@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 
 const scrypt = promisify(scryptCallback);
+const ownerId = "owner";
 
 export type AuthenticatedUser = {
   id: string;
@@ -40,7 +41,7 @@ export class LocalAuthStore {
 
     const normalizedUsername = normalizeUsername(username);
     const user: StoredUser = {
-      id: randomUUID(),
+      id: ownerId,
       username: normalizedUsername,
       passwordHash: await hashPassword(password),
       createdAt: new Date().toISOString()

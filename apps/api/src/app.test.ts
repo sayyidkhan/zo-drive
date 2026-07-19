@@ -137,7 +137,7 @@ describe("Zo Drive API", () => {
     await expect(afterRegistration.json()).resolves.toEqual({
       authenticated: true,
       registrationAllowed: false,
-      user: expect.objectContaining({ username: "sayyid" })
+      user: expect.objectContaining({ id: "owner", username: "sayyid" })
     });
 
     const profile = await app.request("http://localhost/auth/profile", {
