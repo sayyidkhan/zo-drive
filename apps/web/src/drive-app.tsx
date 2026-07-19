@@ -53,11 +53,17 @@ const useDriveUi = create<DriveUiState>((set) => ({
   setViewMode: (viewMode) => set({ viewMode })
 }));
 
+const appBasePath = normalizeAppBasePath(
+  import.meta.env.VITE_ZO_DRIVE_APP_BASE_PATH ?? (import.meta.env.DEV ? "/" : "/drive")
+);
+const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
+const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
+
 // Local development uses Vite's same-origin proxy so browsers never need to
-// make a cross-port request. Deployed builds use the configured service URL.
+// make a cross-port request. Deployed builds use the routed app prefix.
 const apiBaseUrl = import.meta.env.DEV
   ? window.location.origin
-  : import.meta.env.VITE_ZO_DRIVE_API_URL ?? window.location.origin;
+  : import.meta.env.VITE_ZO_DRIVE_API_URL ?? `${window.location.origin}${appBasePath}`;
 
 export function DriveApp({ client, authClient }: { client?: DriveClient; authClient?: AuthClient }) {
   const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: 1 } } }));
@@ -132,7 +138,7 @@ function AuthScreen({ auth, client, onAuthenticated }: { auth: AuthStatus; clien
     <main className="grid min-h-screen place-items-center bg-[#f8faff] p-5 text-slate-800">
       <section className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-7 shadow-sm sm:p-9">
         <div className="flex items-center gap-3 text-xl font-semibold tracking-tight text-slate-900">
-          <span className="relative block h-11 w-11 shrink-0" role="img" aria-label="Zo Drive Pegasus on a cloud"><img className="absolute inset-0 h-full w-full" src="/zo-drive-pegasus-cloud.svg" alt="" /><img className="absolute left-[5.94%] top-0 h-[88.44%] w-[88.44%]" src="/zo-pegasus.svg" alt="" /></span>
+          <span className="relative block h-11 w-11 shrink-0" role="img" aria-label="Zo Drive Pegasus on a cloud"><img className="absolute inset-0 h-full w-full" src={driveCloudLogoUrl} alt="" /><img className="absolute left-[5.94%] top-0 h-[88.44%] w-[88.44%]" src={drivePegasusLogoUrl} alt="" /></span>
           Zo Drive
         </div>
         <div className="mt-8"><LockKeyhole className="mb-3 text-blue-600" size={24} /><h1 className="text-2xl font-semibold tracking-tight text-slate-900">{isBootstrap ? "Create your owner account" : "Sign in to Zo Drive"}</h1><p className="mt-2 text-sm leading-6 text-slate-500">{isBootstrap ? "No owner account exists yet. Create one to initialise this private drive. Registration closes immediately after this." : "Use the owner account for this private drive."}</p></div>
@@ -322,8 +328,8 @@ function DriveScreen({ client, user, onAccount, onSignOut }: { client: DriveClie
       <header className="flex h-18 items-center gap-5 border-b border-slate-200 bg-white px-5">
         <div className="flex items-center gap-2.5 text-xl font-semibold tracking-tight text-slate-900">
           <span className="relative block h-11 w-11 shrink-0" role="img" aria-label="Zo Drive Pegasus on a cloud">
-            <img className="absolute inset-0 h-full w-full" src="/zo-drive-pegasus-cloud.svg" alt="" />
-            <img className="absolute left-[5.94%] top-0 h-[88.44%] w-[88.44%]" src="/zo-pegasus.svg" alt="" />
+            <img className="absolute inset-0 h-full w-full" src={driveCloudLogoUrl} alt="" />
+            <img className="absolute left-[5.94%] top-0 h-[88.44%] w-[88.44%]" src={drivePegasusLogoUrl} alt="" />
           </span>
           Zo Drive
         </div>
@@ -524,7 +530,7 @@ function SharedFilePage({ client, shareId }: { client: SharedClient; shareId: st
   if (shareQuery.isPending) return <AuthLoading />;
   if (shareQuery.isError || !shareQuery.data) return <main className="grid min-h-screen place-items-center bg-[#f8faff] p-5 text-center"><div><h1 className="text-2xl font-semibold text-slate-900">This link is unavailable</h1><p className="mt-2 text-sm text-slate-500">It may have expired or been revoked.</p></div></main>;
   const share: PublicShare = shareQuery.data;
-  return <main className="grid min-h-screen place-items-center bg-[#f8faff] p-5"><section className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-7 shadow-sm"><p className="text-sm font-medium text-blue-600">Zo Drive shared file</p><h1 className="mt-2 break-words text-2xl font-semibold text-slate-900">{share.name}</h1><p className="mt-2 text-sm text-slate-500">{formatBytes(share.size)} · {share.expiresAt ? `Available until ${new Date(share.expiresAt).toLocaleString()}` : "No expiry"}</p>{share.requiresPasscode && <label className="mt-6 block text-sm font-medium text-slate-700">Passcode<input aria-label="Shared file passcode" className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" type="password" value={passcode} onChange={(event) => setPasscode(event.target.value)} /></label>}<button className="mt-6 w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-300" disabled={downloadMutation.isPending || (share.requiresPasscode && !passcode)} onClick={() => downloadMutation.mutate()}>{downloadMutation.isPending ? "Opening…" : "Open shared file"}</button><button className="mt-3 w-full rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100" onClick={() => { window.location.href = "/"; }}>Open Zo Drive</button></section>{preview && <PreviewDialog preview={preview} onClose={() => { URL.revokeObjectURL(preview.url); setPreview(null); }} />}</main>;
+  return <main className="grid min-h-screen place-items-center bg-[#f8faff] p-5"><section className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-7 shadow-sm"><p className="text-sm font-medium text-blue-600">Zo Drive shared file</p><h1 className="mt-2 break-words text-2xl font-semibold text-slate-900">{share.name}</h1><p className="mt-2 text-sm text-slate-500">{formatBytes(share.size)} · {share.expiresAt ? `Available until ${new Date(share.expiresAt).toLocaleString()}` : "No expiry"}</p>{share.requiresPasscode && <label className="mt-6 block text-sm font-medium text-slate-700">Passcode<input aria-label="Shared file passcode" className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" type="password" value={passcode} onChange={(event) => setPasscode(event.target.value)} /></label>}<button className="mt-6 w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-300" disabled={downloadMutation.isPending || (share.requiresPasscode && !passcode)} onClick={() => downloadMutation.mutate()}>{downloadMutation.isPending ? "Opening…" : "Open shared file"}</button><button className="mt-3 w-full rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100" onClick={() => { window.location.href = driveHomeUrl(); }}>Open Zo Drive</button></section>{preview && <PreviewDialog preview={preview} onClose={() => { URL.revokeObjectURL(preview.url); setPreview(null); }} />}</main>;
 }
 
 function PreviewDialog({ preview, onClose }: { preview: { object: DriveObject; url: string }; onClose: () => void }) {
@@ -567,8 +573,17 @@ function ttlToDate(ttl: string): string | null {
   return milliseconds ? new Date(Date.now() + milliseconds).toISOString() : null;
 }
 
+function normalizeAppBasePath(value: string): string {
+  const trimmed = value.trim().replace(/^\/+|\/+$/g, "");
+  return trimmed ? `/${trimmed}` : "";
+}
+
+function driveHomeUrl(): string {
+  return `${window.location.origin}${appBasePath || "/"}`;
+}
+
 function shareLink(id: string): string {
-  return `${window.location.origin}/?share=${encodeURIComponent(id)}`;
+  return `${driveHomeUrl()}?share=${encodeURIComponent(id)}`;
 }
 
 async function copyShareLink(id: string): Promise<void> {

@@ -1,6 +1,7 @@
 import { serve } from "@hono/node-server";
 import { readFile } from "node:fs/promises";
-import { extname, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
+import { dirname, extname, resolve, sep } from "node:path";
 
 import { createApp } from "./app.js";
 import { LocalAuthStore } from "./auth/local-auth-store.js";
@@ -14,7 +15,7 @@ const allowedOrigin = process.env.ZO_DRIVE_ALLOWED_ORIGIN;
 const sessionSecret = process.env.ZO_DRIVE_SESSION_SECRET ?? developmentSessionSecret();
 const sessions = new SessionService(sessionSecret);
 const shareStore = new LocalShareStore({ root: dataRoot });
-const webRoot = process.env.ZO_DRIVE_WEB_ROOT ?? resolve(process.cwd(), "apps/web/dist");
+const webRoot = process.env.ZO_DRIVE_WEB_ROOT ?? resolve(dirname(fileURLToPath(import.meta.url)), "../../web/dist");
 
 const app = createApp({
   storage: new LocalDriveStorage({ root: dataRoot }),
@@ -40,15 +41,21 @@ if (process.env.NODE_ENV === "production") {
 
     try {
       const contents = await readFile(file);
-      context.header("Content-Type", contentTypeFor(file));
-      context.header("Cache-Control", file.includes(`${sep}assets${sep}`) ? "public, max-age=31536000, immutable" : "no-cache");
-      return new Response(contents);
+      return new Response(contents, {
+        headers: {
+          "content-type": contentTypeFor(file),
+          "cache-control": file.includes(`${sep}assets${sep}`) ? "public, max-age=31536000, immutable" : "no-cache"
+        }
+      });
     } catch {
       // Client-side routes (for example a shared-link URL) load the app shell.
       const contents = await readFile(resolve(webRoot, "index.html"));
-      context.header("Content-Type", "text/html; charset=utf-8");
-      context.header("Cache-Control", "no-cache");
-      return new Response(contents);
+      return new Response(contents, {
+        headers: {
+          "content-type": "text/html; charset=utf-8",
+          "cache-control": "no-cache"
+        }
+      });
     }
   });
 }
