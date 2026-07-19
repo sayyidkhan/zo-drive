@@ -5,7 +5,7 @@
   "packageManager": "pnpm@11.9.0",
   "scripts": {
     "build": "pnpm --recursive run build",
-    "test": "pnpm --filter @zo-drive/types build && pnpm --filter @zo-drive/sdk build && pnpm --recursive run test",
+    "test": "pnpm --filter @zo-drive/types build && pnpm --filter @zo-drive/sdk build && pnpm --filter @zo-drive/cli build && pnpm --recursive run test",
     "typecheck": "pnpm --filter @zo-drive/types build && pnpm --filter @zo-drive/sdk build && pnpm --recursive run typecheck"
   },
   "devDependencies": {
