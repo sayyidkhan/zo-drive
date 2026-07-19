@@ -18,7 +18,7 @@ describe("ZoDriveClient", () => {
     );
   });
 
-  it("uploads a browser-compatible Blob through the API", async () => {
+  it("streams a browser-compatible Blob through the API", async () => {
     const fetcher = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ key: "Notes/hello.txt", name: "hello.txt", size: 5, contentType: "text/plain", updatedAt: "2026-01-01T00:00:00.000Z" }), { status: 201 })
     );
@@ -28,10 +28,11 @@ describe("ZoDriveClient", () => {
 
     const [, request] = fetcher.mock.calls[0] as [string, RequestInit];
     expect(request.method).toBe("POST");
-    expect(request.body).toBeInstanceOf(FormData);
-    const form = request.body as FormData;
-    expect(form.get("path")).toBe("Notes");
-    expect((form.get("file") as File).name).toBe("hello.txt");
+    expect(request.body).toBeInstanceOf(Blob);
+    const headers = new Headers(request.headers);
+    expect(headers.get("content-type")).toBe("text/plain");
+    expect(headers.get("x-zo-drive-path")).toBe("Notes");
+    expect(headers.get("x-zo-drive-file-name")).toBe("hello.txt");
   });
 
   it("surfaces typed API errors", async () => {
@@ -52,6 +53,38 @@ describe("ZoDriveClient", () => {
     await expect(client.createFolder("Projects")).resolves.toMatchObject({ key: "Projects" });
     await expect(client.listFolders()).resolves.toMatchObject([{ key: "Projects" }]);
     expect(fetcher).toHaveBeenNthCalledWith(1, "https://drive.example/folders", expect.objectContaining({ method: "POST" }));
+  });
+
+  it("creates Zo-native files through the API", async () => {
+    const file = { key: "Projects/Roadmap", name: "Roadmap", size: 10, contentType: "application/vnd.zo.spreadsheet+json", nativeType: "spreadsheet", updatedAt: "2026-01-01T00:00:00.000Z", starred: false };
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify(file), { status: 201 }));
+    const client = new ZoDriveClient({ baseUrl: "https://drive.example", fetcher });
+
+    await expect(client.createNativeFile({ name: "Roadmap", path: "Projects", type: "spreadsheet" })).resolves.toEqual(file);
+    expect(fetcher).toHaveBeenCalledWith("https://drive.example/native-files", expect.objectContaining({ method: "POST" }));
+  });
+
+  it("lists and updates starred files through the API", async () => {
+    const starredFile = { key: "Notes/hello.txt", name: "hello.txt", size: 5, contentType: "text/plain", updatedAt: "2026-01-01T00:00:00.000Z", starred: true };
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ objects: [starredFile] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(starredFile), { status: 200 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    const client = new ZoDriveClient({ baseUrl: "https://drive.example", fetcher });
+
+    await expect(client.listStarred()).resolves.toEqual([starredFile]);
+    await expect(client.star("Notes/hello.txt")).resolves.toEqual(starredFile);
+    await expect(client.unstar("Notes/hello.txt")).resolves.toBeUndefined();
+    expect(fetcher).toHaveBeenNthCalledWith(2, "https://drive.example/stars/Notes/hello.txt", expect.objectContaining({ method: "PUT" }));
+  });
+
+  it("updates a passcode-protected share through the API", async () => {
+    const share = { id: "share-123", key: "hello.txt", name: "hello.txt", size: 5, contentType: "text/plain", access: "passcode", expiresAt: null, createdAt: "2026-01-01T00:00:00.000Z" };
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify(share), { status: 200 }));
+    const client = new ZoDriveClient({ baseUrl: "https://drive.example", fetcher });
+
+    await expect(client.updateSharePasscode({ id: share.id, passcode: "new-secret" })).resolves.toEqual(share);
+    expect(fetcher).toHaveBeenCalledWith("https://drive.example/shares/share-123/passcode", expect.objectContaining({ method: "PATCH" }));
   });
 
   it("uses the CLI-only login endpoint without exposing a token to browser login", async () => {

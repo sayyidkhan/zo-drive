@@ -1,15 +1,34 @@
 import { z } from "zod";
 
+export const nativeFileTypeSchema = z.enum(["document", "spreadsheet", "presentation", "video", "form"]);
+
 export const driveObjectSchema = z.object({
   key: z.string(),
   name: z.string(),
   size: z.number().int().nonnegative(),
   contentType: z.string(),
-  updatedAt: z.string()
+  updatedAt: z.string(),
+  starred: z.boolean().default(false),
+  nativeType: nativeFileTypeSchema.optional()
 });
 
 export const listObjectsResponseSchema = z.object({
   objects: z.array(driveObjectSchema)
+});
+
+export const driveTrashItemSchema = z.object({
+  id: z.string(),
+  originalKey: z.string(),
+  name: z.string(),
+  size: z.number().int().nonnegative(),
+  contentType: z.string(),
+  starred: z.boolean(),
+  trashedAt: z.string(),
+  expiresAt: z.string()
+});
+
+export const listTrashResponseSchema = z.object({
+  items: z.array(driveTrashItemSchema)
 });
 
 export const driveFolderSchema = z.object({
@@ -67,7 +86,10 @@ export const listSharesResponseSchema = z.object({ shares: z.array(driveShareSch
 export const publicShareSchema = driveShareSchema.pick({ "access": true, "contentType": true, "expiresAt": true, "id": true, "name": true, "size": true }).extend({ requiresPasscode: z.boolean() });
 
 export type DriveObject = z.infer<typeof driveObjectSchema>;
+export type NativeFileType = z.infer<typeof nativeFileTypeSchema>;
 export type ListObjectsResponse = z.infer<typeof listObjectsResponseSchema>;
+export type DriveTrashItem = z.infer<typeof driveTrashItemSchema>;
+export type ListTrashResponse = z.infer<typeof listTrashResponseSchema>;
 export type DriveFolder = z.infer<typeof driveFolderSchema>;
 export type ListFoldersResponse = z.infer<typeof listFoldersResponseSchema>;
 export type StorageUsage = z.infer<typeof storageUsageSchema>;

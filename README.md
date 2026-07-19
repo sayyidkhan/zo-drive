@@ -10,8 +10,9 @@ Zo Drive is a private Drive-like file manager for your Zo server. The source cod
 - Traversal-safe, user-scoped filesystem data root
 - Shared TypeScript SDK used by both the CLI and React app
 - `zo-drive` CLI: upload, list, download, delete, and usage
-- React GUI: folder browsing, search, drag-and-drop/multiple upload, list/grid views, previews, deletion, and usage display
-- Home for recently updated files; My Drive as the default; Shared with others for managed links
+- React GUI: folder browsing, search, drag-and-drop/multiple upload of any file type, list/grid views, previews, deletion, and usage display
+- Zo-native files: documents, spreadsheets, presentations, video projects, and forms created privately inside the drive
+- Home for recently updated files; My Drive as the default; Starred files and Shared with others for managed links
 - Share links: public or passcode-protected, with one-day, seven-day, thirty-day, or no-expiry TTL; copy and revoke controls
 - Account lifecycle design for keeping files or permanently removing everything in [the plan](docs/PLAN.md)
 
@@ -23,9 +24,10 @@ Set `ZO_DRIVE_DATA_ROOT` to a directory outside this project. Do not use the rep
 ZO_DRIVE_DATA_ROOT/
   v1/auth/users.json                 # salted password hash; never commit this
   v1/shares/shares.json              # share metadata and hashed passcodes
-  v1/users/{owner-id}/files/
+  v1/users/{username}/files/
     Notes/hello.txt
     Photos/image.jpg
+  v1/users/{username}/stars.json       # private starred-file metadata
 ```
 
 For development, use a directory such as:
@@ -84,6 +86,6 @@ The test suite includes a full CLI → SDK → API → data-root flow: upload, l
 
 On its first visit, Zo Drive shows **Create your owner account**, not the drive. Registration is available only while no user exists; immediately after creation, all visitors see **Sign in** and every drive endpoint requires a valid session. Passwords are salted and hashed with scrypt; the browser session is an HttpOnly, signed cookie.
 
-For deployment, set a unique `ZO_DRIVE_SESSION_SECRET` (at least 32 characters; for example `openssl rand -base64 48`), create the owner account before making the site public, run over HTTPS, and use a same-origin reverse proxy for the web app and API. Never expose `ZO_DRIVE_DATA_ROOT` itself. This is deliberately an owner-only product: it has no public self-registration or collaborative in-app sharing. Add a database-backed identity system, account recovery, rate limiting, and invitations before turning it into a multi-user service.
+For deployment, set a unique `ZO_DRIVE_SESSION_SECRET` (at least 32 characters; for example `openssl rand -base64 48`), create the owner account before making the site public, run over HTTPS, and use a same-origin reverse proxy for the web app and API. Never expose `ZO_DRIVE_DATA_ROOT` itself. The username is also the user's storage namespace, so renaming it migrates their files and invalidates existing sessions. This is deliberately an owner-only product: it has no public self-registration or collaborative in-app sharing. Add a database-backed identity system, account recovery, rate limiting, and invitations before turning it into a multi-user service.
 
 Share links are deliberately read-only. Public links can open the file directly; passcode links require the passcode for file content; expired and revoked links return no file. On Zo, serve the web app and API from the same origin so public links such as `https://your-drive.zo.com/?share={id}` work without cross-site cookie constraints.

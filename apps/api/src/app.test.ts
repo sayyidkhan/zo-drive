@@ -42,16 +42,12 @@ describe("Zo Drive API", () => {
     await expect(response.json()).resolves.toMatchObject({ error: { code: "UNAUTHORIZED" } });
   });
 
-  it("uploads, lists, streams, reports usage, and deletes a file", async () => {
+  it("uploads, lists, streams, and moves deleted files to Trash until restored", async () => {
     const app = await createTestApp();
-    const form = new FormData();
-    form.set("file", new File(["hello from Zo Drive"], "hello.txt", { type: "text/plain" }));
-    form.set("path", "Notes");
-
     const uploaded = await app.request("http://localhost/objects", {
       method: "POST",
-      headers: { "x-test-user-id": "alice" },
-      body: form
+      headers: { "content-type": "text/plain", "x-test-user-id": "alice", "x-zo-drive-file-name": "hello.txt", "x-zo-drive-path": "Notes" },
+      body: "hello from Zo Drive"
     });
 
     expect(uploaded.status).toBe(201);
@@ -75,17 +71,67 @@ describe("Zo Drive API", () => {
 
     const missing = await app.request("http://localhost/objects/Notes/hello.txt", { headers: { "x-test-user-id": "alice" } });
     expect(missing.status).toBe(404);
+
+    const trash = await app.request("http://localhost/trash", { headers: { "x-test-user-id": "alice" } });
+    const trashBody = await trash.json() as { items: Array<{ id: string; originalKey: string }> };
+    expect(trashBody.items).toHaveLength(1);
+    expect(trashBody.items[0]?.originalKey).toBe("Notes/hello.txt");
+
+    const restored = await app.request(`http://localhost/trash/${trashBody.items[0]?.id}/restore`, { method: "PUT", headers: { "x-test-user-id": "alice" } });
+    expect(restored.status).toBe(200);
+    await expect(restored.json()).resolves.toMatchObject({ key: "Notes/hello.txt" });
+  });
+
+  it("streams a movie upload to disk without multipart parsing", async () => {
+    const app = await createTestApp();
+    const movie = new Uint8Array(2 * 1024 * 1024);
+    movie[0] = 0x66;
+    movie[movie.length - 1] = 0x77;
+
+    const uploaded = await app.request("http://localhost/objects", {
+      method: "POST",
+      headers: { "content-type": "video/quicktime", "x-test-user-id": "alice", "x-zo-drive-file-name": "movie.MOV", "x-zo-drive-path": "Videos" },
+      body: movie
+    });
+
+    expect(uploaded.status).toBe(201);
+    await expect(uploaded.json()).resolves.toMatchObject({ key: "Videos/movie.MOV", size: movie.byteLength, contentType: "video/quicktime" });
+    const downloaded = await app.request("http://localhost/objects/Videos/movie.MOV", { headers: { "x-test-user-id": "alice" } });
+    expect(Buffer.from(await downloaded.arrayBuffer()).equals(Buffer.from(movie))).toBe(true);
+  });
+
+  it("accepts arbitrary file formats and preserves their MIME type", async () => {
+    const app = await createTestApp();
+    const uploaded = await app.request("http://localhost/objects", {
+      method: "POST",
+      headers: { "content-type": "application/vnd.sketch", "x-test-user-id": "alice", "x-zo-drive-file-name": "landing.sketch", "x-zo-drive-path": "Designs" },
+      body: "design data"
+    });
+
+    await expect(uploaded.json()).resolves.toMatchObject({ key: "Designs/landing.sketch", contentType: "application/vnd.sketch" });
+    const downloaded = await app.request("http://localhost/objects/Designs/landing.sketch", { headers: { "x-test-user-id": "alice" } });
+    expect(downloaded.headers.get("content-type")).toBe("application/vnd.sketch");
+  });
+
+  it("requires raw-upload file metadata", async () => {
+    const app = await createTestApp();
+
+    const response = await app.request("http://localhost/objects", {
+      method: "POST",
+      headers: { "content-type": "video/mp4", "x-test-user-id": "alice" },
+      body: "movie bytes"
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "INVALID_REQUEST", message: "A file name is required" } });
   });
 
   it("does not expose one user's data to another user", async () => {
     const app = await createTestApp();
-    const form = new FormData();
-    form.set("file", new File(["private"], "private.txt", { type: "text/plain" }));
-
     await app.request("http://localhost/objects", {
       method: "POST",
-      headers: { "x-test-user-id": "alice" },
-      body: form
+      headers: { "content-type": "text/plain", "x-test-user-id": "alice", "x-zo-drive-file-name": "private.txt" },
+      body: "private"
     });
 
     const listAsBob = await app.request("http://localhost/objects", { headers: { "x-test-user-id": "bob" } });
@@ -93,6 +139,20 @@ describe("Zo Drive API", () => {
 
     const downloadAsBob = await app.request("http://localhost/objects/private.txt", { headers: { "x-test-user-id": "bob" } });
     expect(downloadAsBob.status).toBe(404);
+  });
+
+  it("stars and unstars files only for their authenticated owner", async () => {
+    const app = await createTestApp();
+    expect((await app.request("http://localhost/objects", { method: "POST", headers: { "content-type": "text/plain", "x-test-user-id": "alice", "x-zo-drive-file-name": "private.txt" }, body: "private" })).status).toBe(201);
+
+    const starred = await app.request("http://localhost/stars/private.txt", { method: "PUT", headers: { "x-test-user-id": "alice" } });
+    expect(starred.status).toBe(200);
+    await expect(starred.json()).resolves.toMatchObject({ key: "private.txt", starred: true });
+    await expect((await app.request("http://localhost/stars", { headers: { "x-test-user-id": "alice" } })).json()).resolves.toMatchObject({ objects: [{ key: "private.txt", starred: true }] });
+    await expect((await app.request("http://localhost/stars", { headers: { "x-test-user-id": "bob" } })).json()).resolves.toEqual({ objects: [] });
+
+    expect((await app.request("http://localhost/stars/private.txt", { method: "DELETE", headers: { "x-test-user-id": "alice" } })).status).toBe(204);
+    await expect((await app.request("http://localhost/stars", { headers: { "x-test-user-id": "alice" } })).json()).resolves.toEqual({ objects: [] });
   });
 
   it("creates and lists empty folders for the authenticated user", async () => {
@@ -108,6 +168,20 @@ describe("Zo Drive API", () => {
 
     const rootFolders = await app.request("http://localhost/folders", { headers: { "x-test-user-id": "alice" } });
     await expect(rootFolders.json()).resolves.toMatchObject({ folders: [{ key: "Projects", name: "Projects" }] });
+  });
+
+  it("creates Zo-native files only for the authenticated owner", async () => {
+    const app = await createTestApp();
+
+    const created = await app.request("http://localhost/native-files", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-test-user-id": "alice" },
+      body: JSON.stringify({ name: "Roadmap", path: "Projects", type: "spreadsheet" })
+    });
+    expect(created.status).toBe(201);
+    await expect(created.json()).resolves.toMatchObject({ key: "Projects/Roadmap", contentType: "application/vnd.zo.spreadsheet+json", nativeType: "spreadsheet" });
+    expect((await app.request("http://localhost/native-files", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "Private", type: "document" }) })).status).toBe(401);
+    expect((await app.request("http://localhost/native-files", { method: "POST", headers: { "content-type": "application/json", "x-test-user-id": "alice" }, body: JSON.stringify({ name: "Roadmap", path: "Projects", type: "spreadsheet" }) })).status).toBe(409);
   });
 
   it("allows one owner registration, then protects every drive route with that session", async () => {
@@ -137,7 +211,7 @@ describe("Zo Drive API", () => {
     await expect(afterRegistration.json()).resolves.toEqual({
       authenticated: true,
       registrationAllowed: false,
-      user: expect.objectContaining({ id: "owner", username: "sayyid" })
+      user: expect.objectContaining({ id: "sayyid", username: "sayyid" })
     });
 
     const profile = await app.request("http://localhost/auth/profile", {
@@ -145,11 +219,14 @@ describe("Zo Drive API", () => {
       headers: { "content-type": "application/json", cookie: cookie! },
       body: JSON.stringify({ username: "drive-owner" })
     });
-    await expect(profile.json()).resolves.toEqual({ user: expect.objectContaining({ username: "drive-owner" }) });
+    await expect(profile.json()).resolves.toEqual({ user: expect.objectContaining({ id: "drive-owner", username: "drive-owner" }) });
+    const renamedCookie = profile.headers.get("set-cookie");
+    expect(renamedCookie).toContain("HttpOnly");
+    expect((await app.request("http://localhost/objects", { headers: { cookie: cookie! } })).status).toBe(401);
 
     const password = await app.request("http://localhost/auth/password", {
       method: "POST",
-      headers: { "content-type": "application/json", cookie: cookie! },
+      headers: { "content-type": "application/json", cookie: renamedCookie! },
       body: JSON.stringify({ currentPassword: "correct-horse-battery-staple", newPassword: "new-owner-password" })
     });
     expect(password.status).toBe(204);
@@ -161,20 +238,64 @@ describe("Zo Drive API", () => {
     });
     expect(blockedRegistration.status).toBe(403);
 
-    const form = new FormData();
-    form.set("file", new File(["owner only"], "private.txt", { type: "text/plain" }));
-    expect((await app.request("http://localhost/objects", { method: "POST", headers: { cookie: cookie! }, body: form })).status).toBe(201);
+    expect((await app.request("http://localhost/objects", {
+      method: "POST",
+      headers: { "content-type": "text/plain", cookie: renamedCookie!, "x-zo-drive-file-name": "private.txt" },
+      body: "owner only"
+    })).status).toBe(201);
     expect((await app.request("http://localhost/objects")).status).toBe(401);
 
     const deleted = await app.request("http://localhost/auth/account", {
       method: "DELETE",
-      headers: { "content-type": "application/json", cookie: cookie! },
+      headers: { "content-type": "application/json", cookie: renamedCookie! },
       body: JSON.stringify({ password: "new-owner-password", confirmation: "DELETE MY DRIVE" })
     });
     expect(deleted.status).toBe(204);
     expect(deleted.headers.get("set-cookie")).toContain("Max-Age=0");
-    expect((await app.request("http://localhost/objects", { headers: { cookie: cookie! } })).status).toBe(401);
+    expect((await app.request("http://localhost/objects", { headers: { cookie: renamedCookie! } })).status).toBe(401);
     await expect((await app.request("http://localhost/auth/status", { headers: { cookie: cookie! } })).json()).resolves.toEqual({ authenticated: false, registrationAllowed: true, user: null });
+  });
+
+  it("preserves existing share links when a username renames its storage namespace", async () => {
+    const root = await mkdtemp(join(tmpdir(), "zo-drive-rename-share-"));
+    roots.push(root);
+    const sessions = new SessionService("test-session-secret-that-is-more-than-thirty-two-characters");
+    const app = createApp({
+      storage: new LocalDriveStorage({ root }),
+      resolveUserId: (request) => sessions.userIdFromRequest(request),
+      auth: { store: new LocalAuthStore({ root }), sessions, secureCookies: false },
+      sharing: new LocalShareStore({ root })
+    });
+
+    const registration = await app.request("http://localhost/auth/register", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ username: "sayyid", password: "correct-horse-battery-staple" })
+    });
+    const cookie = registration.headers.get("set-cookie");
+    expect((await app.request("http://localhost/objects", {
+      method: "POST",
+      headers: { "content-type": "text/plain", cookie: cookie!, "x-zo-drive-file-name": "notes.txt" },
+      body: "shared content"
+    })).status).toBe(201);
+
+    const createdShare = await app.request("http://localhost/shares", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie: cookie! },
+      body: JSON.stringify({ key: "notes.txt", access: "public" })
+    });
+    const share = await createdShare.json() as { id: string };
+
+    const profile = await app.request("http://localhost/auth/profile", {
+      method: "PATCH",
+      headers: { "content-type": "application/json", cookie: cookie! },
+      body: JSON.stringify({ username: "sayyidkhan" })
+    });
+    expect(profile.status).toBe(200);
+
+    const sharedContent = await app.request(`http://localhost/shared/${share.id}/content`);
+    expect(sharedContent.status).toBe(200);
+    await expect(sharedContent.text()).resolves.toBe("shared content");
   });
 
   it("creates, protects, expires, and revokes file share links", async () => {
@@ -190,9 +311,11 @@ describe("Zo Drive API", () => {
     });
     const registration = await app.request("http://localhost/auth/register", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: "owner", password: "secret1" }) });
     const cookie = registration.headers.get("set-cookie")!;
-    const form = new FormData();
-    form.set("file", new File(["shared contents"], "shared.txt", { type: "text/plain" }));
-    expect((await app.request("http://localhost/objects", { method: "POST", headers: { cookie }, body: form })).status).toBe(201);
+    expect((await app.request("http://localhost/objects", {
+      method: "POST",
+      headers: { "content-type": "text/plain", cookie, "x-zo-drive-file-name": "shared.txt" },
+      body: "shared contents"
+    })).status).toBe(201);
 
     const publicShare = await app.request("http://localhost/shares", { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ key: "shared.txt", access: "public" }) });
     const publicBody = await publicShare.json() as { id: string };
@@ -207,6 +330,12 @@ describe("Zo Drive API", () => {
     const protectedBody = await protectedShare.json() as { id: string };
     expect((await app.request(`http://localhost/shared/${protectedBody.id}/content`)).status).toBe(401);
     await expect((await app.request(`http://localhost/shared/${protectedBody.id}/content`, { headers: { "x-zo-drive-share-passcode": "open-sesame" } })).text()).resolves.toBe("shared contents");
+
+    const changedPasscode = await app.request(`http://localhost/shares/${protectedBody.id}/passcode`, { method: "PATCH", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ passcode: "new-passcode" }) });
+    expect(changedPasscode.status).toBe(200);
+    await expect(changedPasscode.json()).resolves.toMatchObject({ id: protectedBody.id, access: "passcode" });
+    expect((await app.request(`http://localhost/shared/${protectedBody.id}/content`, { headers: { "x-zo-drive-share-passcode": "open-sesame" } })).status).toBe(401);
+    await expect((await app.request(`http://localhost/shared/${protectedBody.id}/content`, { headers: { "x-zo-drive-share-passcode": "new-passcode" } })).text()).resolves.toBe("shared contents");
 
     expect((await app.request(`http://localhost/shares/${publicBody.id}`, { method: "DELETE", headers: { cookie } })).status).toBe(204);
     expect((await app.request(`http://localhost/shared/${publicBody.id}`)).status).toBe(404);

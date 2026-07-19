@@ -7,7 +7,7 @@ import { Readable } from "node:stream";
 import { LocalAuthStore } from "./auth/local-auth-store.js";
 import { SessionService } from "./auth/session.js";
 import { LocalShareStore, type StoredShare } from "./sharing/local-share-store.js";
-import { LocalDriveStorage, UnsafeDrivePathError } from "./storage/local-drive-storage.js";
+import { LocalDriveStorage, TrashRestoreConflictError, UnsafeDrivePathError, nativeFileTypes } from "./storage/local-drive-storage.js";
 
 export type UserResolver = (request: Request) => string | null | Promise<string | null>;
 
@@ -30,6 +30,11 @@ const listQuerySchema = z.object({
 
 const createFolderSchema = z.object({
   path: z.string().min(1).max(1_024)
+});
+const createNativeFileSchema = z.object({
+  name: z.string().trim().min(1).max(1_024),
+  path: z.string().max(1_024).optional(),
+  type: z.enum(nativeFileTypes)
 });
 
 const credentialsSchema = z.object({
@@ -54,6 +59,9 @@ const createShareSchema = z.object({
 }).superRefine((value, context) => {
   if (value.access === "passcode" && !value.passcode) context.addIssue({ code: z.ZodIssueCode.custom, message: "A passcode is required" });
 });
+const changeSharePasscodeSchema = z.object({
+  passcode: z.string().min(1).max(256)
+});
 
 export function createApp({ storage, resolveUserId, allowedOrigin, auth, sharing }: CreateAppOptions) {
   const app = new Hono();
@@ -67,7 +75,12 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, sharing
     app.use("/objects/*", cors(corsOptions));
     app.use("/objects", cors(corsOptions));
     app.use("/folders", cors(corsOptions));
+    app.use("/native-files", cors(corsOptions));
     app.use("/usage", cors(corsOptions));
+    app.use("/stars", cors(corsOptions));
+    app.use("/stars/*", cors(corsOptions));
+    app.use("/trash", cors(corsOptions));
+    app.use("/trash/*", cors(corsOptions));
     app.use("/auth/*", cors(corsOptions));
     app.use("/shares", cors(corsOptions));
     app.use("/shares/*", cors(corsOptions));
@@ -120,8 +133,12 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, sharing
       if (!userId) return unauthorized(context);
       const parsed = usernameSchema.safeParse(await context.req.json().catch(() => null));
       if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Username must be 3–32 letters, numbers, underscores, or hyphens" } }, 400);
-      const user = await auth.store.updateUsername(userId, parsed.data.username);
+      const nextUserId = parsed.data.username.trim().toLowerCase();
+      await storage.renameUser({ fromUserId: userId, toUserId: nextUserId });
+      await sharing?.renameOwner({ fromUserId: userId, toUserId: nextUserId });
+      const user = await auth.store.renameUser(userId, nextUserId);
       if (!user) return context.json({ error: { code: "PROFILE_UPDATE_FAILED", message: "Could not update the username" } }, 409);
+      context.header("set-cookie", auth.sessions.cookieHeader(auth.sessions.create(user.id), auth.secureCookies));
       return context.json({ user });
     });
 
@@ -169,6 +186,16 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, sharing
         const share = await sharing.create({ ...parsed.data, ownerUserId: userId, expiresAt: parsed.data.expiresAt ?? null });
         const described = await describeShare(storage, share);
         return context.json(described, 201);
+      });
+
+      app.patch("/shares/:id/passcode", async (context) => {
+        const userId = await requireUser(context.req.raw, resolveActiveUser);
+        if (!userId) return unauthorized(context);
+        const parsed = changeSharePasscodeSchema.safeParse(await context.req.json().catch(() => null));
+        if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Enter a valid passcode" } }, 400);
+        const share = await sharing.updatePasscode({ id: context.req.param("id"), ownerUserId: userId, passcode: parsed.data.passcode });
+        if (!share) return context.json({ error: { code: "NOT_FOUND", message: "Passcode-protected share link not found" } }, 404);
+        return context.json(await describeShare(storage, share));
       });
 
       app.delete("/shares/:id", async (context) => {
@@ -223,6 +250,15 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, sharing
     return context.json(await storage.createFolder({ userId, key: parsed.data.path }), 201);
   });
 
+  app.post("/native-files", async (context) => {
+    const userId = await requireUser(context.req.raw, resolveActiveUser);
+    if (!userId) return unauthorized(context);
+    const parsed = createNativeFileSchema.safeParse(await context.req.json().catch(() => null));
+    if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Enter a valid Zo file name and type" } }, 400);
+    const key = parsed.data.path ? `${parsed.data.path.replace(/\/$/, "")}/${parsed.data.name}` : parsed.data.name;
+    return context.json(await storage.createNativeFile({ userId, key, type: parsed.data.type }), 201);
+  });
+
   app.get("/objects", async (context) => {
     const userId = await requireUser(context.req.raw, resolveActiveUser);
     if (!userId) {
@@ -237,27 +273,71 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, sharing
     return context.json({ objects });
   });
 
+  app.get("/stars", async (context) => {
+    const userId = await requireUser(context.req.raw, resolveActiveUser);
+    if (!userId) return unauthorized(context);
+    return context.json({ objects: await storage.listStarred({ userId }) });
+  });
+
+  app.put("/stars/*", async (context) => {
+    const userId = await requireUser(context.req.raw, resolveActiveUser);
+    if (!userId) return unauthorized(context);
+    return context.json(await storage.setStarred({ userId, key: starKeyFromPath(context.req.path), starred: true }));
+  });
+
+  app.delete("/stars/*", async (context) => {
+    const userId = await requireUser(context.req.raw, resolveActiveUser);
+    if (!userId) return unauthorized(context);
+    await storage.setStarred({ userId, key: starKeyFromPath(context.req.path), starred: false });
+    return context.body(null, 204);
+  });
+
+  app.get("/trash", async (context) => {
+    const userId = await requireUser(context.req.raw, resolveActiveUser);
+    if (!userId) return unauthorized(context);
+    return context.json({ items: await storage.listTrash({ userId }) });
+  });
+
+  app.put("/trash/:id/restore", async (context) => {
+    const userId = await requireUser(context.req.raw, resolveActiveUser);
+    if (!userId) return unauthorized(context);
+    return context.json(await storage.restoreTrash({ userId, id: context.req.param("id") }));
+  });
+
+  app.delete("/trash/:id", async (context) => {
+    const userId = await requireUser(context.req.raw, resolveActiveUser);
+    if (!userId) return unauthorized(context);
+    await storage.permanentlyDeleteTrash({ userId, id: context.req.param("id") });
+    return context.body(null, 204);
+  });
+
+  app.delete("/trash", async (context) => {
+    const userId = await requireUser(context.req.raw, resolveActiveUser);
+    if (!userId) return unauthorized(context);
+    await storage.emptyTrash({ userId });
+    return context.body(null, 204);
+  });
+
   app.post("/objects", async (context) => {
     const userId = await requireUser(context.req.raw, resolveActiveUser);
     if (!userId) {
       return unauthorized(context);
     }
 
-    const formData = await context.req.formData();
-    const file = formData.get("file");
-    const path = formData.get("path");
-    if (!(file instanceof File)) {
-      return context.json({ error: { code: "INVALID_REQUEST", message: "A file is required" } }, 400);
+    const fileName = decodeUploadHeader(context.req.header("x-zo-drive-file-name"));
+    const path = decodeUploadHeader(context.req.header("x-zo-drive-path"));
+    if (!fileName) return context.json({ error: { code: "INVALID_REQUEST", message: "A file name is required" } }, 400);
+    if (fileName.length > 1_024 || path.length > 1_024) {
+      return context.json({ error: { code: "INVALID_REQUEST", message: "The file name or folder path is too long" } }, 400);
     }
-    if (path !== null && typeof path !== "string") {
-      return context.json({ error: { code: "INVALID_REQUEST", message: "Path must be text" } }, 400);
-    }
+    if (!context.req.raw.body) return context.json({ error: { code: "INVALID_REQUEST", message: "A file is required" } }, 400);
 
-    const key = path ? `${path.replace(/\/$/, "")}/${file.name}` : file.name;
+    const key = path ? `${path.replace(/\/$/, "")}/${fileName}` : fileName;
     const object = await storage.write({
       userId,
       key,
-      content: Readable.fromWeb(file.stream() as import("node:stream/web").ReadableStream)
+      contentType: context.req.header("content-type"),
+      content: Readable.fromWeb(context.req.raw.body as import("node:stream/web").ReadableStream)
     });
     return context.json(object, 201);
   });
@@ -286,7 +366,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, sharing
       return unauthorized(context);
     }
 
-    await storage.remove({ userId, key: objectKeyFromPath(context.req.path) });
+    await storage.trash({ userId, key: objectKeyFromPath(context.req.path) });
     return context.body(null, 204);
   });
 
@@ -304,6 +384,12 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, sharing
     }
     if (isNotFound(error)) {
       return context.json({ error: { code: "NOT_FOUND", message: "File not found" } }, 404);
+    }
+    if (error instanceof TrashRestoreConflictError) {
+      return context.json({ error: { code: "RESTORE_CONFLICT", message: error.message } }, 409);
+    }
+    if (isAlreadyExists(error)) {
+      return context.json({ error: { code: "ALREADY_EXISTS", message: "A file with this name already exists" } }, 409);
     }
     return context.json({ error: { code: "INTERNAL_ERROR", message: "Unexpected server error" } }, 500);
   });
@@ -324,8 +410,21 @@ function objectKeyFromPath(path: string): string {
   return decodeURIComponent(encodedKey);
 }
 
+function starKeyFromPath(path: string): string {
+  const encodedKey = path.replace(/^\/stars\//, "");
+  return decodeURIComponent(encodedKey);
+}
+
+function decodeUploadHeader(value: string | undefined): string {
+  return value ? decodeURIComponent(value) : "";
+}
+
 function isNotFound(error: unknown): error is NodeJS.ErrnoException {
   return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+}
+
+function isAlreadyExists(error: unknown): error is NodeJS.ErrnoException {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "EEXIST";
 }
 
 async function describeShare(storage: LocalDriveStorage, share: StoredShare) {

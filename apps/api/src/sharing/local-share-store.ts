@@ -61,10 +61,32 @@ export class LocalShareStore {
     return true;
   }
 
+  async updatePasscode({ id, ownerUserId, passcode }: { id: string; ownerUserId: string; passcode: string }): Promise<StoredShare | null> {
+    const shares = await this.readShares();
+    const share = shares.shares.find((candidate) => candidate.id === id && candidate.ownerUserId === ownerUserId);
+    if (!share || share.access !== "passcode") return null;
+    share.passcodeHash = await hashSecret(passcode);
+    await this.writeShares(shares);
+    return share;
+  }
+
   async removeByOwner(ownerUserId: string): Promise<void> {
     const shares = await this.readShares();
     shares.shares = shares.shares.filter((share) => share.ownerUserId !== ownerUserId);
     await this.writeShares(shares);
+  }
+
+  async renameOwner({ fromUserId, toUserId }: { fromUserId: string; toUserId: string }): Promise<void> {
+    if (fromUserId === toUserId) return;
+    const shares = await this.readShares();
+    let changed = false;
+    for (const share of shares.shares) {
+      if (share.ownerUserId === fromUserId) {
+        share.ownerUserId = toUserId;
+        changed = true;
+      }
+    }
+    if (changed) await this.writeShares(shares);
   }
 
   async verifyPasscode(share: StoredShare, passcode: string | null | undefined): Promise<boolean> {

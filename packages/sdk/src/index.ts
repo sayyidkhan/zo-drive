@@ -7,11 +7,13 @@ import {
   publicShareSchema,
   driveFolderSchema,
   driveObjectSchema,
+  driveTrashItemSchema,
   listFoldersResponseSchema,
   listObjectsResponseSchema,
+  listTrashResponseSchema,
   storageUsageSchema
 } from "@zo-drive/types";
-import type { AuthStatus, DriveFolder, DriveObject, DriveShare, DriveUser, PublicShare, ShareAccess, StorageUsage } from "@zo-drive/types";
+import type { AuthStatus, DriveFolder, DriveObject, DriveShare, DriveTrashItem, DriveUser, NativeFileType, PublicShare, ShareAccess, StorageUsage } from "@zo-drive/types";
 
 type Fetcher = typeof fetch;
 
@@ -30,6 +32,12 @@ export type UploadOptions = {
   file: Blob;
   fileName: string;
   path?: string;
+  onProgress?: (progress: UploadProgress) => void;
+};
+
+export type UploadProgress = {
+  loaded: number;
+  total: number;
 };
 
 export class DriveApiError extends Error {
@@ -68,13 +76,12 @@ export class ZoDriveClient {
     return listObjectsResponseSchema.parse(await response.json()).objects;
   }
 
-  async upload({ file, fileName, path }: UploadOptions): Promise<DriveObject> {
-    const form = new FormData();
-    form.set("file", file, fileName);
-    if (path) {
-      form.set("path", path);
+  async upload({ file, fileName, path, onProgress }: UploadOptions): Promise<DriveObject> {
+    const headers = this.uploadHeaders(file, fileName, path);
+    if (onProgress && this.fetcher === fetch && typeof XMLHttpRequest !== "undefined") {
+      return this.uploadWithProgress(file, headers, onProgress);
     }
-    const response = await this.request("/objects", { body: form, method: "POST" });
+    const response = await this.request("/objects", { body: file, headers, method: "POST" });
     return driveObjectSchema.parse(await response.json());
   }
 
@@ -93,12 +100,53 @@ export class ZoDriveClient {
     return driveFolderSchema.parse(await response.json());
   }
 
+  async createNativeFile({ name, path, type }: { name: string; path?: string; type: NativeFileType }): Promise<DriveObject> {
+    const response = await this.request("/native-files", {
+      body: JSON.stringify({ name, path, type }),
+      headers: { "content-type": "application/json" },
+      method: "POST"
+    });
+    return driveObjectSchema.parse(await response.json());
+  }
+
   async download(key: string): Promise<Response> {
     return this.request(`/objects/${encodeDriveKey(key)}`, { method: "GET" });
   }
 
   async delete(key: string): Promise<void> {
     await this.request(`/objects/${encodeDriveKey(key)}`, { method: "DELETE" });
+  }
+
+  async listStarred(): Promise<DriveObject[]> {
+    const response = await this.request("/stars", { method: "GET" });
+    return listObjectsResponseSchema.parse(await response.json()).objects;
+  }
+
+  async listTrash(): Promise<DriveTrashItem[]> {
+    const response = await this.request("/trash", { method: "GET" });
+    return listTrashResponseSchema.parse(await response.json()).items;
+  }
+
+  async restoreTrash(id: string): Promise<DriveObject> {
+    const response = await this.request(`/trash/${encodeURIComponent(id)}/restore`, { method: "PUT" });
+    return driveObjectSchema.parse(await response.json());
+  }
+
+  async permanentlyDeleteTrash(id: string): Promise<void> {
+    await this.request(`/trash/${encodeURIComponent(id)}`, { method: "DELETE" });
+  }
+
+  async emptyTrash(): Promise<void> {
+    await this.request("/trash", { method: "DELETE" });
+  }
+
+  async star(key: string): Promise<DriveObject> {
+    const response = await this.request(`/stars/${encodeDriveKey(key)}`, { method: "PUT" });
+    return driveObjectSchema.parse(await response.json());
+  }
+
+  async unstar(key: string): Promise<void> {
+    await this.request(`/stars/${encodeDriveKey(key)}`, { method: "DELETE" });
   }
 
   async getUsage(): Promise<StorageUsage> {
@@ -187,6 +235,15 @@ export class ZoDriveClient {
     await this.request(`/shares/${encodeURIComponent(id)}`, { method: "DELETE" });
   }
 
+  async updateSharePasscode({ id, passcode }: { id: string; passcode: string }): Promise<DriveShare> {
+    const response = await this.request(`/shares/${encodeURIComponent(id)}/passcode`, {
+      body: JSON.stringify({ passcode }),
+      headers: { "content-type": "application/json" },
+      method: "PATCH"
+    });
+    return driveShareSchema.parse(await response.json());
+  }
+
   async getPublicShare(id: string): Promise<PublicShare> {
     const response = await this.request(`/shared/${encodeURIComponent(id)}`, { method: "GET" });
     return publicShareSchema.parse(await response.json());
@@ -218,6 +275,50 @@ export class ZoDriveClient {
       code: parsedError.success ? parsedError.data.error.code : "HTTP_ERROR",
       message: parsedError.success ? parsedError.data.error.message : `Request failed with status ${response.status}`,
       status: response.status
+    });
+  }
+
+  private uploadHeaders(file: Blob, fileName: string, path?: string): Headers {
+    const configuredHeaders = typeof this.headers === "function" ? this.headers() : this.headers;
+    const headers = new Headers(configuredHeaders);
+    headers.set("content-type", file.type || "application/octet-stream");
+    headers.set("x-zo-drive-file-name", encodeURIComponent(fileName));
+    if (path) headers.set("x-zo-drive-path", encodeURIComponent(path));
+    return headers;
+  }
+
+  private uploadWithProgress(file: Blob, headers: Headers, onProgress: (progress: UploadProgress) => void): Promise<DriveObject> {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `${this.baseUrl}/objects`);
+      xhr.withCredentials = true;
+      headers.forEach((value, key) => xhr.setRequestHeader(key, value));
+      xhr.upload.onprogress = (event) => onProgress({ loaded: event.loaded, total: event.lengthComputable ? event.total : file.size });
+      xhr.onerror = () => reject(new DriveApiError({ code: "NETWORK_ERROR", message: "Upload interrupted. Please try again.", status: 0 }));
+      xhr.onload = () => {
+        let body: unknown = null;
+        try {
+          body = xhr.responseText ? JSON.parse(xhr.responseText) : null;
+        } catch {
+          body = null;
+        }
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            resolve(driveObjectSchema.parse(body));
+          } catch (error) {
+            reject(error);
+          }
+          return;
+        }
+        const parsedError = apiErrorSchema.safeParse(body);
+        reject(new DriveApiError({
+          code: parsedError.success ? parsedError.data.error.code : "HTTP_ERROR",
+          message: parsedError.success ? parsedError.data.error.message : `Request failed with status ${xhr.status}`,
+          status: xhr.status
+        }));
+      };
+      onProgress({ loaded: 0, total: file.size });
+      xhr.send(file);
     });
   }
 }

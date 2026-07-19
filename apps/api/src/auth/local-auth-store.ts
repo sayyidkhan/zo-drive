@@ -4,8 +4,6 @@ import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 
 const scrypt = promisify(scryptCallback);
-const ownerId = "owner";
-
 export type AuthenticatedUser = {
   id: string;
   username: string;
@@ -41,7 +39,7 @@ export class LocalAuthStore {
 
     const normalizedUsername = normalizeUsername(username);
     const user: StoredUser = {
-      id: ownerId,
+      id: normalizedUsername,
       username: normalizedUsername,
       passwordHash: await hashPassword(password),
       createdAt: new Date().toISOString()
@@ -62,11 +60,12 @@ export class LocalAuthStore {
     return user ? publicUser(user) : null;
   }
 
-  async updateUsername(id: string, username: string): Promise<AuthenticatedUser | null> {
+  async renameUser(id: string, username: string): Promise<AuthenticatedUser | null> {
     const users = await this.readUsers();
     const user = users.users.find((candidate) => candidate.id === id);
     const normalizedUsername = normalizeUsername(username);
-    if (!user || users.users.some((candidate) => candidate.id !== id && candidate.username === normalizedUsername)) return null;
+    if (!user || users.users.some((candidate) => candidate.id !== id && (candidate.id === normalizedUsername || candidate.username === normalizedUsername))) return null;
+    user.id = normalizedUsername;
     user.username = normalizedUsername;
     await this.writeUsers(users);
     return publicUser(user);

@@ -15,10 +15,11 @@ const allowedOrigin = process.env.ZO_DRIVE_ALLOWED_ORIGIN;
 const sessionSecret = process.env.ZO_DRIVE_SESSION_SECRET ?? developmentSessionSecret();
 const sessions = new SessionService(sessionSecret);
 const shareStore = new LocalShareStore({ root: dataRoot });
+const storage = new LocalDriveStorage({ root: dataRoot });
 const webRoot = process.env.ZO_DRIVE_WEB_ROOT ?? resolve(dirname(fileURLToPath(import.meta.url)), "../../web/dist");
 
 const app = createApp({
-  storage: new LocalDriveStorage({ root: dataRoot }),
+  storage,
   resolveUserId: (request) => sessions.userIdFromRequest(request),
   allowedOrigin,
   auth: {
@@ -28,6 +29,18 @@ const app = createApp({
   },
   sharing: shareStore
 });
+
+async function purgeExpiredTrash() {
+  try {
+    await storage.purgeExpiredTrash();
+  } catch (error) {
+    console.error("Zo Drive trash cleanup failed", error);
+  }
+}
+
+void purgeExpiredTrash();
+const trashCleanup = setInterval(() => void purgeExpiredTrash(), 60 * 60 * 1_000);
+trashCleanup.unref();
 
 // A hosted Zo Drive is one private HTTP service. Serving the compiled UI from
 // the API keeps session cookies and browser requests on the same origin.
