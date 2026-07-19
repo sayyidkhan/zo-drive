@@ -68,4 +68,43 @@ describe("DriveApp", () => {
     expect(await screen.findByText("Profile & controls")).toBeInTheDocument();
     expect(screen.getByText("Danger zone")).toBeInTheDocument();
   });
+
+  it("keeps an upload progress bar visible until the upload finishes", async () => {
+    let completeUpload!: (value: { key: string; name: string; size: number; contentType: string; updatedAt: string }) => void;
+    const upload = vi.fn(() => new Promise<{ key: string; name: string; size: number; contentType: string; updatedAt: string }>((resolve) => { completeUpload = resolve; }));
+    const client = {
+      list: vi.fn().mockResolvedValue([]),
+      getUsage: vi.fn().mockResolvedValue({ fileCount: 0, usedBytes: 0 }),
+      listFolders: vi.fn().mockResolvedValue([]),
+      createFolder: vi.fn(),
+      createShare: vi.fn(),
+      upload,
+      delete: vi.fn(),
+      download: vi.fn(),
+      listShares: vi.fn().mockResolvedValue([]),
+      revokeShare: vi.fn()
+    };
+    const authClient = {
+      getAuthStatus: vi.fn().mockResolvedValue({ authenticated: true, registrationAllowed: false, user: { id: "owner", username: "sayyid" } }),
+      login: vi.fn(),
+      logout: vi.fn(),
+      registerInitialUser: vi.fn(),
+      updateProfile: vi.fn(),
+      changePassword: vi.fn(),
+      deleteAccount: vi.fn()
+    };
+
+    render(<DriveApp client={client} authClient={authClient} />);
+    await screen.findByText("Your drive is ready for its first file");
+
+    fireEvent.change(screen.getByLabelText("Upload files"), {
+      target: { files: [new File(["contents"], "draft.txt", { type: "text/plain" })] }
+    });
+
+    await waitFor(() => expect(upload).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole("status")).toHaveTextContent("Uploading 1 file");
+
+    completeUpload({ key: "draft.txt", name: "draft.txt", size: 8, contentType: "text/plain", updatedAt: "2026-01-01T00:00:00.000Z" });
+    await waitFor(() => expect(screen.queryByRole("status")).not.toBeInTheDocument());
+  });
 });

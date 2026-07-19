@@ -227,6 +227,7 @@ function DriveScreen({ client, user, onAccount, onSignOut }: { client: DriveClie
   const [folderName, setFolderName] = useState("");
   const [shareFile, setShareFile] = useState<DriveObject | null>(null);
   const [preview, setPreview] = useState<{ object: DriveObject; url: string } | null>(null);
+  const [uploadingFileCount, setUploadingFileCount] = useState(0);
   const fileInput = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
@@ -270,6 +271,7 @@ function DriveScreen({ client, user, onAccount, onSignOut }: { client: DriveClie
     if (filesToUpload.length === 0) {
       return;
     }
+    setUploadingFileCount((count) => count + filesToUpload.length);
     try {
       await Promise.all(
         filesToUpload.map((file) => client.upload({ file, fileName: file.name, path: currentPath || undefined }))
@@ -278,6 +280,8 @@ function DriveScreen({ client, user, onAccount, onSignOut }: { client: DriveClie
       toast.success(`${filesToUpload.length} file${filesToUpload.length === 1 ? "" : "s"} uploaded`);
     } catch {
       toast.error("Upload failed. Please try again.");
+    } finally {
+      setUploadingFileCount((count) => Math.max(0, count - filesToUpload.length));
     }
   }
 
@@ -422,8 +426,13 @@ function DriveScreen({ client, user, onAccount, onSignOut }: { client: DriveClie
       {preview && <PreviewDialog preview={preview} onClose={closePreview} />}
       {folderDialogOpen && <FolderDialog folderName={folderName} onCancel={() => { setFolderDialogOpen(false); setFolderName(""); }} onCreate={() => void createFolder()} onNameChange={setFolderName} />}
       {shareFile && <ShareDialog client={client} file={shareFile} onClose={() => setShareFile(null)} />}
+      {uploadingFileCount > 0 && <UploadProgress fileCount={uploadingFileCount} />}
     </main>
   );
+}
+
+function UploadProgress({ fileCount }: { fileCount: number }) {
+  return <div className="fixed inset-x-0 bottom-0 z-50 border-t border-blue-200 bg-white/95 px-5 py-3 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur" role="status" aria-live="polite"><div className="mx-auto flex max-w-3xl items-center gap-3 text-sm font-medium text-slate-700"><LoaderCircle className="shrink-0 animate-spin text-blue-600" size={18} /><span>Uploading {fileCount} file{fileCount === 1 ? "" : "s"}…</span><div className="ml-auto h-1.5 w-28 overflow-hidden rounded-full bg-blue-100"><div className="h-full w-2/3 animate-pulse rounded-full bg-blue-600" /></div></div></div>;
 }
 
 function UsageCard({ usage }: { usage?: StorageUsage }) {
