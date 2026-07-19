@@ -18,6 +18,15 @@ describe("ZoDriveClient", () => {
     );
   });
 
+  it("sends advanced file search options through the list endpoint", async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ objects: [] }), { status: 200 }));
+    const client = new ZoDriveClient({ baseUrl: "https://drive.example", fetcher });
+
+    await client.list({ contentQuery: "growth plan", modifiedAfter: "2026-01-01T00:00:00.000Z", starred: true, type: "document" });
+
+    expect(fetcher).toHaveBeenCalledWith("https://drive.example/objects?contentQuery=growth+plan&type=document&starred=true&modifiedAfter=2026-01-01T00%3A00%3A00.000Z", expect.objectContaining({ method: "GET" }));
+  });
+
   it("streams a browser-compatible Blob through the API", async () => {
     const fetcher = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ key: "Notes/hello.txt", name: "hello.txt", size: 5, contentType: "text/plain", updatedAt: "2026-01-01T00:00:00.000Z" }), { status: 201 })
@@ -62,6 +71,16 @@ describe("ZoDriveClient", () => {
 
     await expect(client.createNativeFile({ name: "Roadmap", path: "Projects", type: "spreadsheet" })).resolves.toEqual(file);
     expect(fetcher).toHaveBeenCalledWith("https://drive.example/native-files", expect.objectContaining({ method: "POST" }));
+  });
+
+  it("saves Zo-native file content through the API", async () => {
+    const file = { key: "Projects/Notes", name: "Notes", size: 10, contentType: "application/vnd.zo.document+json", nativeType: "document", updatedAt: "2026-01-01T00:00:00.000Z", starred: false };
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify(file), { status: 200 }));
+    const client = new ZoDriveClient({ baseUrl: "https://drive.example", fetcher });
+    const content = { format: "zo-native" as const, type: "document" as const, version: 1 as const, blocks: ["Hello"] };
+
+    await expect(client.saveNativeFile("Projects/Notes", content)).resolves.toEqual(file);
+    expect(fetcher).toHaveBeenCalledWith("https://drive.example/native-files/Projects/Notes", expect.objectContaining({ method: "PUT" }));
   });
 
   it("lists and updates starred files through the API", async () => {

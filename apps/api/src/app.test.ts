@@ -113,6 +113,16 @@ describe("Zo Drive API", () => {
     expect(downloaded.headers.get("content-type")).toBe("application/vnd.sketch");
   });
 
+  it("filters list results with advanced search query fields", async () => {
+    const app = await createTestApp();
+    await app.request("http://localhost/objects", { method: "POST", headers: { "content-type": "text/plain", "x-test-user-id": "alice", "x-zo-drive-file-name": "plan.txt" }, body: "Compound growth" });
+    await app.request("http://localhost/objects", { method: "POST", headers: { "content-type": "image/png", "x-test-user-id": "alice", "x-zo-drive-file-name": "logo.png" }, body: "image" });
+    await app.request("http://localhost/stars/plan.txt", { method: "PUT", headers: { "x-test-user-id": "alice" } });
+
+    const response = await app.request("http://localhost/objects?type=document&contentQuery=growth&starred=true&modifiedAfter=2020-01-01T00%3A00%3A00.000Z", { headers: { "x-test-user-id": "alice" } });
+    await expect(response.json()).resolves.toMatchObject({ objects: [{ key: "plan.txt", starred: true }] });
+  });
+
   it("requires raw-upload file metadata", async () => {
     const app = await createTestApp();
 
@@ -180,6 +190,14 @@ describe("Zo Drive API", () => {
     });
     expect(created.status).toBe(201);
     await expect(created.json()).resolves.toMatchObject({ key: "Projects/Roadmap", contentType: "application/vnd.zo.spreadsheet+json", nativeType: "spreadsheet" });
+    const saved = await app.request("http://localhost/native-files/Projects/Roadmap", {
+      method: "PUT",
+      headers: { "content-type": "application/json", "x-test-user-id": "alice" },
+      body: JSON.stringify({ content: { format: "zo-native", type: "spreadsheet", version: 1, sheets: [{ name: "Sheet 1", cells: { A1: "Revenue" } }] } })
+    });
+    expect(saved.status).toBe(200);
+    const content = await app.request("http://localhost/objects/Projects/Roadmap", { headers: { "x-test-user-id": "alice" } });
+    await expect(content.json()).resolves.toMatchObject({ sheets: [{ cells: { A1: "Revenue" } }] });
     expect((await app.request("http://localhost/native-files", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "Private", type: "document" }) })).status).toBe(401);
     expect((await app.request("http://localhost/native-files", { method: "POST", headers: { "content-type": "application/json", "x-test-user-id": "alice" }, body: JSON.stringify({ name: "Roadmap", path: "Projects", type: "spreadsheet" }) })).status).toBe(409);
   });

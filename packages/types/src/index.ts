@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const nativeFileTypeSchema = z.enum(["document", "spreadsheet", "presentation", "video", "form"]);
+export const nativeFileTypeSchema = z.enum(["document", "spreadsheet", "presentation", "form"]);
 
 export const driveObjectSchema = z.object({
   key: z.string(),

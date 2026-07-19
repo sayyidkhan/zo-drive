@@ -1,9 +1,15 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { DriveApp } from "./drive-app.js";
+import { DriveApp, formulaDisplay } from "./drive-app.js";
 
 describe("DriveApp", () => {
+  it("calculates safe spreadsheet formulas", () => {
+    expect(formulaDisplay("=SUM(A1:A3)+B1", { A1: "2", A2: "=A1*3", A3: "4", B1: "1" })).toBe("13");
+    expect(formulaDisplay("=A1/A2", { A1: "8", A2: "2" })).toBe("4");
+    expect(formulaDisplay("=NOT_A_FORMULA()", {})).toBe("#ERROR");
+  });
+
   it("shows owner registration instead of the drive when no account exists", async () => {
     const authClient = {
       getAuthStatus: vi.fn().mockResolvedValue({ authenticated: false, registrationAllowed: true, user: null }),
@@ -32,14 +38,15 @@ describe("DriveApp", () => {
       listStarred: vi.fn().mockResolvedValue([{ key: "photo.jpg", name: "photo.jpg", size: 10, contentType: "image/jpeg", updatedAt: "2026-01-01T00:00:00.000Z", starred: true }]),
       listTrash: vi.fn().mockResolvedValue([]),
       createFolder: vi.fn(),
-      createNativeFile: vi.fn().mockResolvedValue({ key: "Untitled document", name: "Untitled document", size: 1, contentType: "application/vnd.zo.document+json", nativeType: "document", updatedAt: "2026-01-01T00:00:00.000Z", starred: false }),
+      createNativeFile: vi.fn().mockResolvedValue({ key: "Strategy", name: "Strategy", size: 1, contentType: "application/vnd.zo.document+json", nativeType: "document", updatedAt: "2026-01-01T00:00:00.000Z", starred: false }),
+      saveNativeFile: vi.fn().mockResolvedValue({ key: "Strategy", name: "Strategy", size: 1, contentType: "application/vnd.zo.document+json", nativeType: "document", updatedAt: "2026-01-01T00:00:00.000Z", starred: false }),
       createShare: vi.fn(),
       upload: vi.fn(),
       delete: vi.fn(),
       restoreTrash: vi.fn(),
       permanentlyDeleteTrash: vi.fn(),
       emptyTrash: vi.fn(),
-      download: vi.fn().mockResolvedValue(new Response(new Blob(["image bytes"], { type: "image/jpeg" }))),
+      download: vi.fn((key: string) => Promise.resolve(key === "Strategy" ? new Response(JSON.stringify({ format: "zo-native", type: "document", version: 1, blocks: [] }), { headers: { "content-type": "application/vnd.zo.document+json" } }) : new Response(new Blob(["image bytes"], { type: "image/jpeg" })))),
       star: vi.fn(),
       unstar: vi.fn(),
       updateSharePasscode: vi.fn(),
@@ -64,6 +71,27 @@ describe("DriveApp", () => {
     expect(screen.getByText("photo.jpg")).toBeInTheDocument();
     expect(screen.getByText("15 B used of 100 GB")).toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole("button", { name: "Recent" }));
+    expect(await screen.findByRole("heading", { name: "Recent" })).toBeInTheDocument();
+    expect(await screen.findByText("Last activity")).toBeInTheDocument();
+    expect(screen.getByText("Notes")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Recent file type"), { target: { value: "image" } });
+    await waitFor(() => expect(client.list).toHaveBeenLastCalledWith(expect.objectContaining({ type: "image" })));
+    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    fireEvent.click(screen.getByRole("button", { name: "My Drive" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Advanced search" }));
+    expect(await screen.findByRole("dialog", { name: "Advanced search" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("File type"), { target: { value: "document" } });
+    fireEvent.change(screen.getByLabelText("Has the words"), { target: { value: "strategy" } });
+    fireEvent.click(screen.getByLabelText("Only starred files"));
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    await waitFor(() => expect(client.list).toHaveBeenLastCalledWith(expect.objectContaining({ contentQuery: "strategy", starred: true, type: "document" })));
+
+    fireEvent.click(screen.getByRole("button", { name: "Advanced search" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reset" }));
+    await waitFor(() => expect(screen.getByText("photo.jpg")).toBeInTheDocument());
+
     fireEvent.click(screen.getByRole("button", { name: "Add photo.jpg to Starred" }));
     await waitFor(() => expect(client.star).toHaveBeenCalledWith("photo.jpg"));
     fireEvent.click(screen.getByRole("button", { name: "Starred" }));
@@ -78,11 +106,20 @@ describe("DriveApp", () => {
     await waitFor(() => expect(client.createFolder).toHaveBeenCalledWith("Ideas"));
 
     fireEvent.click(screen.getByRole("button", { name: "New" }));
+    expect(screen.getByAltText("Document illustration")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "New Zo Video" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "New Zo Document" }));
     expect(await screen.findByRole("dialog", { name: "Create Zo Document" })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Document name"), { target: { value: "Strategy" } });
     fireEvent.click(screen.getByRole("button", { name: "Create" }));
     await waitFor(() => expect(client.createNativeFile).toHaveBeenCalledWith({ name: "Strategy", path: undefined, type: "document" }));
+    expect(await screen.findByRole("dialog", { name: "Edit Zo Document" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Format bold" })).toBeInTheDocument();
+    const documentContent = screen.getByLabelText("Document content");
+    documentContent.innerHTML = "<p>Build a focused strategy.</p>";
+    fireEvent.input(documentContent);
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(client.saveNativeFile).toHaveBeenCalledWith("Strategy", expect.objectContaining({ blocks: ["Build a focused strategy."] })));
 
     fireEvent.click(await screen.findByText("Notes"));
     expect(await screen.findByText("hello.txt")).toBeInTheDocument();
@@ -116,6 +153,7 @@ describe("DriveApp", () => {
       listTrash: vi.fn().mockResolvedValue([]),
       createFolder: vi.fn(),
       createNativeFile: vi.fn(),
+      saveNativeFile: vi.fn(),
       createShare: vi.fn(),
       upload,
       delete: vi.fn(),

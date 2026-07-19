@@ -1,7 +1,9 @@
 import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
+  Bold,
   Cloud,
+  Clock3,
   Copy,
   Eye,
   EyeOff,
@@ -14,21 +16,26 @@ import {
   FolderUp,
   Grid2X2,
   HardDrive,
-  House,
   KeyRound,
+  Italic,
   List,
+  ListOrdered,
   LoaderCircle,
   LockKeyhole,
   LogOut,
   MoreHorizontal,
   Plus,
+  Palette,
   Search,
+  Sigma,
+  SlidersHorizontal,
   RotateCcw,
   Share2,
   ShieldAlert,
   Star,
   Trash2,
   Upload,
+  Underline,
   UserRound,
   UsersRound,
   X
@@ -40,10 +47,46 @@ import { create } from "zustand";
 import { ZoDriveClient } from "@zo-drive/sdk";
 import type { AuthStatus, DriveFolder, DriveObject, DriveShare, DriveTrashItem, DriveUser, NativeFileType, PublicShare, ShareAccess, StorageUsage } from "@zo-drive/types";
 
-type DriveClient = Pick<ZoDriveClient, "createFolder" | "createNativeFile" | "createShare" | "delete" | "download" | "emptyTrash" | "getUsage" | "list" | "listFolders" | "listShares" | "listStarred" | "listTrash" | "permanentlyDeleteTrash" | "restoreTrash" | "revokeShare" | "star" | "unstar" | "updateSharePasscode" | "upload">;
+type DriveClient = Pick<ZoDriveClient, "createFolder" | "createNativeFile" | "createShare" | "delete" | "download" | "emptyTrash" | "getUsage" | "list" | "listFolders" | "listShares" | "listStarred" | "listTrash" | "permanentlyDeleteTrash" | "restoreTrash" | "revokeShare" | "saveNativeFile" | "star" | "unstar" | "updateSharePasscode" | "upload">;
 type AuthClient = Pick<ZoDriveClient, "changePassword" | "deleteAccount" | "getAuthStatus" | "login" | "logout" | "registerInitialUser" | "updateProfile">;
 type SharedClient = Pick<ZoDriveClient, "downloadShared" | "getPublicShare">;
 type ViewMode = "grid" | "list";
+type AdvancedFileType = "document" | "spreadsheet" | "presentation" | "form" | "image" | "video" | "audio" | "pdf" | "other";
+type AdvancedFilters = {
+  contentQuery: string;
+  inTrash: boolean;
+  location: "anywhere" | "current";
+  modified: "any" | "today" | "week" | "month" | "year";
+  starred: boolean;
+  type: AdvancedFileType | "any";
+};
+
+type RecentFilters = {
+  modified: AdvancedFilters["modified"];
+  source: "any" | "uploaded" | "zo-native";
+  type: AdvancedFileType | "any";
+};
+
+type NativeFileContent = Record<string, unknown> & {
+  format: "zo-native";
+  type: NativeFileType;
+  version: 1;
+};
+
+const defaultAdvancedFilters: AdvancedFilters = {
+  contentQuery: "",
+  inTrash: false,
+  location: "anywhere",
+  modified: "any",
+  starred: false,
+  type: "any"
+};
+
+const defaultRecentFilters: RecentFilters = {
+  modified: "any",
+  source: "any",
+  type: "any"
+};
 
 type UploadTask = {
   id: string;
@@ -72,6 +115,7 @@ const appBasePath = normalizeAppBasePath(
 );
 const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
+const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
 
 // Local development uses Vite's same-origin proxy so browsers never need to
 // make a cross-port request. Deployed builds use the routed app prefix.
@@ -236,6 +280,10 @@ function DriveScreen({ client, user, onAccount, onSignOut }: { client: DriveClie
   const { currentPath, setCurrentPath, viewMode, setViewMode } = useDriveUi();
   const [section, setSection] = useState<"home" | "my-drive" | "shared" | "starred" | "trash">("my-drive");
   const [search, setSearch] = useState("");
+  const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);
+  const [advancedFilters, setAdvancedFilters] = useState<AdvancedFilters>(defaultAdvancedFilters);
+  const [appliedAdvancedFilters, setAppliedAdvancedFilters] = useState<AdvancedFilters>(defaultAdvancedFilters);
+  const [recentFilters, setRecentFilters] = useState<RecentFilters>(defaultRecentFilters);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [folderDialogOpen, setFolderDialogOpen] = useState(false);
@@ -245,14 +293,28 @@ function DriveScreen({ client, user, onAccount, onSignOut }: { client: DriveClie
   const [shareFile, setShareFile] = useState<DriveObject | null>(null);
   const [passcodeShare, setPasscodeShare] = useState<DriveShare | null>(null);
   const [preview, setPreview] = useState<{ object: DriveObject; url: string } | null>(null);
+  const [nativeEditor, setNativeEditor] = useState<{ content: NativeFileContent; object: DriveObject } | null>(null);
   const [uploads, setUploads] = useState<UploadTask[]>([]);
   const fileInput = useRef<HTMLInputElement>(null);
   const folderInput = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
+  const advancedSearchActive = !sameAdvancedFilters(appliedAdvancedFilters, defaultAdvancedFilters);
+  const advancedDateRange = dateRangeFor(appliedAdvancedFilters.modified);
+  const recentDateRange = dateRangeFor(recentFilters.modified);
+  const isRecent = section === "home";
+  const searchPrefix = isRecent ? undefined : advancedSearchActive ? appliedAdvancedFilters.location === "current" ? currentPath || undefined : undefined : section === "my-drive" ? currentPath || undefined : undefined;
   const filesQuery = useQuery({
-    queryKey: ["objects", section === "my-drive" ? currentPath : "all", search],
-    queryFn: () => client.list({ prefix: section === "my-drive" ? currentPath || undefined : undefined, query: search || undefined }),
+    queryKey: ["objects", section, searchPrefix ?? "all", search, appliedAdvancedFilters, recentFilters],
+    queryFn: () => client.list({
+      prefix: searchPrefix,
+      query: search || undefined,
+      contentQuery: isRecent ? undefined : appliedAdvancedFilters.contentQuery || undefined,
+      type: isRecent ? recentFilters.type === "any" ? undefined : recentFilters.type : appliedAdvancedFilters.type === "any" ? undefined : appliedAdvancedFilters.type,
+      starred: isRecent ? undefined : appliedAdvancedFilters.starred || undefined,
+      modifiedAfter: isRecent ? recentDateRange?.after : advancedDateRange?.after,
+      modifiedBefore: isRecent ? recentDateRange?.before : advancedDateRange?.before
+    }),
     enabled: section !== "shared" && section !== "starred" && section !== "trash"
   });
   const foldersQuery = useQuery({
@@ -298,12 +360,12 @@ function DriveScreen({ client, user, onAccount, onSignOut }: { client: DriveClie
   });
 
   const objects = filesQuery.data ?? [];
-  const files = visibleFiles(objects, currentPath);
-  const recentFiles = [...objects].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  const files = advancedSearchActive ? objects : visibleFiles(objects, currentPath);
+  const recentFiles = objects.filter((file) => recentFilters.source === "any" || (recentFilters.source === "zo-native" ? isZoNativeFile(file) : !isZoNativeFile(file))).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
   const starredFiles = (starredQuery.data ?? []).filter((file) => !search || file.name.toLowerCase().includes(search.toLowerCase()));
-  const trashItems = (trashQuery.data ?? []).filter((item) => !search || item.name.toLowerCase().includes(search.toLowerCase()));
+  const trashItems = (trashQuery.data ?? []).filter((item) => matchesTrashSearch(item, search, appliedAdvancedFilters));
   const displayedFiles = section === "home" ? recentFiles : section === "starred" ? starredFiles : files;
-  const folders = search ? [] : foldersQuery.data ?? [];
+  const folders = search || advancedSearchActive ? [] : foldersQuery.data ?? [];
   const isLoading = section === "shared" ? sharesQuery.isPending || usageQuery.isPending : section === "starred" ? starredQuery.isPending || usageQuery.isPending : section === "trash" ? trashQuery.isPending || usageQuery.isPending : filesQuery.isPending || (section === "my-drive" && foldersQuery.isPending) || usageQuery.isPending;
   const loadError = filesQuery.error ?? foldersQuery.error ?? sharesQuery.error ?? starredQuery.error ?? trashQuery.error ?? usageQuery.error;
 
@@ -340,6 +402,10 @@ function DriveScreen({ client, user, onAccount, onSignOut }: { client: DriveClie
   async function openPreview(object: DriveObject) {
     try {
       const response = await client.download(object.key);
+      if (object.nativeType) {
+        setNativeEditor({ content: parseNativeFileContent(await response.text(), object.nativeType), object });
+        return;
+      }
       const url = URL.createObjectURL(await response.blob());
       setPreview((current) => {
         if (current) URL.revokeObjectURL(current.url);
@@ -367,13 +433,27 @@ function DriveScreen({ client, user, onAccount, onSignOut }: { client: DriveClie
   async function createNativeFile() {
     if (!nativeFileType || !nativeFileName.trim()) return;
     try {
-      await client.createNativeFile({ name: nativeFileName.trim(), path: currentPath || undefined, type: nativeFileType });
+      const created = await client.createNativeFile({ name: nativeFileName.trim(), path: currentPath || undefined, type: nativeFileType });
       await refresh();
       toast.success(`${nativeFileLabel(nativeFileType)} created`);
       setNativeFileType(null);
       setNativeFileName("");
+      await openPreview(created);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not create the Zo file");
+    }
+  }
+
+  async function saveNativeFile(content: NativeFileContent) {
+    if (!nativeEditor) return;
+    try {
+      await client.saveNativeFile(nativeEditor.object.key, content);
+      await refresh();
+      setNativeEditor(null);
+      toast.success("Saved to Zo Drive");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save the Zo-native file");
+      throw error;
     }
   }
 
@@ -436,6 +516,20 @@ function DriveScreen({ client, user, onAccount, onSignOut }: { client: DriveClie
     setNativeFileName(`Untitled ${nativeFileLabel(type).toLowerCase()}`);
   }
 
+  function applyAdvancedSearch() {
+    setAppliedAdvancedFilters(advancedFilters);
+    setAdvancedSearchOpen(false);
+    setSection(advancedFilters.inTrash ? "trash" : "my-drive");
+    if (advancedFilters.location === "anywhere") setCurrentPath("");
+  }
+
+  function resetAdvancedSearch() {
+    setSearch("");
+    setAdvancedFilters(defaultAdvancedFilters);
+    setAppliedAdvancedFilters(defaultAdvancedFilters);
+    setAdvancedSearchOpen(false);
+  }
+
   function handleDrop(event: DragEvent<HTMLElement>) {
     event.preventDefault();
     void uploadFiles(event.dataTransfer.files);
@@ -461,6 +555,7 @@ function DriveScreen({ client, user, onAccount, onSignOut }: { client: DriveClie
             onChange={(event) => setSearch(event.target.value)}
           />
         </label>
+        <button aria-label="Advanced search" className={`rounded-lg p-2 transition ${advancedSearchActive ? "bg-blue-50 text-blue-700" : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"}`} onClick={() => { setAdvancedFilters(appliedAdvancedFilters); setAdvancedSearchOpen(true); }}><SlidersHorizontal size={21} /></button>
         <div className="flex items-center text-sm font-medium text-slate-500">
           <div className="relative">
             <button title="Account menu" aria-label="Account menu" aria-expanded={accountMenuOpen} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800" onClick={() => setAccountMenuOpen((open) => !open)}><MoreHorizontal size={21} /></button>
@@ -484,14 +579,14 @@ function DriveScreen({ client, user, onAccount, onSignOut }: { client: DriveClie
               <button className="new-menu-item" onClick={() => { setNewMenuOpen(false); folderInput.current?.click(); }}><FolderUp size={17} /> Folder upload</button>
               <button className="new-menu-item" onClick={() => { setNewMenuOpen(false); setFolderDialogOpen(true); }}><FolderPlus size={17} /> New folder</button>
               <div className="my-1 border-t border-slate-100" />
-              {(["document", "spreadsheet", "presentation", "video", "form"] as NativeFileType[]).map((type) => <button className="new-menu-item" key={type} onClick={() => startNativeFile(type)}><FileText size={17} /> New Zo {nativeFileLabel(type)}</button>)}
+              {(["document", "spreadsheet", "presentation", "form"] as NativeFileType[]).map((type) => <button aria-label={`New Zo ${nativeFileLabel(type)}`} className="new-menu-item new-menu-native-item" key={type} onClick={() => startNativeFile(type)}><img className="size-9 shrink-0 rounded-md" src={nativeIllustrationUrl(type)} alt={`${nativeFileLabel(type)} illustration`} /><span>New Zo {nativeFileLabel(type)}</span></button>)}
             </div>}
           </div>
           <input ref={fileInput} aria-label="Upload files" className="hidden" type="file" multiple onChange={handleFileInput} />
           <input ref={folderInput} aria-label="Upload folder" className="hidden" type="file" multiple {...{ webkitdirectory: "" }} onChange={handleFolderInput} />
 
           <nav className="mt-6 space-y-1">
-            <button className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold ${section === "home" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => { setSection("home"); setCurrentPath(""); }}><House size={18} /> Home</button>
+            <button className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold ${section === "home" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => { setSection("home"); setCurrentPath(""); }}><Clock3 size={18} /> Recent</button>
             <button className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold ${section === "my-drive" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => { setSection("my-drive"); setCurrentPath(""); }}><HardDrive size={18} /> My Drive</button>
             <button className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold ${section === "starred" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => { setSection("starred"); setCurrentPath(""); }}><Star size={18} /> Starred</button>
             <button className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold ${section === "shared" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => setSection("shared")}><UsersRound size={18} /> Shared with others</button>
@@ -505,16 +600,18 @@ function DriveScreen({ client, user, onAccount, onSignOut }: { client: DriveClie
           <div className="mb-7 flex flex-wrap items-center justify-between gap-4">
             <div>
               {section === "my-drive" && currentPath && <FolderNavigation currentPath={currentPath} onNavigate={setCurrentPath} />}
-              <h1 className={`${section === "my-drive" && currentPath ? "mt-3" : ""} text-2xl font-semibold tracking-tight text-slate-900`}>{search ? "Search results" : section === "home" ? "Home" : section === "shared" ? "Shared with others" : section === "starred" ? "Starred" : section === "trash" ? "Trash" : currentPath ? currentPath.split("/").at(-1) : "Files"}</h1>
-              {section === "home" && <p className="mt-1 text-sm text-slate-500">Your most recently updated files.</p>}
+              <h1 className={`${section === "my-drive" && currentPath ? "mt-3" : ""} text-2xl font-semibold tracking-tight text-slate-900`}>{search || advancedSearchActive ? "Search results" : section === "home" ? "Recent" : section === "shared" ? "Shared with others" : section === "starred" ? "Starred" : section === "trash" ? "Trash" : currentPath ? currentPath.split("/").at(-1) : "Files"}</h1>
+              {section === "home" && <p className="mt-1 text-sm text-slate-500">Files you recently created, uploaded, or updated.</p>}
               {section === "shared" && <p className="mt-1 text-sm text-slate-500">Manage links you have shared outside your drive.</p>}
               {section === "trash" && <p className="mt-1 text-sm text-slate-500">Items are permanently deleted 30 days after being moved here.</p>}
             </div>
-            {section === "trash" && trashItems.length > 0 ? <button className="rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50" onClick={() => void emptyTrash()}>Empty trash</button> : <div className="flex rounded-lg border border-slate-200 bg-white p-1">
+            {section === "trash" && trashItems.length > 0 ? <button className="rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50" onClick={() => void emptyTrash()}>Empty trash</button> : section !== "home" && <div className="flex rounded-lg border border-slate-200 bg-white p-1">
               <button aria-label="List view" className={`rounded-md p-2 ${viewMode === "list" ? "bg-slate-100 text-slate-900" : "text-slate-400"}`} onClick={() => setViewMode("list")}><List size={18} /></button>
               <button aria-label="Grid view" className={`rounded-md p-2 ${viewMode === "grid" ? "bg-slate-100 text-slate-900" : "text-slate-400"}`} onClick={() => setViewMode("grid")}><Grid2X2 size={18} /></button>
             </div>}
           </div>
+
+          {section === "home" && <RecentFiltersBar filters={recentFilters} onChange={setRecentFilters} />}
 
           {isLoading ? (
             <div className="grid h-64 place-items-center text-sm text-slate-500"><LoaderCircle className="mr-2 animate-spin" size={20} /> Loading your drive…</div>
@@ -532,7 +629,9 @@ function DriveScreen({ client, user, onAccount, onSignOut }: { client: DriveClie
           ) : (
             <TrashEntries items={trashItems} onRestore={(id) => void restoreTrashItem(id)} onPermanentlyDelete={(item) => void permanentlyDeleteTrashItem(item)} />
           ) : (section === "my-drive" ? folders.length === 0 && files.length === 0 : displayedFiles.length === 0) ? (
-            <EmptyState title={search ? "No matching files" : section === "starred" ? "No starred files" : "Your drive is ready for its first file"} description={section === "starred" && !search ? "Use the star next to any file to keep it here." : undefined} action={section === "starred" ? "Go to My Drive" : "Upload files"} onAction={() => section === "starred" ? setSection("my-drive") : fileInput.current?.click()} />
+            <EmptyState title={search ? "No matching files" : section === "home" ? "No recent files" : section === "starred" ? "No starred files" : "Your drive is ready for its first file"} description={section === "home" ? "Recent uploads, changes, and Zo-native files will appear here." : section === "starred" && !search ? "Use the star next to any file to keep it here." : undefined} action={section === "starred" ? "Go to My Drive" : "Upload files"} onAction={() => section === "starred" ? setSection("my-drive") : fileInput.current?.click()} />
+          ) : section === "home" ? (
+            <RecentEntries files={recentFiles} onPreview={openPreview} onDelete={(key) => deleteMutation.mutate(key)} onToggleStar={(file) => starMutation.mutate({ key: file.key, starred: file.starred })} onShare={setShareFile} />
           ) : (
             <DriveEntries
               files={displayedFiles}
@@ -549,6 +648,8 @@ function DriveScreen({ client, user, onAccount, onSignOut }: { client: DriveClie
       </div>
 
       {preview && <PreviewDialog preview={preview} onClose={closePreview} />}
+      {nativeEditor && <NativeEditor key={nativeEditor.object.key} content={nativeEditor.content} fileName={nativeEditor.object.name} onClose={() => setNativeEditor(null)} onSave={saveNativeFile} />}
+      {advancedSearchOpen && <AdvancedSearchDialog filters={advancedFilters} itemName={search} onCancel={() => setAdvancedSearchOpen(false)} onFiltersChange={setAdvancedFilters} onItemNameChange={setSearch} onReset={resetAdvancedSearch} onSearch={applyAdvancedSearch} />}
       {folderDialogOpen && <FolderDialog folderName={folderName} onCancel={() => { setFolderDialogOpen(false); setFolderName(""); }} onCreate={() => void createFolder()} onNameChange={setFolderName} />}
       {nativeFileType && <NativeFileDialog type={nativeFileType} name={nativeFileName} onCancel={() => { setNativeFileType(null); setNativeFileName(""); }} onCreate={() => void createNativeFile()} onNameChange={setNativeFileName} />}
       {shareFile && <ShareDialog client={client} file={shareFile} onClose={() => setShareFile(null)} />}
@@ -641,6 +742,55 @@ function DriveEntries({ files, folders, viewMode, onOpenFolder, onPreview, onDel
   );
 }
 
+function RecentFiltersBar({ filters, onChange }: { filters: RecentFilters; onChange: (filters: RecentFilters) => void }) {
+  return (
+    <div className="mb-6 flex flex-wrap gap-2" aria-label="Recent filters">
+      <label className="sr-only" htmlFor="recent-type">Type</label>
+      <select id="recent-type" aria-label="Recent file type" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm outline-none hover:border-blue-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-100" value={filters.type} onChange={(event) => onChange({ ...filters, type: event.target.value as RecentFilters["type"] })}>
+        <option value="any">All types</option><option value="document">Documents</option><option value="spreadsheet">Spreadsheets</option><option value="presentation">Presentations</option><option value="form">Forms</option><option value="image">Images</option><option value="video">Videos</option><option value="audio">Audio</option><option value="pdf">PDFs</option><option value="other">Other files</option>
+      </select>
+      <label className="sr-only" htmlFor="recent-modified">Modified</label>
+      <select id="recent-modified" aria-label="Recent modified date" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm outline-none hover:border-blue-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-100" value={filters.modified} onChange={(event) => onChange({ ...filters, modified: event.target.value as RecentFilters["modified"] })}>
+        <option value="any">Any time</option><option value="today">Modified today</option><option value="week">Past week</option><option value="month">Past month</option><option value="year">Past year</option>
+      </select>
+      <label className="sr-only" htmlFor="recent-source">Source</label>
+      <select id="recent-source" aria-label="Recent source" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm outline-none hover:border-blue-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-100" value={filters.source} onChange={(event) => onChange({ ...filters, source: event.target.value as RecentFilters["source"] })}>
+        <option value="any">All sources</option><option value="uploaded">Uploaded files</option><option value="zo-native">Zo-native files</option>
+      </select>
+      {(filters.type !== "any" || filters.modified !== "any" || filters.source !== "any") && <button className="rounded-lg px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50" onClick={() => onChange(defaultRecentFilters)}>Clear filters</button>}
+    </div>
+  );
+}
+
+function RecentEntries({ files, onPreview, onDelete, onToggleStar, onShare }: {
+  files: DriveObject[];
+  onPreview: (file: DriveObject) => void;
+  onDelete: (key: string) => void;
+  onToggleStar: (file: DriveObject) => void;
+  onShare: (file: DriveObject) => void;
+}) {
+  const groups = groupRecentFiles(files);
+  return (
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div className="hidden grid-cols-[minmax(15rem,1fr)_12rem_7rem_10rem_7rem] gap-4 border-b border-slate-100 bg-slate-50 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-400 lg:grid"><span>Name</span><span>Last activity</span><span>File size</span><span>Location</span><span /></div>
+      {groups.map(([label, items]) => (
+        <section key={label}>
+          <h2 className="border-b border-slate-100 bg-white px-5 py-3 text-sm font-semibold text-slate-600">{label}</h2>
+          {items.map((file) => (
+            <article key={file.key} className="group grid gap-3 border-b border-slate-100 px-5 py-3 last:border-b-0 hover:bg-slate-50 lg:grid-cols-[minmax(15rem,1fr)_12rem_7rem_10rem_7rem] lg:items-center lg:gap-4">
+              <button className="flex min-w-0 items-center gap-3 text-left" onClick={() => void onPreview(file)}><span className="rounded-lg bg-slate-100 p-2 text-slate-500">{fileIcon(file.contentType)}</span><span className="min-w-0 truncate text-sm font-medium text-slate-800">{file.name}</span></button>
+              <span className="text-xs text-slate-500">{formatRecentActivity(file.updatedAt)}</span>
+              <span className="text-xs text-slate-500">{formatBytes(file.size)}</span>
+              <span className="truncate text-xs text-slate-500" title={recentFileLocation(file.key)}>{recentFileLocation(file.key)}</span>
+              <div className="flex items-center justify-end gap-1"><button aria-label={`${file.starred ? "Remove" : "Add"} ${file.name} ${file.starred ? "from" : "to"} Starred`} className={`rounded-md p-2 transition hover:bg-amber-50 hover:text-amber-500 ${file.starred ? "text-amber-400" : "text-slate-400 opacity-0 group-hover:opacity-100 focus:opacity-100"}`} onClick={() => onToggleStar(file)}><Star size={17} fill={file.starred ? "currentColor" : "none"} /></button><button aria-label={`Share ${file.name}`} className="rounded-md p-2 text-slate-400 opacity-0 transition hover:bg-blue-50 hover:text-blue-600 group-hover:opacity-100 focus:opacity-100" onClick={() => onShare(file)}><Share2 size={17} /></button><button aria-label={`Move ${file.name} to Trash`} className="rounded-md p-2 text-slate-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100 focus:opacity-100" onClick={() => onDelete(file.key)}><Trash2 size={17} /></button></div>
+            </article>
+          ))}
+        </section>
+      ))}
+    </div>
+  );
+}
+
 function TrashEntries({ items, onRestore, onPermanentlyDelete }: { items: DriveTrashItem[]; onRestore: (id: string) => void; onPermanentlyDelete: (item: DriveTrashItem) => void }) {
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -667,6 +817,11 @@ function FolderDialog({ folderName, onCancel, onCreate, onNameChange }: { folder
 function NativeFileDialog({ type, name, onCancel, onCreate, onNameChange }: { type: NativeFileType; name: string; onCancel: () => void; onCreate: () => void; onNameChange: (name: string) => void }) {
   const label = nativeFileLabel(type);
   return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/30 p-4" role="dialog" aria-modal="true" aria-label={`Create Zo ${label}`}><form className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl" onSubmit={(event) => { event.preventDefault(); onCreate(); }}><h2 className="text-lg font-semibold text-slate-900">Create Zo {label}</h2><p className="mt-1 text-sm text-slate-500">This is a private, structured Zo-native file in the current folder.</p><input aria-label={`${label} name`} autoFocus className="mt-5 w-full rounded-lg border border-slate-300 px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" maxLength={128} value={name} onChange={(event) => onNameChange(event.target.value)} required /><div className="mt-5 flex justify-end gap-2"><button className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100" type="button" onClick={onCancel}>Cancel</button><button className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-300" disabled={!name.trim()} type="submit">Create</button></div></form></div>;
+}
+
+function AdvancedSearchDialog({ filters, itemName, onCancel, onFiltersChange, onItemNameChange, onReset, onSearch }: { filters: AdvancedFilters; itemName: string; onCancel: () => void; onFiltersChange: (filters: AdvancedFilters) => void; onItemNameChange: (value: string) => void; onReset: () => void; onSearch: () => void }) {
+  const update = (change: Partial<AdvancedFilters>) => onFiltersChange({ ...filters, ...change });
+  return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4" role="dialog" aria-modal="true" aria-label="Advanced search"><form className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl" onSubmit={(event) => { event.preventDefault(); onSearch(); }}><header className="flex items-center justify-between border-b border-slate-100 px-6 py-5"><div><h2 className="text-xl font-semibold text-slate-900">Advanced search</h2><p className="mt-1 text-sm text-slate-500">Search your private Drive with precise file filters.</p></div><button aria-label="Close advanced search" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" onClick={onCancel} type="button"><X size={20} /></button></header><div className="grid gap-5 p-6 sm:grid-cols-[10rem_minmax(0,1fr)]"><label className="text-sm font-semibold text-slate-700 sm:pt-2">Type</label><select aria-label="File type" className="rounded-lg border border-slate-300 bg-white px-3 py-2.5" value={filters.type} onChange={(event) => update({ type: event.target.value as AdvancedFilters["type"] })}><option value="any">Any</option><option value="document">Documents</option><option value="spreadsheet">Spreadsheets</option><option value="presentation">Presentations</option><option value="form">Forms</option><option value="image">Images</option><option value="video">Videos</option><option value="audio">Audio</option><option value="pdf">PDFs</option><option value="other">Other files</option></select><label className="text-sm font-semibold text-slate-700 sm:pt-2" htmlFor="advanced-content">Has the words</label><input id="advanced-content" className="rounded-lg border border-slate-300 px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" placeholder="Words within a text or Zo-native file" value={filters.contentQuery} onChange={(event) => update({ contentQuery: event.target.value })} /><label className="text-sm font-semibold text-slate-700 sm:pt-2" htmlFor="advanced-name">Item name</label><input id="advanced-name" className="rounded-lg border border-slate-300 px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" placeholder="Part of the file name" value={itemName} onChange={(event) => onItemNameChange(event.target.value)} /><label className="text-sm font-semibold text-slate-700 sm:pt-2">Location</label><div className="space-y-3"><select aria-label="Search location" className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5" value={filters.location} onChange={(event) => update({ location: event.target.value as AdvancedFilters["location"] })}><option value="anywhere">Anywhere in My Drive</option><option value="current">Current folder only</option></select><label className="flex items-center gap-2 text-sm font-medium text-slate-700"><input aria-label="Search in Trash" className="size-4 accent-blue-600" type="checkbox" checked={filters.inTrash} onChange={(event) => update({ inTrash: event.target.checked })} /> Search in Trash</label><label className="flex items-center gap-2 text-sm font-medium text-slate-700"><input aria-label="Only starred files" className="size-4 accent-blue-600" type="checkbox" checked={filters.starred} onChange={(event) => update({ starred: event.target.checked })} /> Only Starred</label></div><label className="text-sm font-semibold text-slate-700 sm:pt-2">Date modified</label><select aria-label="Date modified" className="rounded-lg border border-slate-300 bg-white px-3 py-2.5" value={filters.modified} onChange={(event) => update({ modified: event.target.value as AdvancedFilters["modified"] })}><option value="any">Any time</option><option value="today">Today</option><option value="week">Past week</option><option value="month">Past month</option><option value="year">Past year</option></select></div><footer className="flex items-center justify-between border-t border-slate-100 px-6 py-4"><button className="text-sm font-semibold text-blue-700 hover:text-blue-900" type="button" onClick={onReset}>Reset</button><div className="flex gap-2"><button className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100" type="button" onClick={onCancel}>Cancel</button><button className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700" type="submit">Search</button></div></footer></form></div>;
 }
 
 function ShareDialog({ client, file, onClose }: { client: DriveClient; file: DriveObject; onClose: () => void }) {
@@ -738,6 +893,80 @@ function PreviewDialog({ preview, onClose }: { preview: { object: DriveObject; u
   return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/60 p-4" role="dialog" aria-modal="true" aria-label={`Preview ${object.name}`}><div className="w-full max-w-5xl rounded-2xl bg-slate-900 p-4 shadow-2xl"><div className="mb-4 flex items-center justify-between gap-4 text-white"><span className="truncate text-sm font-medium">{object.name}</span><button className="rounded-lg p-2 hover:bg-white/10" onClick={onClose} aria-label="Close preview"><X size={20} /></button></div><div className="grid min-h-48 place-items-center">{media}</div></div></div>;
 }
 
+function DocumentComposer({ blocks, html, onChange }: { blocks: string[]; html: string; onChange: (value: { blocks: string[]; html: string }) => void }) {
+  const editor = useRef<HTMLDivElement>(null);
+  const initialHtml = html ? sanitizeRichHtml(html) : blocksToHtml(blocks);
+
+  useEffect(() => {
+    if (editor.current && editor.current.innerHTML !== initialHtml) editor.current.innerHTML = initialHtml;
+  }, [initialHtml]);
+
+  function sync() {
+    const nextHtml = sanitizeRichHtml(editor.current?.innerHTML ?? "");
+    onChange({ blocks: richHtmlToBlocks(nextHtml), html: nextHtml });
+  }
+
+  function format(command: string, value?: string) {
+    editor.current?.focus();
+    document.execCommand(command, false, value);
+    sync();
+  }
+
+  return <div className="min-h-full bg-slate-100 px-4 py-5 md:px-8"><div className="mx-auto max-w-4xl overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"><div className="flex flex-wrap items-center gap-1 border-b border-slate-200 bg-slate-50 p-2"><select aria-label="Text style" className="rounded-md bg-transparent px-2 py-1.5 text-sm font-medium text-slate-700 outline-none hover:bg-white" defaultValue="p" onChange={(event) => format("formatBlock", event.target.value)}><option value="p">Paragraph</option><option value="h1">Title</option><option value="h2">Heading</option><option value="blockquote">Quote</option></select><span className="mx-1 h-5 border-l border-slate-200" />{[["bold", <Bold size={17} />], ["italic", <Italic size={17} />], ["underline", <Underline size={17} />], ["insertUnorderedList", <List size={17} />], ["insertOrderedList", <ListOrdered size={17} />]].map(([command, icon]) => <button aria-label={`Format ${command}`} className="rounded-md p-2 text-slate-600 hover:bg-white hover:text-blue-700" key={String(command)} onMouseDown={(event) => event.preventDefault()} onClick={() => format(command as string)}>{icon}</button>)}</div><div ref={editor} aria-label="Document content" contentEditable suppressContentEditableWarning className="min-h-[62vh] p-8 text-[1.05rem] leading-8 text-slate-800 outline-none empty:before:pointer-events-none empty:before:text-slate-300 empty:before:content-[attr(data-placeholder)] md:p-12" data-placeholder="Start writing…" onInput={sync} /></div></div>;
+}
+
+function SpreadsheetComposer({ cells, onChange }: { cells: Record<string, string>; onChange: (cells: Record<string, string>) => void }) {
+  const [selected, setSelected] = useState("A1");
+  const columns = ["A", "B", "C", "D", "E", "F", "G", "H"];
+  const updateCell = (cell: string, value: string) => onChange({ ...cells, [cell]: value });
+  return <div className="min-h-full overflow-auto bg-slate-100 p-4 md:p-7"><div className="mx-auto min-w-[58rem] max-w-7xl overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"><div className="flex items-center gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3"><span className="rounded bg-slate-200 px-2 py-1 text-xs font-semibold text-slate-600">{selected}</span><Sigma size={18} className="text-slate-400" /><input aria-label="Formula bar" className="min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" placeholder="Enter a value or formula, e.g. =SUM(A1:A5)" value={cells[selected] ?? ""} onChange={(event) => updateCell(selected, event.target.value)} /><span className="text-xs text-slate-400">{formulaDisplay(cells[selected] ?? "", cells)}</span></div><div className="grid grid-cols-[3.25rem_repeat(8,minmax(7.5rem,1fr))] bg-slate-50 text-center text-xs font-semibold text-slate-400"><span className="border-b border-r border-slate-200 py-2" />{columns.map((column) => <span className="border-b border-r border-slate-200 py-2 last:border-r-0" key={column}>{column}</span>)}</div>{Array.from({ length: 24 }, (_, index) => index + 1).map((row) => <div className="grid grid-cols-[3.25rem_repeat(8,minmax(7.5rem,1fr))]" key={row}><span className="border-b border-r border-slate-200 bg-slate-50 py-2 text-center text-xs font-semibold text-slate-400">{row}</span>{columns.map((column) => { const cell = `${column}${row}`; const isSelected = selected === cell; return <button aria-label={`Cell ${cell}`} className={`min-w-0 border-b border-r border-slate-200 px-2 py-2 text-left text-sm text-slate-700 outline-none hover:bg-blue-50 focus:z-10 focus:ring-2 focus:ring-inset focus:ring-blue-500 ${isSelected ? "bg-blue-50 ring-2 ring-inset ring-blue-500" : "bg-white"}`} key={cell} onClick={() => setSelected(cell)} onDoubleClick={() => { const next = window.prompt(`Edit ${cell}`, cells[cell] ?? ""); if (next !== null) updateCell(cell, next); }} title={cells[cell] ?? ""}>{formulaDisplay(cells[cell] ?? "", cells)}</button>; })}</div>)}</div><p className="mx-auto mt-3 max-w-7xl text-xs text-slate-500">Select a cell and use the formula bar. Supports `+`, `-`, `*`, `/`, cell references, and `SUM(A1:A5)`.</p></div>;
+}
+
+function PresentationComposer({ activeSlide, onAdd, onSelect, onUpdate, slide, slides }: { activeSlide: number; onAdd: () => void; onSelect: (index: number) => void; onUpdate: (change: Record<string, unknown>) => void; slide: Record<string, unknown>; slides: Record<string, unknown>[] }) {
+  const themeName = typeof slide.theme === "string" && slide.theme in presentationThemes ? slide.theme : "ocean";
+  const theme = presentationThemes[themeName as keyof typeof presentationThemes];
+  const layout = typeof slide.layout === "string" ? slide.layout : "title-body";
+  return <div className="grid min-h-[calc(100vh-4rem)] md:grid-cols-[14rem_minmax(0,1fr)]"><aside className="border-b border-slate-200 bg-white p-4 md:border-b-0 md:border-r"><button className="mb-4 flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-blue-700" onClick={onAdd}><Plus size={17} /> New slide</button><div className="space-y-3">{slides.map((item, index) => { const itemTheme = presentationThemes[typeof item.theme === "string" && item.theme in presentationThemes ? item.theme as keyof typeof presentationThemes : "ocean"]; return <button className={`w-full overflow-hidden rounded-lg border text-left transition ${index === activeSlide ? "border-blue-500 ring-2 ring-blue-100" : "border-slate-200 hover:border-blue-300"}`} key={index} onClick={() => onSelect(index)}><span className="flex aspect-video flex-col justify-center p-3" style={{ background: itemTheme.background, color: itemTheme.foreground }}><span className="text-[0.55rem] font-bold uppercase opacity-60">{index + 1}</span><span className="mt-1 line-clamp-2 text-xs font-semibold">{typeof item.title === "string" ? item.title : "Untitled slide"}</span></span></button>; })}</div></aside><section className="min-w-0 bg-slate-100 p-4 md:p-8"><div className="mx-auto mb-4 flex max-w-6xl flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2"><Palette size={18} className="text-slate-500" /><label className="text-sm font-medium text-slate-600">Theme <select aria-label="Slide theme" className="ml-1 rounded-md border border-slate-300 bg-white px-2 py-1.5" value={themeName} onChange={(event) => onUpdate({ theme: event.target.value })}>{Object.keys(presentationThemes).map((name) => <option key={name} value={name}>{name[0]?.toUpperCase()}{name.slice(1)}</option>)}</select></label></div><label className="text-sm font-medium text-slate-600">Layout <select aria-label="Slide layout" className="ml-1 rounded-md border border-slate-300 bg-white px-2 py-1.5" value={layout} onChange={(event) => onUpdate({ layout: event.target.value })}><option value="title-body">Title and body</option><option value="statement">Big statement</option><option value="two-column">Two columns</option></select></label></div><article className={`mx-auto flex aspect-video w-full max-w-6xl flex-col overflow-hidden rounded-xl p-7 shadow-xl md:p-14 ${layout === "statement" ? "justify-center text-center" : ""}`} style={{ background: theme.background, color: theme.foreground }}><input aria-label="Slide title" className={`w-full border-0 bg-transparent font-semibold tracking-tight outline-none placeholder:opacity-40 ${layout === "statement" ? "text-4xl md:text-6xl" : "text-3xl md:text-5xl"}`} placeholder="Slide title" style={{ color: theme.foreground }} value={typeof slide.title === "string" ? slide.title : ""} onChange={(event) => onUpdate({ title: event.target.value })} /><textarea aria-label="Slide body" className={`mt-8 min-h-0 flex-1 resize-none border-0 bg-transparent text-lg leading-8 outline-none placeholder:opacity-40 md:text-2xl ${layout === "two-column" ? "columns-2 gap-12" : ""}`} placeholder="Write your key message…" style={{ color: theme.foreground }} value={typeof slide.body === "string" ? slide.body : ""} onChange={(event) => onUpdate({ body: event.target.value })} /></article></section></div>;
+}
+
+function NativeEditor({ content: initialContent, fileName, onClose, onSave }: { content: NativeFileContent; fileName: string; onClose: () => void; onSave: (content: NativeFileContent) => Promise<void> }) {
+  const [content, setContent] = useState(initialContent);
+  const [activeSlide, setActiveSlide] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const type = content.type;
+
+  async function save() {
+    setSaving(true);
+    try {
+      await onSave(content);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  let editor: React.ReactNode;
+  if (type === "document") {
+    const blocks = Array.isArray(content.blocks) ? content.blocks.filter((block): block is string => typeof block === "string") : [];
+    editor = <DocumentComposer blocks={blocks} html={typeof content.html === "string" ? content.html : ""} onChange={({ blocks: nextBlocks, html }) => setContent({ ...content, blocks: nextBlocks, html })} />;
+  } else if (type === "spreadsheet") {
+    const sheets = Array.isArray(content.sheets) ? content.sheets : [];
+    const sheet = sheets[0] && typeof sheets[0] === "object" && sheets[0] !== null ? sheets[0] as Record<string, unknown> : { name: "Sheet 1", cells: {} };
+    const cells = sheet.cells && typeof sheet.cells === "object" && !Array.isArray(sheet.cells) ? sheet.cells as Record<string, string> : {};
+    editor = <SpreadsheetComposer cells={cells} onChange={(nextCells) => setContent({ ...content, sheets: [{ ...sheet, cells: nextCells }, ...sheets.slice(1)] })} />;
+  } else if (type === "presentation") {
+    const slides = Array.isArray(content.slides) ? content.slides.filter((slide): slide is Record<string, unknown> => typeof slide === "object" && slide !== null) : [];
+    const currentIndex = Math.min(activeSlide, Math.max(0, slides.length - 1));
+    const slide = slides[currentIndex] ?? { title: "Untitled slide", body: "" };
+    const updateSlide = (change: Record<string, unknown>) => setContent({ ...content, slides: slides.map((item, index) => index === currentIndex ? { ...item, ...change } : item) });
+    editor = <PresentationComposer activeSlide={currentIndex} onAdd={() => { setContent({ ...content, slides: [...slides, { title: `Slide ${slides.length + 1}`, body: "", theme: "ocean" }] }); setActiveSlide(slides.length); }} onSelect={setActiveSlide} onUpdate={updateSlide} slide={slide} slides={slides} />;
+  } else {
+    const questions = Array.isArray(content.questions) ? content.questions.filter((question): question is string => typeof question === "string") : [];
+    editor = <div className="mx-auto max-w-3xl space-y-4 p-6 md:p-10"><div className="rounded-xl border border-blue-100 bg-blue-50 p-5"><input aria-label="Form title" className="w-full bg-transparent text-2xl font-semibold text-slate-900 outline-none placeholder:text-slate-400" placeholder="Untitled form" value={typeof content.title === "string" ? content.title : ""} onChange={(event) => setContent({ ...content, title: event.target.value })} /><p className="mt-2 text-sm text-slate-500">Add questions for this private Zo-native form.</p></div>{questions.map((question, index) => <div className="flex gap-2 rounded-xl border border-slate-200 bg-white p-4" key={index}><input aria-label={`Question ${index + 1}`} className="min-w-0 flex-1 border-0 text-sm font-medium text-slate-800 outline-none" value={question} onChange={(event) => setContent({ ...content, questions: questions.map((item, itemIndex) => itemIndex === index ? event.target.value : item) })} /><button aria-label={`Remove question ${index + 1}`} className="rounded-md p-2 text-slate-400 hover:bg-red-50 hover:text-red-600" onClick={() => setContent({ ...content, questions: questions.filter((_, itemIndex) => itemIndex !== index) })}><Trash2 size={17} /></button></div>)}<button className="rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50" onClick={() => setContent({ ...content, questions: [...questions, "New question"] })}>Add question</button></div>;
+  }
+
+  return <div className="fixed inset-0 z-50 flex flex-col bg-slate-100" role="dialog" aria-modal="true" aria-label={`Edit Zo ${nativeFileLabel(type)}`}><header className="flex min-h-16 items-center gap-3 border-b border-slate-200 bg-white px-4 md:px-6"><button aria-label="Close editor" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" onClick={onClose}><X size={20} /></button><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-800">{fileName}</p><p className="text-xs text-slate-400">Zo {nativeFileLabel(type)} · private</p></div><button className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-300" disabled={saving} onClick={() => void save()}>{saving ? "Saving…" : "Save"}</button></header><main className="min-h-0 flex-1 overflow-auto">{editor}</main></div>;
+}
+
 function visibleFiles(objects: DriveObject[], currentPath: string) {
   const prefix = currentPath ? `${currentPath}/` : "";
   const files: DriveObject[] = [];
@@ -758,7 +987,173 @@ function fileIcon(contentType: string) {
 }
 
 function nativeFileLabel(type: NativeFileType): string {
-  return { document: "Document", spreadsheet: "Spreadsheet", presentation: "Presentation", video: "Video", form: "Form" }[type];
+  return { document: "Document", spreadsheet: "Spreadsheet", presentation: "Presentation", form: "Form" }[type];
+}
+
+function parseNativeFileContent(value: string, expectedType: NativeFileType): NativeFileContent {
+  const parsed: unknown = JSON.parse(value);
+  if (!parsed || typeof parsed !== "object") throw new Error("This Zo-native file is invalid");
+  const content = parsed as Partial<NativeFileContent>;
+  if (content.format !== "zo-native" || content.type !== expectedType || content.version !== 1) {
+    throw new Error("This Zo-native file has an unsupported format");
+  }
+  return content as NativeFileContent;
+}
+
+const presentationThemes = {
+  ocean: { background: "linear-gradient(135deg, #082f49, #0e7490)", foreground: "#ecfeff" },
+  ember: { background: "linear-gradient(135deg, #431407, #c2410c)", foreground: "#fff7ed" },
+  plum: { background: "linear-gradient(135deg, #3b0764, #7e22ce)", foreground: "#faf5ff" },
+  paper: { background: "#fffdf7", foreground: "#1c1917" }
+} as const;
+
+function blocksToHtml(blocks: string[]): string {
+  return blocks.map((block) => `<p>${escapeHtml(block)}</p>`).join("");
+}
+
+function richHtmlToBlocks(html: string): string[] {
+  const element = document.createElement("div");
+  element.innerHTML = sanitizeRichHtml(html);
+  return (element.textContent ?? "").split(/\n{2,}/).map((block) => block.trim()).filter(Boolean);
+}
+
+function sanitizeRichHtml(html: string): string {
+  const template = document.createElement("template");
+  template.innerHTML = html;
+  const allowed = new Set(["P", "DIV", "H1", "H2", "BLOCKQUOTE", "UL", "OL", "LI", "STRONG", "B", "EM", "I", "U", "BR", "SPAN"]);
+  for (const element of [...template.content.querySelectorAll("*")]) {
+    if (!allowed.has(element.tagName)) {
+      element.replaceWith(...[...element.childNodes]);
+      continue;
+    }
+    for (const attribute of [...element.attributes]) element.removeAttribute(attribute.name);
+  }
+  return template.innerHTML;
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character);
+}
+
+export function formulaDisplay(value: string, cells: Record<string, string>): string {
+  if (!value.startsWith("=")) return value;
+  try {
+    const result = evaluateFormula(value.slice(1), cells, new Set());
+    return Number.isInteger(result) ? String(result) : String(Math.round(result * 1_000_000) / 1_000_000);
+  } catch {
+    return "#ERROR";
+  }
+}
+
+function evaluateFormula(expression: string, cells: Record<string, string>, visited: Set<string>): number {
+  const withSums = expression.replace(/SUM\(([A-Z]+\d+):([A-Z]+\d+)\)/gi, (_match, first: string, last: string) => String(sumRange(first.toUpperCase(), last.toUpperCase(), cells, visited)));
+  const substituted = withSums.replace(/\b([A-Z]+\d+)\b/gi, (_match, reference: string) => String(cellNumber(reference.toUpperCase(), cells, visited)));
+  if (!/^[0-9+\-*/().\s]+$/.test(substituted)) throw new Error("Unsupported formula");
+  const result = Function(`"use strict"; return (${substituted});`)();
+  if (typeof result !== "number" || !Number.isFinite(result)) throw new Error("Invalid result");
+  return result;
+}
+
+function cellNumber(reference: string, cells: Record<string, string>, visited: Set<string>): number {
+  if (visited.has(reference)) throw new Error("Circular reference");
+  const value = cells[reference] ?? "0";
+  if (!value.startsWith("=")) return Number(value) || 0;
+  const nextVisited = new Set(visited);
+  nextVisited.add(reference);
+  return evaluateFormula(value.slice(1), cells, nextVisited);
+}
+
+function sumRange(first: string, last: string, cells: Record<string, string>, visited: Set<string>): number {
+  const start = parseCellReference(first);
+  const end = parseCellReference(last);
+  if (!start || !end || start.column > end.column || start.row > end.row) throw new Error("Invalid range");
+  let total = 0;
+  for (let column = start.column; column <= end.column; column += 1) {
+    for (let row = start.row; row <= end.row; row += 1) total += cellNumber(`${columnName(column)}${row}`, cells, visited);
+  }
+  return total;
+}
+
+function parseCellReference(value: string): { column: number; row: number } | null {
+  const match = /^([A-Z]+)(\d+)$/.exec(value);
+  if (!match) return null;
+  const column = [...match[1]!].reduce((total, character) => total * 26 + character.charCodeAt(0) - 64, 0);
+  return { column, row: Number(match[2]) };
+}
+
+function columnName(column: number): string {
+  let result = "";
+  for (let current = column; current > 0; current = Math.floor((current - 1) / 26)) result = String.fromCharCode(65 + ((current - 1) % 26)) + result;
+  return result;
+}
+
+function sameAdvancedFilters(left: AdvancedFilters, right: AdvancedFilters): boolean {
+  return left.contentQuery === right.contentQuery && left.inTrash === right.inTrash && left.location === right.location && left.modified === right.modified && left.starred === right.starred && left.type === right.type;
+}
+
+function dateRangeFor(value: AdvancedFilters["modified"]): { after: string; before: string } | null {
+  if (value === "any") return null;
+  const now = new Date();
+  const after = new Date(now);
+  if (value === "today") after.setHours(0, 0, 0, 0);
+  if (value === "week") after.setDate(after.getDate() - 7);
+  if (value === "month") after.setMonth(after.getMonth() - 1);
+  if (value === "year") after.setFullYear(after.getFullYear() - 1);
+  return { after: after.toISOString(), before: now.toISOString() };
+}
+
+function matchesTrashSearch(item: DriveTrashItem, query: string, filters: AdvancedFilters): boolean {
+  if (query && !item.name.toLowerCase().includes(query.toLowerCase())) return false;
+  if (filters.starred && !item.starred) return false;
+  if (filters.type !== "any" && !matchesContentTypeCategory(item.contentType, filters.type)) return false;
+  const range = dateRangeFor(filters.modified);
+  return !range || (item.trashedAt >= range.after && item.trashedAt <= range.before);
+}
+
+function matchesContentTypeCategory(contentType: string, type: AdvancedFileType): boolean {
+  if (type === "document") return contentType === "application/vnd.zo.document+json" || contentType.startsWith("text/");
+  if (type === "spreadsheet") return contentType === "application/vnd.zo.spreadsheet+json";
+  if (type === "presentation") return contentType === "application/vnd.zo.presentation+json";
+  if (type === "form") return contentType === "application/vnd.zo.form+json";
+  if (type === "image") return contentType.startsWith("image/");
+  if (type === "video") return contentType.startsWith("video/");
+  if (type === "audio") return contentType.startsWith("audio/");
+  if (type === "pdf") return contentType === "application/pdf";
+  return !contentType.startsWith("text/") && !contentType.startsWith("image/") && !contentType.startsWith("video/") && !contentType.startsWith("audio/") && contentType !== "application/pdf" && !contentType.startsWith("application/vnd.zo.");
+}
+
+function isZoNativeFile(file: DriveObject): boolean {
+  return Boolean(file.nativeType) || file.contentType.startsWith("application/vnd.zo.");
+}
+
+function recentFileLocation(key: string): string {
+  const separator = key.lastIndexOf("/");
+  return separator < 0 ? "My Drive" : key.slice(0, separator);
+}
+
+function formatRecentActivity(updatedAt: string): string {
+  const date = new Date(updatedAt);
+  const now = new Date();
+  const today = date.toDateString() === now.toDateString();
+  if (today) return `Modified today, ${date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+  return `Modified ${date.toLocaleDateString([], { month: "short", day: "numeric" })}`;
+}
+
+function groupRecentFiles(files: DriveObject[]): Array<[string, DriveObject[]]> {
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const weekStart = new Date(todayStart);
+  weekStart.setDate(todayStart.getDate() - 7);
+  const lastWeekStart = new Date(todayStart);
+  lastWeekStart.setDate(todayStart.getDate() - 14);
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const groups = new Map<string, DriveObject[]>();
+  for (const file of files) {
+    const updatedAt = new Date(file.updatedAt);
+    const label = updatedAt >= todayStart ? "Today" : updatedAt >= weekStart ? "Earlier this week" : updatedAt >= lastWeekStart ? "Last week" : updatedAt >= monthStart ? "Earlier this month" : updatedAt.toLocaleDateString([], { month: "long", year: "numeric" });
+    groups.set(label, [...(groups.get(label) ?? []), file]);
+  }
+  return [...groups.entries()];
 }
 
 function formatBytes(bytes: number): string {

@@ -7,7 +7,7 @@ import { Readable } from "node:stream";
 import { LocalAuthStore } from "./auth/local-auth-store.js";
 import { SessionService } from "./auth/session.js";
 import { LocalShareStore, type StoredShare } from "./sharing/local-share-store.js";
-import { LocalDriveStorage, TrashRestoreConflictError, UnsafeDrivePathError, nativeFileTypes } from "./storage/local-drive-storage.js";
+import { LocalDriveStorage, TrashRestoreConflictError, UnsafeDrivePathError, nativeFileTypes, type DriveFileCategory } from "./storage/local-drive-storage.js";
 
 export type UserResolver = (request: Request) => string | null | Promise<string | null>;
 
@@ -25,7 +25,12 @@ type CreateAppOptions = {
 
 const listQuerySchema = z.object({
   prefix: z.string().max(1_024).optional(),
-  query: z.string().max(256).optional()
+  query: z.string().max(256).optional(),
+  contentQuery: z.string().max(256).optional(),
+  type: z.enum(["document", "spreadsheet", "presentation", "form", "image", "video", "audio", "pdf", "other"] satisfies [DriveFileCategory, ...DriveFileCategory[]]).optional(),
+  starred: z.enum(["true"]).optional().transform((value) => value === "true" ? true : undefined),
+  modifiedAfter: z.string().datetime().optional(),
+  modifiedBefore: z.string().datetime().optional()
 });
 
 const createFolderSchema = z.object({
@@ -35,6 +40,13 @@ const createNativeFileSchema = z.object({
   name: z.string().trim().min(1).max(1_024),
   path: z.string().max(1_024).optional(),
   type: z.enum(nativeFileTypes)
+});
+const updateNativeFileSchema = z.object({
+  content: z.object({
+    format: z.literal("zo-native"),
+    type: z.enum(nativeFileTypes),
+    version: z.literal(1)
+  }).passthrough()
 });
 
 const credentialsSchema = z.object({
@@ -76,6 +88,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, sharing
     app.use("/objects", cors(corsOptions));
     app.use("/folders", cors(corsOptions));
     app.use("/native-files", cors(corsOptions));
+    app.use("/native-files/*", cors(corsOptions));
     app.use("/usage", cors(corsOptions));
     app.use("/stars", cors(corsOptions));
     app.use("/stars/*", cors(corsOptions));
@@ -259,6 +272,14 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, sharing
     return context.json(await storage.createNativeFile({ userId, key, type: parsed.data.type }), 201);
   });
 
+  app.put("/native-files/*", async (context) => {
+    const userId = await requireUser(context.req.raw, resolveActiveUser);
+    if (!userId) return unauthorized(context);
+    const parsed = updateNativeFileSchema.safeParse(await context.req.json().catch(() => null));
+    if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Invalid Zo-native file content" } }, 400);
+    return context.json(await storage.updateNativeFile({ userId, key: nativeFileKeyFromPath(context.req.path), content: parsed.data.content }));
+  });
+
   app.get("/objects", async (context) => {
     const userId = await requireUser(context.req.raw, resolveActiveUser);
     if (!userId) {
@@ -412,6 +433,11 @@ function objectKeyFromPath(path: string): string {
 
 function starKeyFromPath(path: string): string {
   const encodedKey = path.replace(/^\/stars\//, "");
+  return decodeURIComponent(encodedKey);
+}
+
+function nativeFileKeyFromPath(path: string): string {
+  const encodedKey = path.replace(/^\/native-files\//, "");
   return decodeURIComponent(encodedKey);
 }
 

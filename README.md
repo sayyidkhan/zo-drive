@@ -11,7 +11,7 @@ Zo Drive is a private Drive-like file manager for your Zo server. The source cod
 - Shared TypeScript SDK used by both the CLI and React app
 - `zo-drive` CLI: upload, list, download, delete, and usage
 - React GUI: folder browsing, search, drag-and-drop/multiple upload of any file type, list/grid views, previews, deletion, and usage display
-- Zo-native files: documents, spreadsheets, presentations, video projects, and forms created privately inside the drive
+- Zo-native files: documents, spreadsheets, presentations, and forms created privately inside the drive
 - Home for recently updated files; My Drive as the default; Starred files and Shared with others for managed links
 - Share links: public or passcode-protected, with one-day, seven-day, thirty-day, or no-expiry TTL; copy and revoke controls
 - Account lifecycle design for keeping files or permanently removing everything in [the plan](docs/PLAN.md)

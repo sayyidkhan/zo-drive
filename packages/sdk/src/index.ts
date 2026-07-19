@@ -26,6 +26,11 @@ export type ZoDriveClientOptions = {
 export type ListOptions = {
   prefix?: string;
   query?: string;
+  contentQuery?: string;
+  type?: "document" | "spreadsheet" | "presentation" | "form" | "image" | "video" | "audio" | "pdf" | "other";
+  starred?: boolean;
+  modifiedAfter?: string;
+  modifiedBefore?: string;
 };
 
 export type UploadOptions = {
@@ -71,6 +76,11 @@ export class ZoDriveClient {
     if (options.query) {
       params.set("query", options.query);
     }
+    if (options.contentQuery) params.set("contentQuery", options.contentQuery);
+    if (options.type) params.set("type", options.type);
+    if (options.starred) params.set("starred", "true");
+    if (options.modifiedAfter) params.set("modifiedAfter", options.modifiedAfter);
+    if (options.modifiedBefore) params.set("modifiedBefore", options.modifiedBefore);
     const suffix = params.size > 0 ? `?${params.toString()}` : "";
     const response = await this.request(`/objects${suffix}`, { method: "GET" });
     return listObjectsResponseSchema.parse(await response.json()).objects;
@@ -105,6 +115,15 @@ export class ZoDriveClient {
       body: JSON.stringify({ name, path, type }),
       headers: { "content-type": "application/json" },
       method: "POST"
+    });
+    return driveObjectSchema.parse(await response.json());
+  }
+
+  async saveNativeFile(key: string, content: Record<string, unknown> & { format: "zo-native"; type: NativeFileType; version: 1 }): Promise<DriveObject> {
+    const response = await this.request(`/native-files/${encodeDriveKey(key)}`, {
+      body: JSON.stringify({ content }),
+      headers: { "content-type": "application/json" },
+      method: "PUT"
     });
     return driveObjectSchema.parse(await response.json());
   }

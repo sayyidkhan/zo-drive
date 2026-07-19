@@ -4,6 +4,10 @@
   @apply flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700;
 }
 
+.new-menu-native-item {
+  @apply py-1.5;
+}
+
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
 }

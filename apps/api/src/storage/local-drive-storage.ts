@@ -5,14 +5,13 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { randomUUID } from "node:crypto";
 
-export const nativeFileTypes = ["document", "spreadsheet", "presentation", "video", "form"] as const;
+export const nativeFileTypes = ["document", "spreadsheet", "presentation", "form"] as const;
 export type NativeFileType = (typeof nativeFileTypes)[number];
 
 const nativeContentTypes: Record<NativeFileType, string> = {
   document: "application/vnd.zo.document+json",
   spreadsheet: "application/vnd.zo.spreadsheet+json",
   presentation: "application/vnd.zo.presentation+json",
-  video: "application/vnd.zo.video+json",
   form: "application/vnd.zo.form+json"
 };
 
@@ -72,12 +71,20 @@ type WriteDriveFile = StorageTarget & {
 };
 
 type CreateNativeDriveFile = StorageTarget & { type: NativeFileType };
+type UpdateNativeDriveFile = StorageTarget & { content: Record<string, unknown> & { format: "zo-native"; type: NativeFileType; version: 1 } };
 
 type ListDriveFiles = {
   userId: string;
   prefix?: string;
   query?: string;
+  contentQuery?: string;
+  type?: DriveFileCategory;
+  starred?: boolean;
+  modifiedAfter?: string;
+  modifiedBefore?: string;
 };
+
+export type DriveFileCategory = "document" | "spreadsheet" | "presentation" | "form" | "image" | "video" | "audio" | "pdf" | "other";
 
 type ListDriveFolders = {
   userId: string;
@@ -163,6 +170,19 @@ export class LocalDriveStorage {
       key: normalizedKey,
       content: Buffer.from(JSON.stringify(nativeFileTemplate(type))),
       contentType: nativeContentTypes[type]
+    });
+  }
+
+  async updateNativeFile({ userId, key, content }: UpdateNativeDriveFile): Promise<DriveFile> {
+    const existing = await this.read({ userId, key });
+    if (!existing.nativeType || existing.nativeType !== content.type) {
+      throw Object.assign(new Error("This is not a matching Zo-native file"), { code: "ENOTSUP" });
+    }
+    return this.write({
+      userId,
+      key,
+      content: Buffer.from(JSON.stringify(content)),
+      contentType: nativeContentTypes[content.type]
     });
   }
 
@@ -325,17 +345,24 @@ export class LocalDriveStorage {
     return folders.sort((left, right) => left.key.localeCompare(right.key));
   }
 
-  async list({ userId, prefix = "", query = "" }: ListDriveFiles): Promise<DriveFile[]> {
+  async list({ userId, prefix = "", query = "", contentQuery = "", type, starred, modifiedAfter, modifiedBefore }: ListDriveFiles): Promise<DriveFile[]> {
     const filesRoot = this.userFilesRoot(userId);
     const normalizedPrefix = prefix ? this.normalizeKey(prefix, { allowEmpty: false }) : "";
     const normalizedQuery = query.trim().toLowerCase();
     const [starredKeys, storedContentTypes] = await Promise.all([this.readStarredKeys(userId), this.readContentTypes(userId)]);
     const files = await this.collectFiles(filesRoot, filesRoot, starredKeys, storedContentTypes);
-
-    return files
+    const filtered = files
       .filter((file) => !normalizedPrefix || file.key === normalizedPrefix || file.key.startsWith(`${normalizedPrefix}/`))
       .filter((file) => !normalizedQuery || file.name.toLowerCase().includes(normalizedQuery))
-      .sort((left, right) => left.key.localeCompare(right.key));
+      .filter((file) => !type || matchesFileCategory(file, type))
+      .filter((file) => starred === undefined || file.starred === starred)
+      .filter((file) => !modifiedAfter || file.updatedAt >= modifiedAfter)
+      .filter((file) => !modifiedBefore || file.updatedAt <= modifiedBefore);
+    const normalizedContentQuery = contentQuery.trim().toLowerCase();
+    const contentMatches = normalizedContentQuery
+      ? (await Promise.all(filtered.map(async (file) => (await this.matchesContentQuery(userId, file, normalizedContentQuery)) ? file : null))).filter((file): file is DriveFile => file !== null)
+      : filtered;
+    return contentMatches.sort((left, right) => left.key.localeCompare(right.key));
   }
 
   async listStarred({ userId }: Pick<StorageTarget, "userId">): Promise<DriveFile[]> {
@@ -556,6 +583,15 @@ export class LocalDriveStorage {
     };
   }
 
+  private async matchesContentQuery(userId: string, file: DriveFile, query: string): Promise<boolean> {
+    if (!isTextSearchable(file.contentType) || file.size > 1_048_576) return false;
+    try {
+      return (await readFile(this.resolveFilePath(userId, file.key), "utf8")).toLowerCase().includes(query);
+    } catch {
+      return false;
+    }
+  }
+
   private async describeFolder(folderPath: string, key: string): Promise<DriveFolder> {
     const folderStat = await stat(folderPath);
     return {
@@ -598,13 +634,28 @@ function nativeFileTypeFromContentType(contentType: string): NativeFileType | un
   return nativeFileTypes.find((type) => nativeContentTypes[type] === contentType);
 }
 
+function matchesFileCategory(file: DriveFile, category: DriveFileCategory): boolean {
+  if (category === "document") return file.nativeType === "document" || file.contentType.startsWith("text/");
+  if (category === "spreadsheet") return file.nativeType === "spreadsheet";
+  if (category === "presentation") return file.nativeType === "presentation";
+  if (category === "form") return file.nativeType === "form";
+  if (category === "image") return file.contentType.startsWith("image/");
+  if (category === "video") return file.contentType.startsWith("video/");
+  if (category === "audio") return file.contentType.startsWith("audio/");
+  if (category === "pdf") return file.contentType === "application/pdf";
+  return !file.nativeType && !file.contentType.startsWith("text/") && !file.contentType.startsWith("image/") && !file.contentType.startsWith("video/") && !file.contentType.startsWith("audio/") && file.contentType !== "application/pdf";
+}
+
+function isTextSearchable(contentType: string): boolean {
+  return contentType.startsWith("text/") || contentType === "application/json" || contentType.endsWith("+json");
+}
+
 function nativeFileTemplate(type: NativeFileType): Record<string, unknown> {
   const createdAt = new Date().toISOString();
   switch (type) {
     case "document": return { format: "zo-native", type, version: 1, createdAt, blocks: [] };
     case "spreadsheet": return { format: "zo-native", type, version: 1, createdAt, sheets: [{ name: "Sheet 1", cells: {} }] };
     case "presentation": return { format: "zo-native", type, version: 1, createdAt, slides: [{ title: "Untitled presentation", body: "" }] };
-    case "video": return { format: "zo-native", type, version: 1, createdAt, timeline: [] };
     case "form": return { format: "zo-native", type, version: 1, createdAt, questions: [] };
   }
 }

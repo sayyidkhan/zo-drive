@@ -80,6 +80,16 @@ describe("LocalDriveStorage", () => {
     await expect(storage.getUsage({ userId: "user_123" })).resolves.toEqual({ fileCount: 2, usedBytes: 8 });
   });
 
+  it("filters files by type, text content, star state, and modified date", async () => {
+    const storage = await createStorage();
+    await storage.write({ userId: "user_123", key: "Notes/strategy.txt", content: Buffer.from("Compound growth plan"), contentType: "text/plain" });
+    await storage.write({ userId: "user_123", key: "Photos/logo.png", content: Buffer.from("image"), contentType: "image/png" });
+    await storage.setStarred({ userId: "user_123", key: "Notes/strategy.txt", starred: true });
+
+    await expect(storage.list({ userId: "user_123", type: "document", contentQuery: "growth", starred: true, modifiedAfter: "2020-01-01T00:00:00.000Z" })).resolves.toMatchObject([{ key: "Notes/strategy.txt", starred: true }]);
+    await expect(storage.list({ userId: "user_123", type: "image", contentQuery: "growth" })).resolves.toEqual([]);
+  });
+
   it("persists starred files in the user's namespace and clears stars when files are deleted", async () => {
     const storage = await createStorage();
     await storage.write({ userId: "alice", key: "Notes/plan.txt", content: Buffer.from("ship it"), contentType: "text/plain" });
