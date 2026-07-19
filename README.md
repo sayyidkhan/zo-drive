@@ -1,2 +1,89 @@
-# zo-drive
-Zo Drive is your personal cloud drive with 100GB of free storage, built on Zo. Store, organize, search, preview, and share your files—all while owning your cloud experience.
+# Zo Drive
+
+Zo Drive is a private Drive-like file manager for your Zo server. The source code stays in this repository; uploaded data lives in one configured data root outside it.
+
+## What works now
+
+- Hono REST API for upload, list, download/preview, delete, search, and storage usage
+- Owner-account authentication: signed HttpOnly sessions and one-time registration
+- Account controls for username, password, sign-out, and permanent account/data deletion
+- Traversal-safe, user-scoped filesystem data root
+- Shared TypeScript SDK used by both the CLI and React app
+- `zo-drive` CLI: upload, list, download, delete, and usage
+- React GUI: folder browsing, search, drag-and-drop/multiple upload, list/grid views, previews, deletion, and usage display
+- Home for recently updated files; My Drive as the default; Shared with others for managed links
+- Share links: public or passcode-protected, with one-day, seven-day, thirty-day, or no-expiry TTL; copy and revoke controls
+- Account lifecycle design for keeping files or permanently removing everything in [the plan](docs/PLAN.md)
+
+## Storage layout
+
+Set `ZO_DRIVE_DATA_ROOT` to a directory outside this project. Do not use the repository root or add an `uploads` directory here.
+
+```text
+ZO_DRIVE_DATA_ROOT/
+  v1/auth/users.json                 # salted password hash; never commit this
+  v1/shares/shares.json              # share metadata and hashed passcodes
+  v1/users/{owner-id}/files/
+    Notes/hello.txt
+    Photos/image.jpg
+```
+
+For development, use a directory such as:
+
+```text
+/Users/your-user/Library/Application Support/zo-drive-data
+```
+
+On Zo, configure a persistent directory such as `~/zo-drive-data` and point `ZO_DRIVE_DATA_ROOT` to it.
+
+## Run locally
+
+Install dependencies once:
+
+```bash
+pnpm install
+```
+
+In one terminal, start the API:
+
+```bash
+ZO_DRIVE_DATA_ROOT="$HOME/Library/Application Support/zo-drive-data" \
+ZO_DRIVE_SESSION_SECRET="replace-this-with-a-long-random-secret" \
+ZO_DRIVE_ALLOWED_ORIGIN="http://127.0.0.1:43072" \
+pnpm --filter @zo-drive/api dev
+```
+
+In another terminal, start the web app:
+
+```bash
+VITE_ZO_DRIVE_API_URL="http://127.0.0.1:43071" pnpm --filter @zo-drive/web dev
+```
+
+The CLI uses the same API:
+
+```bash
+pnpm --filter @zo-drive/cli build
+ZO_DRIVE_API_URL="http://127.0.0.1:43071" node apps/cli/dist/index.js login --username sayyid --password 'your-password'
+# Copy the printed ZO_DRIVE_SESSION_TOKEN export, then:
+ZO_DRIVE_API_URL="http://127.0.0.1:43071" node apps/cli/dist/index.js upload ./example.pdf --path Documents
+ZO_DRIVE_API_URL="http://127.0.0.1:43071" node apps/cli/dist/index.js mkdir Documents/Receipts
+ZO_DRIVE_API_URL="http://127.0.0.1:43071" node apps/cli/dist/index.js ls Documents
+```
+
+## Verify before trying it
+
+```bash
+pnpm test
+pnpm typecheck
+pnpm build
+```
+
+The test suite includes a full CLI → SDK → API → data-root flow: upload, list, download with byte verification, and delete.
+
+## Deployment note
+
+On its first visit, Zo Drive shows **Create your owner account**, not the drive. Registration is available only while no user exists; immediately after creation, all visitors see **Sign in** and every drive endpoint requires a valid session. Passwords are salted and hashed with scrypt; the browser session is an HttpOnly, signed cookie.
+
+For deployment, set a unique `ZO_DRIVE_SESSION_SECRET` (at least 32 characters; for example `openssl rand -base64 48`), create the owner account before making the site public, run over HTTPS, and use a same-origin reverse proxy for the web app and API. Never expose `ZO_DRIVE_DATA_ROOT` itself. This is deliberately an owner-only product: it has no public self-registration or collaborative in-app sharing. Add a database-backed identity system, account recovery, rate limiting, and invitations before turning it into a multi-user service.
+
+Share links are deliberately read-only. Public links can open the file directly; passcode links require the passcode for file content; expired and revoked links return no file. On Zo, serve the web app and API from the same origin so public links such as `https://your-drive.zo.com/?share={id}` work without cross-site cookie constraints.

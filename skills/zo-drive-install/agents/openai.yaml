@@ -1,0 +1,4 @@
+interface:
+  display_name: "Zo Drive Install"
+  short_description: "Install, verify, or remove Zo Drive safely"
+  default_prompt: "Use $zo-drive-install to install and verify Zo Drive on my Zo server."

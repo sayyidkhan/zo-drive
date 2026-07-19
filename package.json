@@ -1,0 +1,15 @@
+{
+  "name": "zo-drive",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@11.9.0",
+  "scripts": {
+    "build": "pnpm --recursive run build",
+    "test": "pnpm --filter @zo-drive/types build && pnpm --filter @zo-drive/sdk build && pnpm --recursive run test",
+    "typecheck": "pnpm --filter @zo-drive/types build && pnpm --filter @zo-drive/sdk build && pnpm --recursive run typecheck"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "typescript": "^5.8.3"
+  }
+}

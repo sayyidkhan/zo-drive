@@ -83,7 +83,7 @@ The application also serves as a reference implementation for developers learnin
 
 ## Authentication
 
-- Email login
+- Username login
 - Social login (future)
 - Session management
 

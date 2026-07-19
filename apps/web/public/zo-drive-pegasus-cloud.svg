@@ -1,0 +1,12 @@
+<svg width="320" height="320" viewBox="0 0 320 320" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <title>Zo Drive cloud base</title>
+  <desc>Cloud base for the Zo Drive Pegasus lockup.</desc>
+  <g aria-hidden="true" fill="#DCEBFF">
+    <ellipse cx="161" cy="274" rx="110" ry="25"/>
+    <circle cx="94" cy="260" r="31"/>
+    <circle cx="132" cy="247" r="42"/>
+    <circle cx="181" cy="244" r="47"/>
+    <circle cx="229" cy="259" r="33"/>
+  </g>
+  <path d="M64 278C91 286 229 286 256 278" stroke="#B8D5FF" stroke-width="5" stroke-linecap="round"/>
+</svg>
