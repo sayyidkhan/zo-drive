@@ -87,6 +87,13 @@ can drop a file or folder into the panel, or use **Choose file** and **Choose
 folder**. Folder uploads retain their directory structure below the current Drive
 folder.
 
+#### GUI versioning
+
+The browser GUI has its own release track, currently `GUI v0.2.0`. GUI changes
+are deployed to Zo Drive directly; browser users receive the current version by
+loading the page. Use `gui-v*` Git tags to trace a deployed GUI release. CLI
+releases are separate and do not change the GUI version.
+
 ### CLI
 
 #### Installation
@@ -132,11 +139,12 @@ With the cloud address and session token exported, upload directly to Drive:
 zo-drive upload ./launch-plan.pdf --path Product/Launch
 ```
 
-#### Updates and versioning
+#### CLI updates and versioning
 
-The global `zo-drive` command remains linked to the repository checkout, so a
-rebuild updates the existing command without running `npm link` again. Use the
-`main` branch for the latest pushed changes:
+The CLI has its own release track, currently `CLI v0.1.3`. Check an installed
+copy with `zo-drive --version`. The global command remains linked to the
+repository checkout, so a rebuild updates the existing CLI without running
+`npm link` again. Use the `main` branch for the latest pushed changes:
 
 ```bash
 cd zo-drive
@@ -146,14 +154,14 @@ pnpm build
 zo-drive --help
 ```
 
-Stable releases are marked with Git tags. To pin a machine to a release, fetch
+Stable CLI releases use `cli-v*` Git tags. To pin a machine to a release, fetch
 the tags, choose the version returned by the third command, then rebuild:
 
 ```bash
 cd zo-drive
 git fetch origin --tags
-git tag --sort=-v:refname | head -n 1
-git checkout <release-tag>
+git tag --list 'cli-v*' --sort=-v:refname | head -n 1
+git checkout <cli-release-tag>
 pnpm install --frozen-lockfile
 pnpm build
 ```

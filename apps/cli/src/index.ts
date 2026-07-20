@@ -7,6 +7,8 @@ import { readFile as readFileFromDisk, writeFile as writeFileToDisk } from "node
 import { ZoDriveClient } from "@zo-drive/sdk";
 import type { DriveObject, StorageUsage } from "@zo-drive/types";
 
+const CLI_VERSION = "0.1.3";
+
 type CliClient = Partial<Pick<ZoDriveClient, "createFolder" | "delete" | "download" | "getUsage" | "list" | "loginForCli" | "upload">>;
 
 type CliDependencies = {
@@ -101,6 +103,11 @@ export async function runCli(args: string[], dependencies: CliDependencies): Pro
       case undefined:
         write(helpText());
         return command ? 0 : 1;
+      case "version":
+      case "--version":
+      case "-v":
+        write(`zo-drive ${CLI_VERSION}\n`);
+        return 0;
       default:
         throw new CliUsageError(`Unknown command: ${command}\n\n${helpText()}`);
     }
@@ -177,11 +184,17 @@ function helpText(): string {
     "  ls [path] [--json]",
     "  download <key> [--output <file>]",
     "  delete <key>",
-    "  usage [--json]"
+    "  usage [--json]",
+    "  version"
   ].join("\n").concat("\n");
 }
 
 async function main() {
+  const args = process.argv.slice(2);
+  if (["help", "--help", "-h", "version", "--version", "-v"].includes(args[0] ?? "")) {
+    process.exitCode = await runCli(args, { client: {} });
+    return;
+  }
   const baseUrl = process.env.ZO_DRIVE_API_URL;
   if (!baseUrl) {
     process.stderr.write("ZO_DRIVE_API_URL is required.\n");
@@ -190,7 +203,7 @@ async function main() {
   }
   const sessionToken = process.env.ZO_DRIVE_SESSION_TOKEN;
   const client = new ZoDriveClient({ baseUrl, headers: sessionToken ? { authorization: `Bearer ${sessionToken}` } : undefined });
-  process.exitCode = await runCli(process.argv.slice(2), { client });
+  process.exitCode = await runCli(args, { client });
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

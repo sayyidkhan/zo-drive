@@ -32,6 +32,7 @@ describe("DriveApp", () => {
 
       expect(screen.getByRole("heading", { name: "Manage files in your private Drive." })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Share files on your terms" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 0.2.0" })).toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
 
       cleanup();
@@ -45,8 +46,8 @@ describe("DriveApp", () => {
       expect(screen.getByRole("heading", { name: "Connect your local computer to Zo" })).toBeInTheDocument();
       expect(screen.getByText(/export ZO_DRIVE_API_URL=/)).toBeInTheDocument();
       expect(screen.getByText(/You do not need SSH, Tailscale/)).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "Keep zo-drive current" })).toBeInTheDocument();
-      expect(screen.getByText(/Git release tag/)).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "CLI version 0.1.3" })).toBeInTheDocument();
+      expect(screen.getByText(/cli-v Git release tag/)).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Automate uploads in code" })).toBeInTheDocument();
       expect(screen.getAllByText(/@zo-drive\/sdk/).length).toBeGreaterThanOrEqual(1);
     } finally {
@@ -121,7 +122,10 @@ describe("DriveApp", () => {
 
     render(<DriveApp client={client} authClient={authClient} />);
 
-    expect(await screen.findByRole("link", { name: "Back to landing page" })).toHaveAttribute("href", "/");
+    expect(await screen.findByRole("link", { name: "Back to Zo Drive landing page" })).toHaveAttribute("href", "/");
+    fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
+    expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
+    fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
     const notes = await screen.findByText("Notes");
     expect(notes).toBeInTheDocument();
     expect(screen.getByText("photo.jpg")).toBeInTheDocument();

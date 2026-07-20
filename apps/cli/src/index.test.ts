@@ -52,6 +52,15 @@ describe("zo-drive CLI", () => {
     expect(write).toHaveBeenCalledWith(expect.stringContaining("export ZO_DRIVE_SESSION_TOKEN='signed-token'"));
   });
 
+  it("prints the independent CLI version without a Drive client", async () => {
+    const write = vi.fn();
+
+    const code = await runCli(["--version"], { client: {}, write });
+
+    expect(code).toBe(0);
+    expect(write).toHaveBeenCalledWith("zo-drive 0.1.3\n");
+  });
+
   it("returns a non-zero result and a useful error for invalid commands", async () => {
     const error = vi.fn();
 
