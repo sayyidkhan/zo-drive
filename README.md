@@ -2,6 +2,9 @@
 
 Zo Drive is a private Drive-like file manager for your Zo server. The source code stays in this repository; uploaded data lives in one configured data root outside it.
 
+Release history is maintained in [CHANGELOG.md](CHANGELOG.md). See
+[AGENTS.md](AGENTS.md) for the GUI/CLI versioning and release policy.
+
 ## What works now
 
 - Hono REST API for upload, list, download/preview, delete, search, and storage usage
