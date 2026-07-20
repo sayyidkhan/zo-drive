@@ -121,6 +121,7 @@ describe("DriveApp", () => {
 
     render(<DriveApp client={client} authClient={authClient} />);
 
+    expect(await screen.findByRole("link", { name: "Back to landing page" })).toHaveAttribute("href", "/");
     const notes = await screen.findByText("Notes");
     expect(notes).toBeInTheDocument();
     expect(screen.getByText("photo.jpg")).toBeInTheDocument();

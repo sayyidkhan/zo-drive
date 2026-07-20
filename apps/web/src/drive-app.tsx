@@ -698,14 +698,15 @@ function DriveScreen({ client, user, onAccount, onSignOut }: { client: DriveClie
 
   return (
     <main className="min-h-screen bg-[#f8faff] text-slate-800" onDragOver={(event) => event.preventDefault()} onDrop={handleDrop}>
-      <header className="flex h-18 items-center gap-5 border-b border-slate-200 bg-white px-5">
-        <div className="flex items-center gap-2.5 text-xl font-semibold tracking-tight text-slate-900">
+      <header className="flex h-18 items-center gap-3 border-b border-slate-200 bg-white px-5 sm:gap-5">
+        <a aria-label="Back to Zo Drive landing page" className="flex shrink-0 items-center gap-2.5 text-xl font-semibold tracking-tight text-slate-900" href={landingUrl()}>
           <span className="relative block h-11 w-11 shrink-0" role="img" aria-label="Zo Drive Pegasus on a cloud">
             <img className="absolute inset-0 h-full w-full" src={driveCloudLogoUrl} alt="" />
             <img className="absolute left-[5.94%] top-0 h-[88.44%] w-[88.44%]" src={drivePegasusLogoUrl} alt="" />
           </span>
           Zo Drive
-        </div>
+        </a>
+        <a aria-label="Back to landing page" className="hidden shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 md:inline-flex" href={landingUrl()}><ArrowLeft size={17} /> Landing page</a>
         <label className="relative min-w-0 flex-1">
           <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={19} />
           <input
