@@ -32,11 +32,11 @@ describe("DriveApp", () => {
 
       expect(screen.getByRole("heading", { name: "Manage files in your private Drive." })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Share files on your terms" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 0.3.2" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 1.0.0" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
       expect(screen.getByRole("link", { name: "Changelog" })).toHaveAttribute("href", "#changelog");
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("GUI v0.3.2")).toBeInTheDocument();
+      expect(screen.getByText("GUI v1.0.0")).toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
 
       cleanup();
@@ -248,9 +248,7 @@ describe("DriveApp", () => {
     expect(await screen.findByText("Trash is empty")).toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText("Account menu"));
-    fireEvent.click(screen.getByText("Profile & controls"));
-    expect(await screen.findByText("Profile & controls")).toBeInTheDocument();
-    expect(screen.getByText("Danger zone")).toBeInTheDocument();
+    expect(screen.queryByText("Profile & controls")).not.toBeInTheDocument();
   });
 
   it("keeps an upload progress bar visible until the upload finishes", async () => {

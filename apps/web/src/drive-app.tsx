@@ -141,10 +141,15 @@ const appBasePath = normalizeAppBasePath(
 const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "0.3.2";
+const GUI_VERSION = "1.0.0";
 const CLI_VERSION = "1.0.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.0.0",
+    date: "20 July 2026",
+    changes: ["Removed the Profile & controls screen. API Keys is now the sole account-management workspace, with sign-out retained in the account menu."]
+  },
   {
     version: "v0.3.2",
     date: "20 July 2026",
@@ -345,13 +350,11 @@ function CodeBlock({ code, label }: { code: string; label: string }) {
 
 function DriveGate({ client, authClient }: { client: DriveClient; authClient: AuthClient }) {
   const queryClient = useQueryClient();
-  const [page, setPage] = useState<"drive" | "account">("drive");
   const authQuery = useQuery({ queryKey: ["auth-status"], queryFn: () => authClient.getAuthStatus(), retry: false });
   const logoutMutation = useMutation({
     mutationFn: () => authClient.logout(),
     onSuccess: async () => {
       useDriveUi.getState().setCurrentPath("");
-      setPage("drive");
       await queryClient.invalidateQueries();
       toast.success("Signed out");
     },
@@ -363,10 +366,7 @@ function DriveGate({ client, authClient }: { client: DriveClient; authClient: Au
   if (!authQuery.data.authenticated || !authQuery.data.user) {
     return <AuthScreen auth={authQuery.data} client={authClient} onAuthenticated={() => void authQuery.refetch()} />;
   }
-  if (page === "account") {
-    return <AccountScreen user={authQuery.data.user} client={authClient} onBack={() => setPage("drive")} onAccountDeleted={() => void authQuery.refetch()} onSignOut={() => logoutMutation.mutate()} />;
-  }
-  return <DriveScreen client={client} user={authQuery.data.user} onAccount={() => setPage("account")} onSignOut={() => logoutMutation.mutate()} />;
+  return <DriveScreen client={client} user={authQuery.data.user} onSignOut={() => logoutMutation.mutate()} />;
 }
 
 function AuthLoading() {
@@ -481,7 +481,7 @@ function SettingsCard({ children, description, danger = false, icon, title }: { 
   return <section className={`rounded-xl border bg-white p-5 shadow-sm ${danger ? "border-red-200" : "border-slate-200"}`}><div className={`flex items-start gap-3 ${danger ? "text-red-600" : "text-blue-600"}`}><span className="rounded-lg bg-current/10 p-2">{icon}</span><div><h2 className="font-semibold text-slate-900">{title}</h2><p className="mt-1 text-sm leading-5 text-slate-500">{description}</p></div></div><div className="mt-5">{children}</div></section>;
 }
 
-function DriveScreen({ client, user, onAccount, onSignOut }: { client: DriveClient; user: DriveUser; onAccount: () => void; onSignOut: () => void }) {
+function DriveScreen({ client, user, onSignOut }: { client: DriveClient; user: DriveUser; onSignOut: () => void }) {
   const { currentPath, setCurrentPath, viewMode, setViewMode } = useDriveUi();
   const [section, setSection] = useState<"api-keys" | "home" | "my-drive" | "pastes" | "shared" | "starred" | "transfer" | "trash">("my-drive");
   const [search, setSearch] = useState("");
@@ -795,7 +795,6 @@ function DriveScreen({ client, user, onAccount, onSignOut }: { client: DriveClie
               <p className="truncate px-3 py-2 text-xs font-medium text-slate-400">{user.username}</p>
               <a className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" href={landingUrl()}><ArrowLeft size={17} /> Landing page</a>
               <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={() => { setAccountMenuOpen(false); setSection("api-keys"); setCurrentPath(""); }}><KeyRound size={17} /> API Keys</button>
-              <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={() => { setAccountMenuOpen(false); onAccount(); }}><UserRound size={17} /> Profile & controls</button>
               <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={onSignOut}><LogOut size={17} /> Sign out</button>
             </div>}
           </div>

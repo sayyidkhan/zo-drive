@@ -4,6 +4,12 @@ All notable changes to the Zo Drive browser experience are recorded here.
 
 ## Unreleased
 
+## v1.0.0 - 2026-07-20
+
+### Removed
+
+- The Profile & controls screen. API Keys is now the sole account-management workspace.
+
 ## v0.3.2 - 2026-07-20
 
 ### Changed
