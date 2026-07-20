@@ -4,6 +4,12 @@ All notable changes to the Zo Drive browser experience are recorded here.
 
 ## Unreleased
 
+## v0.3.1 - 2026-07-20
+
+### Changed
+
+- Moved API Keys from the Drive sidebar into the account menu.
+
 ## v0.3.0 - 2026-07-20
 
 ### Added

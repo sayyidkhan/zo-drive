@@ -32,11 +32,11 @@ describe("DriveApp", () => {
 
       expect(screen.getByRole("heading", { name: "Manage files in your private Drive." })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Share files on your terms" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 0.3.0" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 0.3.1" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
       expect(screen.getByRole("link", { name: "Changelog" })).toHaveAttribute("href", "#changelog");
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("GUI v0.3.0")).toBeInTheDocument();
+      expect(screen.getByText("GUI v0.3.1")).toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
 
       cleanup();
@@ -135,7 +135,10 @@ describe("DriveApp", () => {
     expect(await screen.findByRole("link", { name: "Back to Zo Drive landing page" })).toHaveAttribute("href", "/");
     fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
     expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-    fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "API Keys" }));
+    expect(await screen.findByRole("heading", { name: "API Keys" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "API Keys" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "My Drive" }));
     const notes = await screen.findByText("Notes");
     expect(notes).toBeInTheDocument();
     expect(screen.getByText("photo.jpg")).toBeInTheDocument();

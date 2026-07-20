@@ -141,10 +141,15 @@ const appBasePath = normalizeAppBasePath(
 const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "0.3.0";
+const GUI_VERSION = "0.3.1";
 const CLI_VERSION = "1.0.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v0.3.1",
+    date: "20 July 2026",
+    changes: ["Moved API Keys from the primary sidebar into the account menu, keeping device-access controls available without cluttering the Drive workspace."]
+  },
   {
     version: "v0.3.0",
     date: "20 July 2026",
@@ -784,6 +789,7 @@ function DriveScreen({ client, user, onAccount, onSignOut }: { client: DriveClie
             {accountMenuOpen && <div className="absolute right-0 top-11 z-20 w-52 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg">
               <p className="truncate px-3 py-2 text-xs font-medium text-slate-400">{user.username}</p>
               <a className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" href={landingUrl()}><ArrowLeft size={17} /> Landing page</a>
+              <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={() => { setAccountMenuOpen(false); setSection("api-keys"); setCurrentPath(""); }}><KeyRound size={17} /> API Keys</button>
               <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={() => { setAccountMenuOpen(false); onAccount(); }}><UserRound size={17} /> Profile & controls</button>
               <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={onSignOut}><LogOut size={17} /> Sign out</button>
             </div>}
@@ -816,7 +822,6 @@ function DriveScreen({ client, user, onAccount, onSignOut }: { client: DriveClie
             <button className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold ${section === "shared" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => setSection("shared")}><UsersRound size={18} /> Shared with others</button>
             <button className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold ${section === "trash" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => { setSection("trash"); setCurrentPath(""); }}><Trash2 size={18} /> Trash</button>
             <div className="my-3 border-t border-slate-200" role="separator" />
-            <button className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold ${section === "api-keys" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => { setSection("api-keys"); setCurrentPath(""); }}><KeyRound size={18} /> API Keys</button>
             <button className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold ${section === "pastes" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => { setSection("pastes"); setCurrentPath(""); }}><Code2 size={18} /> Zo Paste</button>
             <button className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold ${section === "transfer" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => { setSection("transfer"); setCurrentPath(""); }}><Send size={18} /> Zo Transfer</button>
           </nav>
