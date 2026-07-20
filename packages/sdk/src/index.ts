@@ -1,12 +1,20 @@
 import {
   apiErrorSchema,
   authStatusSchema,
+  createdDatabaseApiKeySchema,
+  databaseQueryResultSchema,
+  databaseRowsSchema,
+  databaseTableSchema,
   createdDriveApiKeySchema,
+  driveDatabaseSchema,
   driveUserSchema,
   driveShareSchema,
   formResponseSchema,
   listFormResponsesSchema,
   listDriveApiKeysResponseSchema,
+  listDriveDatabasesResponseSchema,
+  listDatabaseApiKeysResponseSchema,
+  listDatabaseTablesResponseSchema,
   listSharesResponseSchema,
   publishedFormSchema,
   publicShareSchema,
@@ -18,7 +26,7 @@ import {
   listTrashResponseSchema,
   storageUsageSchema
 } from "@zo-drive/types";
-import type { ApiKeyScope, AuthStatus, CreatedDriveApiKey, DriveApiKey, DriveFolder, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, NativeFileType, PublicShare, PublishedForm, ShareAccess, ShareKind, StorageUsage } from "@zo-drive/types";
+import type { ApiKeyScope, AuthStatus, CreatedDatabaseApiKey, CreatedDriveApiKey, DatabaseApiKey, DatabaseApiKeyScope, DatabaseQueryResult, DatabaseRows, DatabaseTable, DriveApiKey, DriveDatabase, DriveFolder, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, NativeFileType, PublicShare, PublishedForm, ShareAccess, ShareKind, StorageUsage } from "@zo-drive/types";
 
 type Fetcher = typeof fetch;
 
@@ -194,6 +202,63 @@ export class ZoDriveClient {
       method: "PUT"
     });
     return storageUsageSchema.parse(await response.json());
+  }
+
+  async listDatabases(): Promise<DriveDatabase[]> {
+    const response = await this.request("/databases", { method: "GET" });
+    return listDriveDatabasesResponseSchema.parse(await response.json()).databases;
+  }
+
+  async createDatabase(name: string): Promise<DriveDatabase> {
+    const response = await this.request("/databases", { body: JSON.stringify({ name }), headers: { "content-type": "application/json" }, method: "POST" });
+    return driveDatabaseSchema.parse(await response.json());
+  }
+
+  async deleteDatabase(id: string): Promise<void> {
+    await this.request(`/databases/${encodeURIComponent(id)}`, { method: "DELETE" });
+  }
+
+  async importDatabase({ file, name }: { file: Blob; name: string }): Promise<DriveDatabase> {
+    const form = new FormData();
+    form.append("file", file, "database.sqlite");
+    form.append("name", name);
+    const response = await this.request("/databases/import", { body: form, method: "POST" });
+    return driveDatabaseSchema.parse(await response.json());
+  }
+
+  async exportDatabase(id: string): Promise<Blob> {
+    const response = await this.request(`/databases/${encodeURIComponent(id)}/export`, { method: "GET" });
+    return response.blob();
+  }
+
+  async listDatabaseTables(id: string): Promise<DatabaseTable[]> {
+    const response = await this.request(`/databases/${encodeURIComponent(id)}/tables`, { method: "GET" });
+    return listDatabaseTablesResponseSchema.parse(await response.json()).tables;
+  }
+
+  async listDatabaseRows({ id, table, limit = 100, offset = 0 }: { id: string; table: string; limit?: number; offset?: number }): Promise<DatabaseRows> {
+    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    const response = await this.request(`/databases/${encodeURIComponent(id)}/tables/${encodeURIComponent(table)}/rows?${params.toString()}`, { method: "GET" });
+    return databaseRowsSchema.parse(await response.json());
+  }
+
+  async queryDatabase({ id, sql, params = [] }: { id: string; sql: string; params?: Array<string | number | boolean | null> }): Promise<DatabaseQueryResult> {
+    const response = await this.request(`/databases/${encodeURIComponent(id)}/query`, { body: JSON.stringify({ sql, params }), headers: { "content-type": "application/json" }, method: "POST" });
+    return databaseQueryResultSchema.parse(await response.json());
+  }
+
+  async listDatabaseApiKeys(databaseId: string): Promise<DatabaseApiKey[]> {
+    const response = await this.request(`/databases/${encodeURIComponent(databaseId)}/api-keys`, { method: "GET" });
+    return listDatabaseApiKeysResponseSchema.parse(await response.json()).keys;
+  }
+
+  async createDatabaseApiKey({ databaseId, name, scopes, expiresAt }: { databaseId: string; name: string; scopes: DatabaseApiKeyScope[]; expiresAt: string | null }): Promise<CreatedDatabaseApiKey> {
+    const response = await this.request(`/databases/${encodeURIComponent(databaseId)}/api-keys`, { body: JSON.stringify({ name, scopes, expiresAt }), headers: { "content-type": "application/json" }, method: "POST" });
+    return createdDatabaseApiKeySchema.parse(await response.json());
+  }
+
+  async revokeDatabaseApiKey({ databaseId, keyId }: { databaseId: string; keyId: string }): Promise<void> {
+    await this.request(`/databases/${encodeURIComponent(databaseId)}/api-keys/${encodeURIComponent(keyId)}`, { method: "DELETE" });
   }
 
   async getAuthStatus(): Promise<AuthStatus> {

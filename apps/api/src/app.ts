@@ -10,6 +10,8 @@ import { LocalApiKeyStore, type ApiKeyScope } from "./auth/local-api-key-store.j
 import { SessionService } from "./auth/session.js";
 import { LocalShareStore, type StoredShare } from "./sharing/local-share-store.js";
 import { LocalFormStore, type PublishedForm } from "./forms/local-form-store.js";
+import { DatabaseImportError, DatabaseQueryError, LocalDatabaseStore } from "./databases/local-database-store.js";
+import { LocalDatabaseApiKeyStore, type DatabaseApiKeyScope } from "./databases/local-database-api-key-store.js";
 import { LocalDriveStorage, StorageQuotaConfigurationError, StorageQuotaExceededError, TrashRestoreConflictError, UnsafeDrivePathError, nativeFileTypes, type DriveFileCategory } from "./storage/local-drive-storage.js";
 
 export type UserResolver = (request: Request) => string | null | Promise<string | null>;
@@ -26,6 +28,8 @@ type CreateAppOptions = {
   apiKeys?: LocalApiKeyStore;
   sharing?: LocalShareStore;
   forms?: LocalFormStore;
+  databases?: LocalDatabaseStore;
+  databaseApiKeys?: LocalDatabaseApiKeyStore;
 };
 
 const listQuerySchema = z.object({
@@ -95,8 +99,24 @@ const createApiKeySchema = z.object({
   scopes: z.array(z.enum(["read", "write"])).min(1).max(2),
   expiresAt: z.string().datetime().nullable()
 });
+const createDatabaseSchema = z.object({
+  name: z.string().trim().min(1).max(80)
+});
+const databaseRowsQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(100),
+  offset: z.coerce.number().int().min(0).default(0)
+});
+const databaseQuerySchema = z.object({
+  sql: z.string().min(1).max(50_000),
+  params: z.array(z.union([z.string(), z.number(), z.boolean(), z.null()])).max(100).default([])
+});
+const createDatabaseApiKeySchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  scopes: z.array(z.enum(["read", "write"])).min(1).max(2),
+  expiresAt: z.string().datetime().nullable()
+});
 
-export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys, sharing, forms }: CreateAppOptions) {
+export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys, sharing, forms, databases = new LocalDatabaseStore(storage.root), databaseApiKeys = new LocalDatabaseApiKeyStore({ root: storage.root }) }: CreateAppOptions) {
   const app = new Hono();
   const resolveActiveUser: UserResolver = async (request) => {
     const userId = await resolveUserId(request);
@@ -125,6 +145,8 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     app.use("/forms", cors(corsOptions));
     app.use("/forms/*", cors(corsOptions));
     app.use("/public/forms/*", cors(corsOptions));
+    app.use("/databases", cors(corsOptions));
+    app.use("/databases/*", cors(corsOptions));
   }
 
   app.get("/health", (context) => context.json({ status: "ok" }));
@@ -175,6 +197,8 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
       await storage.renameUser({ fromUserId: userId, toUserId: nextUserId });
       await sharing?.renameOwner({ fromUserId: userId, toUserId: nextUserId });
       await forms?.renameOwner({ fromUserId: userId, toUserId: nextUserId });
+      await databases.renameOwner({ fromUserId: userId, toUserId: nextUserId });
+      await databaseApiKeys.renameOwner({ fromUserId: userId, toUserId: nextUserId });
       await apiKeys?.renameOwner({ fromUserId: userId, toUserId: nextUserId });
       const user = await auth.store.renameUser(userId, nextUserId);
       if (!user) return context.json({ error: { code: "PROFILE_UPDATE_FAILED", message: "Could not update the username" } }, 409);
@@ -204,6 +228,8 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
       await storage.removeUser({ userId });
       await sharing?.removeByOwner(userId);
       await forms?.removeByOwner(userId);
+      await databases.removeByOwner(userId);
+      await databaseApiKeys.removeByOwner(userId);
       await apiKeys?.removeByOwner(userId);
       await auth.store.removeUser(userId);
       context.header("set-cookie", auth.sessions.clearCookieHeader(auth.secureCookies));
@@ -345,6 +371,97 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     }
     const folders = await storage.listFolders({ userId, ...parsed.data });
     return context.json({ folders });
+  });
+
+  app.get("/databases", async (context) => {
+    const userId = await requireDatabaseOwner(context.req.raw, resolveActiveUser, auth);
+    if (!userId) return unauthorized(context);
+    return context.json({ databases: await databases.list(userId) });
+  });
+
+  app.post("/databases", async (context) => {
+    const userId = await requireDatabaseOwner(context.req.raw, resolveActiveUser, auth);
+    if (!userId) return unauthorized(context);
+    const parsed = createDatabaseSchema.safeParse(await context.req.json().catch(() => null));
+    if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Enter a database name of up to 80 characters" } }, 400);
+    return context.json(await databases.create({ ownerUserId: userId, name: parsed.data.name }), 201);
+  });
+
+  app.post("/databases/import", async (context) => {
+    const userId = await requireDatabaseOwner(context.req.raw, resolveActiveUser, auth);
+    if (!userId) return unauthorized(context);
+    const form = await context.req.formData().catch(() => null);
+    const file = form?.get("file");
+    const name = form?.get("name");
+    if (!(file instanceof File) || typeof name !== "string" || !name.trim() || name.trim().length > 80) {
+      return context.json({ error: { code: "INVALID_REQUEST", message: "Choose a SQLite file and database name of up to 80 characters" } }, 400);
+    }
+    return context.json(await databases.import({ ownerUserId: userId, name: name.trim(), bytes: new Uint8Array(await file.arrayBuffer()) }), 201);
+  });
+
+  app.delete("/databases/:id", async (context) => {
+    const userId = await requireDatabaseOwner(context.req.raw, resolveActiveUser, auth);
+    if (!userId) return unauthorized(context);
+    if (!(await databases.remove({ ownerUserId: userId, id: context.req.param("id") }))) return context.json({ error: { code: "NOT_FOUND", message: "Database not found" } }, 404);
+    await databaseApiKeys.removeByDatabase({ ownerUserId: userId, databaseId: context.req.param("id") });
+    return context.body(null, 204);
+  });
+
+  app.get("/databases/:id/export", async (context) => {
+    const userId = await requireDatabaseOwner(context.req.raw, resolveActiveUser, auth);
+    if (!userId) return unauthorized(context);
+    const exported = await databases.export({ ownerUserId: userId, id: context.req.param("id") });
+    context.header("content-type", "application/vnd.sqlite3");
+    context.header("content-disposition", `attachment; filename="${exported.database.name.replaceAll(/[^a-zA-Z0-9_-]+/g, "-") || "database"}.sqlite"`);
+    const body = new ArrayBuffer(exported.bytes.byteLength);
+    new Uint8Array(body).set(exported.bytes);
+    return context.body(body);
+  });
+
+  app.get("/databases/:id/api-keys", async (context) => {
+    const userId = await requireDatabaseOwner(context.req.raw, resolveActiveUser, auth);
+    if (!userId) return unauthorized(context);
+    await databases.listTables({ ownerUserId: userId, id: context.req.param("id") });
+    return context.json({ keys: await databaseApiKeys.list({ ownerUserId: userId, databaseId: context.req.param("id") }) });
+  });
+
+  app.post("/databases/:id/api-keys", async (context) => {
+    const userId = await requireDatabaseOwner(context.req.raw, resolveActiveUser, auth);
+    if (!userId) return unauthorized(context);
+    const parsed = createDatabaseApiKeySchema.safeParse(await context.req.json().catch(() => null));
+    if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Enter a key name, scope, and valid expiry" } }, 400);
+    if (parsed.data.expiresAt && new Date(parsed.data.expiresAt).getTime() <= Date.now()) return context.json({ error: { code: "INVALID_REQUEST", message: "Expiry must be in the future" } }, 400);
+    await databases.listTables({ ownerUserId: userId, id: context.req.param("id") });
+    return context.json(await databaseApiKeys.create({ ownerUserId: userId, databaseId: context.req.param("id"), ...parsed.data, scopes: parsed.data.scopes as DatabaseApiKeyScope[] }), 201);
+  });
+
+  app.delete("/databases/:id/api-keys/:keyId", async (context) => {
+    const userId = await requireDatabaseOwner(context.req.raw, resolveActiveUser, auth);
+    if (!userId) return unauthorized(context);
+    if (!(await databaseApiKeys.revoke({ id: context.req.param("keyId"), ownerUserId: userId, databaseId: context.req.param("id") }))) return context.json({ error: { code: "NOT_FOUND", message: "Database API key not found" } }, 404);
+    return context.body(null, 204);
+  });
+
+  app.get("/databases/:id/tables", async (context) => {
+    const userId = await requireDatabaseUser(context.req.raw, context.req.param("id"), "read", resolveActiveUser, databaseApiKeys);
+    if (!userId) return unauthorized(context);
+    return context.json({ tables: await databases.listTables({ ownerUserId: userId, id: context.req.param("id") }) });
+  });
+
+  app.get("/databases/:id/tables/:table/rows", async (context) => {
+    const userId = await requireDatabaseUser(context.req.raw, context.req.param("id"), "read", resolveActiveUser, databaseApiKeys);
+    if (!userId) return unauthorized(context);
+    const parsed = databaseRowsQuerySchema.safeParse(context.req.query());
+    if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Invalid table pagination" } }, 400);
+    return context.json(await databases.listRows({ ownerUserId: userId, id: context.req.param("id"), table: context.req.param("table"), ...parsed.data }));
+  });
+
+  app.post("/databases/:id/query", async (context) => {
+    const parsed = databaseQuerySchema.safeParse(await context.req.json().catch(() => null));
+    if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Enter one valid SQL statement and up to 100 parameters" } }, 400);
+    const userId = await requireDatabaseUser(context.req.raw, context.req.param("id"), databaseQueryScope(parsed.data.sql), resolveActiveUser, databaseApiKeys);
+    if (!userId) return unauthorized(context);
+    return context.json(await databases.query({ ownerUserId: userId, id: context.req.param("id"), ...parsed.data }));
   });
 
   app.post("/folders", async (context) => {
@@ -535,6 +652,12 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     if (error instanceof StorageQuotaConfigurationError) {
       return context.json({ error: { code: "INVALID_STORAGE_QUOTA", message: error.message } }, 400);
     }
+    if (error instanceof DatabaseQueryError) {
+      return context.json({ error: { code: "DATABASE_QUERY_ERROR", message: error.message } }, 400);
+    }
+    if (error instanceof DatabaseImportError) {
+      return context.json({ error: { code: "DATABASE_IMPORT_ERROR", message: error.message } }, 400);
+    }
     if (isAlreadyExists(error)) {
       return context.json({ error: { code: "ALREADY_EXISTS", message: "A file with this name already exists" } }, 409);
     }
@@ -551,6 +674,22 @@ async function requireUser(request: Request, resolveUserId: UserResolver): Promi
 async function requireBrowserUser(request: Request, auth: NonNullable<CreateAppOptions["auth"]>): Promise<string | null> {
   const userId = auth.sessions.userIdFromCookie(request);
   return userId && (await auth.store.findById(userId))?.id || null;
+}
+
+async function requireDatabaseOwner(request: Request, resolveUserId: UserResolver, auth: CreateAppOptions["auth"]): Promise<string | null> {
+  if (request.headers.has("authorization")) return null;
+  if (auth) return requireBrowserUser(request, auth);
+  return requireUser(request, resolveUserId);
+}
+
+async function requireDatabaseUser(request: Request, databaseId: string, scope: DatabaseApiKeyScope, resolveUserId: UserResolver, databaseApiKeys: LocalDatabaseApiKeyStore): Promise<string | null> {
+  if (!request.headers.has("authorization")) return requireUser(request, resolveUserId);
+  const credential = await databaseApiKeys.authorize(request, scope);
+  return credential?.databaseId === databaseId ? credential.ownerUserId : null;
+}
+
+function databaseQueryScope(sql: string): DatabaseApiKeyScope {
+  return /^\s*(select|explain)\b/i.test(sql) ? "read" : "write";
 }
 
 function unauthorized(context: Context) {

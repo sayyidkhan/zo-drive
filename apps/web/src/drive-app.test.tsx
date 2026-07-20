@@ -33,11 +33,11 @@ describe("DriveApp", () => {
 
       expect(screen.getByRole("heading", { name: "Manage files in your private Drive." })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Share files on your terms" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 1.1.4" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 1.3.1" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI changelog version 1.1.4" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
+      expect(screen.getByRole("link", { name: "GUI changelog version 1.3.1" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("GUI v1.1.4")).toBeInTheDocument();
+      expect(screen.getByText("GUI v1.3.1")).toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
 
       cleanup();
@@ -65,7 +65,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.1.4")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.3.1")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();
@@ -134,7 +134,18 @@ describe("DriveApp", () => {
       revokeShare: vi.fn(),
       createApiKey: vi.fn(),
       listApiKeys: vi.fn().mockResolvedValue([]),
-      revokeApiKey: vi.fn()
+      revokeApiKey: vi.fn(),
+      listDatabases: vi.fn().mockResolvedValue([{ id: "db-11111111-1111-4111-8111-111111111111", name: "app-data", engine: "sqlite", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", sizeBytes: 4096 }]),
+      createDatabase: vi.fn(),
+      deleteDatabase: vi.fn(),
+      importDatabase: vi.fn(),
+      exportDatabase: vi.fn().mockResolvedValue(new Blob(["sqlite database"])),
+      listDatabaseApiKeys: vi.fn().mockResolvedValue([]),
+      createDatabaseApiKey: vi.fn().mockResolvedValue({ id: "key-11111111-1111-4111-8111-111111111111", databaseId: "db-11111111-1111-4111-8111-111111111111", name: "Production backend", prefix: "zdb_test", scopes: ["read", "write"], createdAt: "2026-01-01T00:00:00.000Z", expiresAt: null, lastUsedAt: null, apiKey: "zdb_test_value" }),
+      revokeDatabaseApiKey: vi.fn(),
+      listDatabaseTables: vi.fn().mockResolvedValue([{ name: "tasks", schema: "CREATE TABLE tasks (id INTEGER PRIMARY KEY, title TEXT)" }]),
+      listDatabaseRows: vi.fn().mockResolvedValue({ columns: ["id", "title"], rows: [{ id: 1, title: "Ship Database Engines" }], total: 1 }),
+      queryDatabase: vi.fn().mockResolvedValue({ columns: ["title"], rows: [{ title: "Ship Database Engines" }], changes: 0, lastInsertRowid: null })
     };
 
     const authClient = {
@@ -155,12 +166,30 @@ describe("DriveApp", () => {
     expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
     fireEvent.click(screen.getByRole("button", { name: "API Keys" }));
     expect(await screen.findByRole("heading", { name: "API Keys" })).toBeInTheDocument();
+    expect(screen.getByText("Zo Drive URL")).toBeInTheDocument();
+    expect(screen.getByText("http://localhost:3000/")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy Zo Drive URL" })).toBeInTheDocument();
     for (const expiry of ["10 minutes", "1 hour", "12 hours", "1 day", "7 days", "10 days", "14 days"]) {
       expect(screen.getByRole("option", { name: expiry })).toBeInTheDocument();
     }
     expect(screen.queryByRole("button", { name: "API Keys" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "List view" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Grid view" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Databases" }));
+    expect(await screen.findByRole("heading", { name: "Databases" })).toBeInTheDocument();
+    expect((await screen.findAllByText("app-data")).length).toBe(2);
+    expect(await screen.findByText("tasks")).toBeInTheDocument();
+    expect(await screen.findByText("Ship Database Engines")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Import SQLite file" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Export" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "SQL editor" }));
+    fireEvent.click(screen.getByRole("button", { name: "Run query" }));
+    await waitFor(() => expect(client.queryDatabase).toHaveBeenCalledWith(expect.objectContaining({ id: "db-11111111-1111-4111-8111-111111111111" })));
+    fireEvent.click(screen.getByRole("button", { name: "Backend access" }));
+    expect(await screen.findByRole("heading", { name: "Connect from your backend" })).toBeInTheDocument();
+    expect(screen.getByText("Query endpoint")).toBeInTheDocument();
+    expect(screen.getByText("Node.js example")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "My Drive" }));
     const notes = await screen.findByText("Notes");
     expect(notes).toBeInTheDocument();

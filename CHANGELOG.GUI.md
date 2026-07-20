@@ -4,9 +4,35 @@ All notable changes to the Zo Drive browser experience are recorded here.
 
 ## Unreleased
 
+### Added
+
+- Added validated SQLite import and consistent `.sqlite` export from Database Engines.
+
+### Changed
+
+- Simplified Database Engines into a compact instance rail and focused workspace tabs.
+
+## v1.3.1 - 2026-07-20
+
+### Added
+
+- Added a copyable Zo Drive URL to API Keys for quick CLI and automation setup.
+
+## v1.3.0 - 2026-07-20
+
+### Added
+
+- Added database-scoped API credentials, copyable HTTPS query endpoints, and Node.js connection examples in Database Engines.
+
 ### Changed
 
 - Moved the GUI and CLI changelogs into dedicated versioned release-history pages, linked from the top-right of the documentation header.
+
+## v1.2.0 - 2026-07-20
+
+### Added
+
+- Added Database Engines in the account menu. Create private SQLite databases, inspect tables and rows, and run SQL from the Zo Drive workspace.
 
 ## v1.1.4 - 2026-07-20
 

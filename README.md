@@ -9,6 +9,7 @@ GUI/CLI versioning and release policy.
 ## What works now
 
 - Hono REST API for upload, list, download/preview, delete, search, and storage usage
+- Database HTTP API for private SQLite databases, with per-database read/write credentials for external backends and validated `.sqlite` import/export
 - Owner-account authentication: signed HttpOnly sessions and one-time registration
 - Account controls for username, password, sign-out, and permanent account/data deletion
 - Traversal-safe, user-scoped filesystem data root
@@ -30,6 +31,7 @@ Set `ZO_DRIVE_DATA_ROOT` to a directory outside this project. Do not use the rep
 ZO_DRIVE_DATA_ROOT/
   v1/auth/users.json                 # salted password hash; never commit this
   v1/shares/shares.json              # share metadata and hashed passcodes
+  v1/databases/api-keys.json         # hashed database-scoped API credentials
   v1/users/{username}/files/
     Notes/hello.txt
     Photos/image.jpg
@@ -93,7 +95,7 @@ folder.
 
 #### GUI versioning
 
-The browser GUI has its own release track, currently `GUI v1.1.4`. GUI changes
+The browser GUI has its own release track, currently `GUI v1.3.0`. GUI changes
 are deployed to Zo Drive directly; browser users receive the current version by
 loading the page. Use `gui-v*` Git tags to trace a deployed GUI release. CLI
 releases are separate and do not change the GUI version.

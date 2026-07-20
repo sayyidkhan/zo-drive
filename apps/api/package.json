@@ -1,7 +1,7 @@
 {
   "name": "@zo-drive/api",
   "private": true,
-  "version": "0.1.2",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -12,10 +12,12 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.13.8",
+    "better-sqlite3": "^12.11.1",
     "hono": "^4.7.9",
     "zod": "^3.24.4"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@zo-drive/cli": "workspace:*",
     "@zo-drive/sdk": "workspace:*",
     "tsx": "^4.19.3",

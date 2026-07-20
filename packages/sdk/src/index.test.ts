@@ -138,4 +138,18 @@ describe("ZoDriveClient", () => {
     expect(fetcher).toHaveBeenNthCalledWith(1, "https://drive.example/api-keys", expect.objectContaining({ method: "POST" }));
     expect(fetcher).toHaveBeenNthCalledWith(3, "https://drive.example/api-keys/key-123", expect.objectContaining({ method: "DELETE" }));
   });
+
+  it("imports and exports SQLite databases through the database API", async () => {
+    const database = { id: "11111111-1111-4111-8111-111111111111", name: "app-data", engine: "sqlite", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", sizeBytes: 4096 };
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(database), { status: 201 }))
+      .mockResolvedValueOnce(new Response(new Blob(["sqlite bytes"], { type: "application/vnd.sqlite3" }), { status: 200 }));
+    const client = new ZoDriveClient({ baseUrl: "https://drive.example", fetcher });
+
+    await expect(client.importDatabase({ file: new Blob(["sqlite bytes"]), name: "app-data" })).resolves.toEqual(database);
+    await expect(client.exportDatabase(database.id)).resolves.toBeInstanceOf(Blob);
+    const [, importRequest] = fetcher.mock.calls[0] as [string, RequestInit];
+    expect(importRequest.body).toBeInstanceOf(FormData);
+    expect(fetcher).toHaveBeenNthCalledWith(2, `https://drive.example/databases/${database.id}/export`, expect.objectContaining({ method: "GET" }));
+  });
 });

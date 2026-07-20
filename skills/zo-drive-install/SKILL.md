@@ -2,7 +2,6 @@
 name: zo-drive-install
 description: Install, configure, verify, update, or remove the Zo Drive application. Use when setting up Zo Drive locally or on a Zo server, choosing an external data root, validating the API/CLI/web stack, or handling a request to uninstall while keeping files or permanently deleting all user data.
 ---
-
 # Zo Drive Install
 
 Use this skill from the Zo Drive repository. Treat [README.md](../../README.md) as the current runnable-command reference and [docs/PLAN.md](../../docs/PLAN.md) as the product-lifecycle specification.

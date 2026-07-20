@@ -44,6 +44,129 @@ describe("Zo Drive API", () => {
     await expect(response.json()).resolves.toMatchObject({ error: { code: "UNAUTHORIZED" } });
   });
 
+  it("creates, browses, queries, and deletes an isolated SQLite database", async () => {
+    const app = await createTestApp();
+    const created = await app.request("http://localhost/databases", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-test-user-id": "alice" },
+      body: JSON.stringify({ name: "app-data" })
+    });
+    expect(created.status).toBe(201);
+    const database = await created.json() as { id: string; engine: string; name: string };
+    expect(database).toMatchObject({ engine: "sqlite", name: "app-data" });
+
+    const createTable = await app.request(`http://localhost/databases/${database.id}/query`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-test-user-id": "alice" },
+      body: JSON.stringify({ sql: "CREATE TABLE tasks (id INTEGER PRIMARY KEY, title TEXT NOT NULL)" })
+    });
+    expect(createTable.status).toBe(200);
+
+    const inserted = await app.request(`http://localhost/databases/${database.id}/query`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-test-user-id": "alice" },
+      body: JSON.stringify({ sql: "INSERT INTO tasks (title) VALUES (?)", params: ["Ship Database Engines"] })
+    });
+    await expect(inserted.json()).resolves.toMatchObject({ changes: 1, lastInsertRowid: 1 });
+
+    const tables = await app.request(`http://localhost/databases/${database.id}/tables`, { headers: { "x-test-user-id": "alice" } });
+    await expect(tables.json()).resolves.toMatchObject({ tables: [{ name: "tasks", schema: expect.stringContaining("CREATE TABLE tasks") }] });
+    const rows = await app.request(`http://localhost/databases/${database.id}/tables/tasks/rows`, { headers: { "x-test-user-id": "alice" } });
+    await expect(rows.json()).resolves.toMatchObject({ columns: ["id", "title"], total: 1, rows: [{ id: 1, title: "Ship Database Engines" }] });
+
+    const queried = await app.request(`http://localhost/databases/${database.id}/query`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-test-user-id": "alice" },
+      body: JSON.stringify({ sql: "SELECT title FROM tasks WHERE id = ?", params: [1] })
+    });
+    await expect(queried.json()).resolves.toMatchObject({ columns: ["title"], rows: [{ title: "Ship Database Engines" }] });
+
+    const exported = await app.request(`http://localhost/databases/${database.id}/export`, { headers: { "x-test-user-id": "alice" } });
+    expect(exported.status).toBe(200);
+    expect(exported.headers.get("content-type")).toContain("application/vnd.sqlite3");
+    const importForm = new FormData();
+    importForm.set("name", "imported-data");
+    importForm.set("file", new File([await exported.arrayBuffer()], "app-data.sqlite", { type: "application/vnd.sqlite3" }));
+    const imported = await app.request("http://localhost/databases/import", { method: "POST", headers: { "x-test-user-id": "alice" }, body: importForm });
+    expect(imported.status).toBe(201);
+    const importedDatabase = await imported.json() as { id: string; name: string };
+    expect(importedDatabase.name).toBe("imported-data");
+    const importedRows = await app.request(`http://localhost/databases/${importedDatabase.id}/tables/tasks/rows`, { headers: { "x-test-user-id": "alice" } });
+    await expect(importedRows.json()).resolves.toMatchObject({ rows: [{ id: 1, title: "Ship Database Engines" }] });
+
+    const invalidImport = new FormData();
+    invalidImport.set("name", "invalid-data");
+    invalidImport.set("file", new File(["not sqlite"], "invalid.sqlite", { type: "application/vnd.sqlite3" }));
+    const invalidImportResponse = await app.request("http://localhost/databases/import", { method: "POST", headers: { "x-test-user-id": "alice" }, body: invalidImport });
+    expect(invalidImportResponse.status).toBe(400);
+    await expect(invalidImportResponse.json()).resolves.toMatchObject({ error: { code: "DATABASE_IMPORT_ERROR" } });
+
+    const blocked = await app.request(`http://localhost/databases/${database.id}/query`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-test-user-id": "alice" },
+      body: JSON.stringify({ sql: "SELECT 1; SELECT 2" })
+    });
+    expect(blocked.status).toBe(400);
+    await expect(blocked.json()).resolves.toMatchObject({ error: { code: "DATABASE_QUERY_ERROR" } });
+
+    const privateToOwner = await app.request(`http://localhost/databases/${database.id}/tables`, { headers: { "x-test-user-id": "bob" } });
+    expect(privateToOwner.status).toBe(404);
+    const deleted = await app.request(`http://localhost/databases/${database.id}`, { method: "DELETE", headers: { "x-test-user-id": "alice" } });
+    expect(deleted.status).toBe(204);
+  });
+
+  it("issues database-scoped keys for external backends and enforces their access", async () => {
+    const app = await createTestApp();
+    const createDatabase = async (name: string) => {
+      const response = await app.request("http://localhost/databases", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-test-user-id": "alice" },
+        body: JSON.stringify({ name })
+      });
+      return response.json() as Promise<{ id: string }>;
+    };
+    const primary = await createDatabase("primary");
+    const other = await createDatabase("other");
+    const created = await app.request(`http://localhost/databases/${primary.id}/api-keys`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-test-user-id": "alice" },
+      body: JSON.stringify({ name: "Read-only production", scopes: ["read"], expiresAt: null })
+    });
+    expect(created.status).toBe(201);
+    const readKey = await created.json() as { id: string; apiKey: string; databaseId: string };
+    expect(readKey.apiKey).toMatch(/^zdb_/);
+    expect(readKey.databaseId).toBe(primary.id);
+
+    const readHeaders = { authorization: `Bearer ${readKey.apiKey}` };
+    expect((await app.request(`http://localhost/databases/${primary.id}/tables`, { headers: readHeaders })).status).toBe(200);
+    expect((await app.request(`http://localhost/databases/${other.id}/tables`, { headers: readHeaders })).status).toBe(401);
+    expect((await app.request(`http://localhost/databases/${primary.id}/query`, {
+      method: "POST",
+      headers: { ...readHeaders, "content-type": "application/json" },
+      body: JSON.stringify({ sql: "SELECT 1 AS one" })
+    })).status).toBe(200);
+    expect((await app.request(`http://localhost/databases/${primary.id}/query`, {
+      method: "POST",
+      headers: { ...readHeaders, "content-type": "application/json" },
+      body: JSON.stringify({ sql: "CREATE TABLE blocked (id INTEGER)" })
+    })).status).toBe(401);
+
+    const writeCreated = await app.request(`http://localhost/databases/${primary.id}/api-keys`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-test-user-id": "alice" },
+      body: JSON.stringify({ name: "Writer", scopes: ["read", "write"], expiresAt: null })
+    });
+    const writeKey = await writeCreated.json() as { apiKey: string };
+    expect((await app.request(`http://localhost/databases/${primary.id}/query`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${writeKey.apiKey}`, "content-type": "application/json" },
+      body: JSON.stringify({ sql: "CREATE TABLE allowed (id INTEGER)" })
+    })).status).toBe(200);
+
+    expect((await app.request(`http://localhost/databases/${primary.id}/api-keys/${readKey.id}`, { method: "DELETE", headers: { "x-test-user-id": "alice" } })).status).toBe(204);
+    expect((await app.request(`http://localhost/databases/${primary.id}/tables`, { headers: readHeaders })).status).toBe(401);
+  });
+
   it("uploads, lists, streams, and moves deleted files to Trash until restored", async () => {
     const app = await createTestApp();
     const uploaded = await app.request("http://localhost/objects", {

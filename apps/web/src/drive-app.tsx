@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
+import { flexRender, getCoreRowModel, useReactTable, type ColumnDef } from "@tanstack/react-table";
 import {
   ArrowLeft,
   ArrowUpRight,
@@ -9,6 +10,7 @@ import {
   Code2,
   Database,
   Copy,
+  Download,
   Eye,
   EyeOff,
   File,
@@ -58,9 +60,9 @@ import { toast, Toaster } from "sonner";
 import { create } from "zustand";
 
 import { ZoDriveClient } from "@zo-drive/sdk";
-import type { ApiKeyScope, AuthStatus, DriveApiKey, DriveFolder, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, NativeFileType, PublicShare, PublishedForm, ShareAccess, StorageUsage } from "@zo-drive/types";
+import type { ApiKeyScope, AuthStatus, DatabaseApiKey, DatabaseApiKeyScope, DatabaseRows, DriveApiKey, DriveDatabase, DriveFolder, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, NativeFileType, PublicShare, PublishedForm, ShareAccess, StorageUsage } from "@zo-drive/types";
 
-type DriveClient = Pick<ZoDriveClient, "createApiKey" | "createFolder" | "createNativeFile" | "createShare" | "delete" | "download" | "emptyTrash" | "getUsage" | "list" | "listApiKeys" | "listFolders" | "listFormResponses" | "listShares" | "listStarred" | "listTrash" | "permanentlyDeleteTrash" | "publishForm" | "rename" | "restoreTrash" | "revokeApiKey" | "revokeShare" | "saveNativeFile" | "setQuota" | "star" | "unstar" | "updateSharePasscode" | "upload">;
+type DriveClient = Pick<ZoDriveClient, "createApiKey" | "createFolder" | "createNativeFile" | "createShare" | "delete" | "download" | "emptyTrash" | "getUsage" | "list" | "listApiKeys" | "listFolders" | "listFormResponses" | "listShares" | "listStarred" | "listTrash" | "permanentlyDeleteTrash" | "publishForm" | "rename" | "restoreTrash" | "revokeApiKey" | "revokeShare" | "saveNativeFile" | "setQuota" | "star" | "unstar" | "updateSharePasscode" | "upload"> & Partial<Pick<ZoDriveClient, "createDatabase" | "createDatabaseApiKey" | "deleteDatabase" | "exportDatabase" | "importDatabase" | "listDatabaseApiKeys" | "listDatabases" | "listDatabaseRows" | "listDatabaseTables" | "queryDatabase" | "revokeDatabaseApiKey">>;
 type AuthClient = Pick<ZoDriveClient, "changePassword" | "deleteAccount" | "getAuthStatus" | "login" | "logout" | "registerInitialUser" | "updateProfile">;
 type SharedClient = Pick<ZoDriveClient, "downloadShared" | "getPublicShare">;
 type PublicFormClient = Pick<ZoDriveClient, "getPublicForm" | "submitFormResponse">;
@@ -141,10 +143,25 @@ const appBasePath = normalizeAppBasePath(
 const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.1.4";
+const GUI_VERSION = "1.3.1";
 const CLI_VERSION = "1.1.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.3.1",
+    date: "20 July 2026",
+    changes: ["Added a copyable Zo Drive URL to API Keys for quickly connecting local machines and automations."]
+  },
+  {
+    version: "v1.3.0",
+    date: "20 July 2026",
+    changes: ["Added database-scoped API credentials, a copyable HTTPS endpoint, and backend connection examples for SQLite databases."]
+  },
+  {
+    version: "v1.2.0",
+    date: "20 July 2026",
+    changes: ["Added Database Engines: create private SQLite databases, browse tables and rows, and run SQL in the Zo Drive workspace."]
+  },
   {
     version: "v1.1.4",
     date: "20 July 2026",
@@ -528,7 +545,7 @@ function SettingsCard({ children, description, danger = false, icon, title }: { 
 
 function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: { authClient: AuthClient; client: DriveClient; user: DriveUser; onAccountDeleted: () => void; onSignOut: () => void }) {
   const { currentPath, setCurrentPath, viewMode, setViewMode } = useDriveUi();
-  const [section, setSection] = useState<"api-keys" | "home" | "my-drive" | "pastes" | "profile" | "shared" | "starred" | "transfer" | "trash">("my-drive");
+  const [section, setSection] = useState<"api-keys" | "databases" | "home" | "my-drive" | "pastes" | "profile" | "shared" | "starred" | "transfer" | "trash">("my-drive");
   const [search, setSearch] = useState("");
   const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);
   const [storageBreakdownOpen, setStorageBreakdownOpen] = useState(false);
@@ -568,7 +585,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
       modifiedAfter: isRecent ? recentDateRange?.after : advancedDateRange?.after,
       modifiedBefore: isRecent ? recentDateRange?.before : advancedDateRange?.before
     }),
-    enabled: section !== "api-keys" && section !== "shared" && section !== "starred" && section !== "transfer" && section !== "trash"
+    enabled: section !== "api-keys" && section !== "databases" && section !== "shared" && section !== "starred" && section !== "transfer" && section !== "trash"
   });
   const foldersQuery = useQuery({
     queryKey: ["folders", currentPath],
@@ -841,6 +858,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
               <a className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" href={landingUrl()}><ArrowLeft size={17} /> Landing page</a>
               <a className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" href={docsUrl("gui")}><ScrollText size={17} /> Documentation</a>
               <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={() => { setAccountMenuOpen(false); setSection("api-keys"); setCurrentPath(""); }}><KeyRound size={17} /> API Keys</button>
+              <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={() => { setAccountMenuOpen(false); setSection("databases"); setCurrentPath(""); }}><Database size={17} /> Databases</button>
               <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={() => { setAccountMenuOpen(false); setSection("profile"); setCurrentPath(""); }}><UserRound size={17} /> Profile & controls</button>
               <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={onSignOut}><LogOut size={17} /> Sign out</button>
             </div>}
@@ -884,8 +902,9 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
           <div className="mb-7 flex flex-wrap items-center justify-between gap-4">
             <div>
               {section === "my-drive" && currentPath && <FolderNavigation currentPath={currentPath} onNavigate={setCurrentPath} />}
-              <h1 className={`${section === "my-drive" && currentPath ? "mt-3" : ""} text-2xl font-semibold tracking-tight text-slate-900`}>{search || advancedSearchActive ? "Search results" : section === "api-keys" ? "API Keys" : section === "profile" ? "Profile & controls" : section === "home" ? "Recent" : section === "pastes" ? "Zo Paste" : section === "transfer" ? "Zo Transfer" : section === "shared" ? "Shared with others" : section === "starred" ? "Starred" : section === "trash" ? "Trash" : currentPath ? currentPath.split("/").at(-1) : "Files"}</h1>
+              <h1 className={`${section === "my-drive" && currentPath ? "mt-3" : ""} text-2xl font-semibold tracking-tight text-slate-900`}>{search || advancedSearchActive ? "Search results" : section === "api-keys" ? "API Keys" : section === "databases" ? "Databases" : section === "profile" ? "Profile & controls" : section === "home" ? "Recent" : section === "pastes" ? "Zo Paste" : section === "transfer" ? "Zo Transfer" : section === "shared" ? "Shared with others" : section === "starred" ? "Starred" : section === "trash" ? "Trash" : currentPath ? currentPath.split("/").at(-1) : "Files"}</h1>
               {section === "api-keys" && <p className="mt-1 text-sm text-slate-500">Provision and revoke scoped access for local computers and automations.</p>}
+              {section === "databases" && <p className="mt-1 text-sm text-slate-500">Create SQLite databases, inspect data, and run parameterised SQL from your private Drive.</p>}
               {section === "profile" && <p className="mt-1 text-sm text-slate-500">Manage the owner account for this private drive.</p>}
               {section === "home" && <p className="mt-1 text-sm text-slate-500">Files you recently created, uploaded, or updated.</p>}
               {section === "pastes" && <p className="mt-1 text-sm text-slate-500">Create, keep, and securely share code or text snippets.</p>}
@@ -893,7 +912,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
               {section === "shared" && <p className="mt-1 text-sm text-slate-500">Manage links you have shared outside your drive.</p>}
               {section === "trash" && <p className="mt-1 text-sm text-slate-500">Items are permanently deleted 30 days after being moved here.</p>}
             </div>
-            {section === "trash" && trashItems.length > 0 ? <button className="rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50" onClick={() => void emptyTrash()}>Empty trash</button> : section === "pastes" ? <button className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800" onClick={() => startNativeFile("paste")}><Plus size={17} /> New paste</button> : section !== "home" && section !== "transfer" && section !== "api-keys" && section !== "profile" && <div className="flex rounded-lg border border-slate-200 bg-white p-1">
+            {section === "trash" && trashItems.length > 0 ? <button className="rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50" onClick={() => void emptyTrash()}>Empty trash</button> : section === "pastes" ? <button className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800" onClick={() => startNativeFile("paste")}><Plus size={17} /> New paste</button> : section !== "home" && section !== "transfer" && section !== "api-keys" && section !== "databases" && section !== "profile" && <div className="flex rounded-lg border border-slate-200 bg-white p-1">
               <button aria-label="List view" className={`rounded-md p-2 ${viewMode === "list" ? "bg-slate-100 text-slate-900" : "text-slate-400"}`} onClick={() => setViewMode("list")}><List size={18} /></button>
               <button aria-label="Grid view" className={`rounded-md p-2 ${viewMode === "grid" ? "bg-slate-100 text-slate-900" : "text-slate-400"}`} onClick={() => setViewMode("grid")}><Grid2X2 size={18} /></button>
             </div>}
@@ -901,7 +920,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
 
           {section === "home" && <RecentFiltersBar filters={recentFilters} onChange={setRecentFilters} />}
 
-          {section === "api-keys" ? <ApiKeys client={client} /> : section === "profile" ? <AccountScreen client={authClient} onAccountDeleted={onAccountDeleted} user={user} /> : section === "transfer" ? <ZoTransfer client={client} onCreated={async () => { await refresh(); await queryClient.invalidateQueries({ queryKey: ["shares"] }); }} /> : section === "pastes" ? <ZoPaste files={displayedFiles} isError={filesQuery.isError} isLoading={isLoading} onCreate={() => startNativeFile("paste")} onDelete={(key) => deleteMutation.mutate(key)} onPreview={openPreview} onRetry={() => void filesQuery.refetch()} onShare={(file) => { setShareSettings(null); setShareFile(file); }} onToggleStar={(file) => starMutation.mutate({ key: file.key, starred: file.starred })} /> : isLoading ? (
+          {section === "api-keys" ? <ApiKeys client={client} /> : section === "databases" ? <Databases client={client} /> : section === "profile" ? <AccountScreen client={authClient} onAccountDeleted={onAccountDeleted} user={user} /> : section === "transfer" ? <ZoTransfer client={client} onCreated={async () => { await refresh(); await queryClient.invalidateQueries({ queryKey: ["shares"] }); }} /> : section === "pastes" ? <ZoPaste files={displayedFiles} isError={filesQuery.isError} isLoading={isLoading} onCreate={() => startNativeFile("paste")} onDelete={(key) => deleteMutation.mutate(key)} onPreview={openPreview} onRetry={() => void filesQuery.refetch()} onShare={(file) => { setShareSettings(null); setShareFile(file); }} onToggleStar={(file) => starMutation.mutate({ key: file.key, starred: file.starred })} /> : isLoading ? (
             <div className="grid h-64 place-items-center text-sm text-slate-500"><LoaderCircle className="mr-2 animate-spin" size={20} /> Loading your drive…</div>
           ) : (section === "shared" ? sharesQuery.isError : section === "starred" ? starredQuery.isError : section === "trash" ? trashQuery.isError : filesQuery.isError) ? (
             <EmptyState
@@ -949,17 +968,221 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
         return updatedUsage;
       }} />}
       {uploadDialogOpen && <UploadDialog onClose={() => setUploadDialogOpen(false)} onChooseFiles={() => { setUploadDialogOpen(false); fileInput.current?.click(); }} onChooseFolder={() => { setUploadDialogOpen(false); folderInput.current?.click(); }} onDrop={(dataTransfer) => { setUploadDialogOpen(false); return uploadDroppedItems(dataTransfer); }} />}
-      {uploads.length === 0 && <button aria-label="Open upload menu" className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-900/25 transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200" onClick={() => setUploadDialogOpen(true)}><Upload size={18} /> Upload</button>}
+      {uploads.length === 0 && section !== "databases" && <button aria-label="Open upload menu" className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-900/25 transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200" onClick={() => setUploadDialogOpen(true)}><Upload size={18} /> Upload</button>}
       {uploads.length > 0 && <UploadProgress uploads={uploads} />}
     </main>
   );
 }
+
+function Databases({ client }: { client: DriveClient }) {
+  const queryClient = useQueryClient();
+  const [name, setName] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedTable, setSelectedTable] = useState<string | null>(null);
+  const [activePanel, setActivePanel] = useState<"data" | "sql" | "access">("data");
+  const [sql, setSql] = useState("SELECT name, sql FROM sqlite_master WHERE type = 'table' ORDER BY name");
+  const [queryResult, setQueryResult] = useState<DatabaseRows | null>(null);
+  const importInput = useRef<HTMLInputElement>(null);
+  const supported = Boolean(client.listDatabases && client.createDatabase && client.deleteDatabase && client.exportDatabase && client.importDatabase && client.listDatabaseTables && client.listDatabaseRows && client.queryDatabase);
+  const databasesQuery = useQuery({
+    queryKey: ["databases"],
+    queryFn: () => client.listDatabases!(),
+    enabled: supported
+  });
+  const databases = databasesQuery.data ?? [];
+  const activeDatabase = databases.find((database) => database.id === selectedId) ?? databases[0] ?? null;
+  const tablesQuery = useQuery({
+    queryKey: ["database-tables", activeDatabase?.id],
+    queryFn: () => client.listDatabaseTables!(activeDatabase!.id),
+    enabled: supported && Boolean(activeDatabase)
+  });
+  const tables = tablesQuery.data ?? [];
+  const activeTable = tables.find((table) => table.name === selectedTable) ?? tables[0] ?? null;
+  const rowsQuery = useQuery({
+    queryKey: ["database-rows", activeDatabase?.id, activeTable?.name],
+    queryFn: () => client.listDatabaseRows!({ id: activeDatabase!.id, table: activeTable!.name }),
+    enabled: supported && Boolean(activeDatabase && activeTable)
+  });
+  const createMutation = useMutation({
+    mutationFn: () => client.createDatabase!(name.trim()),
+    onSuccess: async (database) => {
+      setName("");
+      setSelectedId(database.id);
+      setSelectedTable(null);
+      await queryClient.invalidateQueries({ queryKey: ["databases"] });
+      toast.success(`${database.name} created`);
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not create the database")
+  });
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => client.deleteDatabase!(id),
+    onSuccess: async () => {
+      setSelectedId(null);
+      setSelectedTable(null);
+      setQueryResult(null);
+      await queryClient.invalidateQueries({ queryKey: ["databases"] });
+      toast.success("Database deleted");
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not delete the database")
+  });
+  const importMutation = useMutation({
+    mutationFn: (file: File) => client.importDatabase!({ file, name: databaseNameFromFile(file.name) }),
+    onSuccess: async (database) => {
+      setSelectedId(database.id);
+      setSelectedTable(null);
+      setQueryResult(null);
+      setActivePanel("data");
+      await queryClient.invalidateQueries({ queryKey: ["databases"] });
+      toast.success(`${database.name} imported`);
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not import the SQLite database")
+  });
+  const exportMutation = useMutation({
+    mutationFn: () => client.exportDatabase!(activeDatabase!.id),
+    onSuccess: (file) => {
+      const url = URL.createObjectURL(file);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${activeDatabase?.name ?? "database"}.sqlite`;
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      toast.success("SQLite database exported");
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not export the SQLite database")
+  });
+  const queryMutation = useMutation({
+    mutationFn: () => client.queryDatabase!({ id: activeDatabase!.id, sql }),
+    onSuccess: async (result) => {
+      setQueryResult({ columns: result.columns, rows: result.rows, total: result.rows.length });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["databases"] }),
+        queryClient.invalidateQueries({ queryKey: ["database-tables", activeDatabase?.id] }),
+        queryClient.invalidateQueries({ queryKey: ["database-rows", activeDatabase?.id] })
+      ]);
+      await tablesQuery.refetch();
+      toast.success(result.columns.length > 0 ? `${result.rows.length} row${result.rows.length === 1 ? "" : "s"} returned` : `${result.changes} row${result.changes === 1 ? "" : "s"} changed`);
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not run SQL")
+  });
+
+  if (!supported) {
+    return <section className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm"><h2 className="text-xl font-semibold text-slate-900">Database tools are unavailable</h2><p className="mt-2 text-sm text-slate-500">Update the Zo Drive API and browser workspace together to use Database Engines.</p></section>;
+  }
+
+  const panels = [
+    { id: "data" as const, label: "Data" },
+    { id: "sql" as const, label: "SQL editor" },
+    { id: "access" as const, label: "Backend access" }
+  ];
+
+  return <div className="grid gap-5 md:grid-cols-[15rem_minmax(0,1fr)]">
+    <aside className="h-fit overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="border-b border-slate-100 p-4">
+        <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">SQLite</p><h2 className="mt-1 text-lg font-semibold text-slate-900">Your instances</h2></div><span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-500">{databases.length}</span></div>
+        <form className="mt-4 flex gap-2" onSubmit={(event) => { event.preventDefault(); if (name.trim()) createMutation.mutate(); }}><input aria-label="New database name" className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" maxLength={80} placeholder="New database" value={name} onChange={(event) => setName(event.target.value)} /><button aria-label="Create database" className="grid size-9 shrink-0 place-items-center rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:bg-slate-300" disabled={!name.trim() || createMutation.isPending} type="submit"><Plus size={17} /></button></form>
+        <input accept=".db,.sqlite,.sqlite3,application/vnd.sqlite3,application/x-sqlite3" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) importMutation.mutate(file); event.target.value = ""; }} ref={importInput} type="file" />
+        <button className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:text-slate-400" disabled={importMutation.isPending} onClick={() => importInput.current?.click()} type="button"><Upload size={16} />{importMutation.isPending ? "Importing…" : "Import SQLite file"}</button>
+      </div>
+      {databasesQuery.isPending ? <p className="p-5 text-sm text-slate-500">Loading databases…</p> : databases.length === 0 ? <p className="p-5 text-sm leading-6 text-slate-500">Create a private SQLite database to get started.</p> : <div className="p-2">{databases.map((database) => <button className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${activeDatabase?.id === database.id ? "bg-blue-600 text-white shadow-sm" : "text-slate-700 hover:bg-slate-50"}`} key={database.id} onClick={() => { setSelectedId(database.id); setSelectedTable(null); setQueryResult(null); setActivePanel("data"); }}><span className={`grid size-9 place-items-center rounded-lg ${activeDatabase?.id === database.id ? "bg-white/15 text-white" : "bg-slate-100 text-slate-500"}`}><Database size={18} /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{database.name}</span><span className={`mt-0.5 block text-xs font-medium ${activeDatabase?.id === database.id ? "text-blue-100" : "text-slate-400"}`}>{formatBytes(database.sizeBytes)}</span></span></button>)}</div>}
+    </aside>
+
+    <div className="min-w-0">
+      {!activeDatabase ? <section className="grid min-h-96 place-items-center rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center"><div><span className="mx-auto grid size-12 place-items-center rounded-2xl bg-blue-50 text-blue-600"><Database size={24} /></span><h2 className="mt-4 text-xl font-semibold text-slate-900">Build with data you control.</h2><p className="mt-2 max-w-sm text-sm leading-6 text-slate-500">Create a SQLite database to browse tables here and access it from your backend through Zo Drive’s authenticated API.</p></div></section> : <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <header className="flex flex-wrap items-center justify-between gap-4 px-5 py-5 sm:px-6"><div className="flex min-w-0 items-center gap-3"><span className="grid size-11 shrink-0 place-items-center rounded-xl bg-blue-600 text-white shadow-sm"><Database size={21} /></span><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="truncate text-xl font-semibold text-slate-900">{activeDatabase.name}</h2><span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">Private</span></div><p className="mt-1 text-sm text-slate-500">SQLite · {formatBytes(activeDatabase.sizeBytes)} · {tables.length} table{tables.length === 1 ? "" : "s"}</p></div></div><div className="flex items-center gap-1"><button className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 disabled:text-slate-400" disabled={exportMutation.isPending} onClick={() => exportMutation.mutate()} type="button"><Download size={16} />{exportMutation.isPending ? "Exporting…" : "Export"}</button><button aria-label="Delete database" className="rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600" disabled={deleteMutation.isPending} onClick={() => { if (window.confirm(`Delete ${activeDatabase.name}? This permanently removes its database file.`)) deleteMutation.mutate(activeDatabase.id); }}><X size={18} /></button></div></header>
+        <nav aria-label="Database workspace" className="flex gap-1 border-y border-slate-100 bg-slate-50 px-3 py-2 sm:px-4">{panels.map((panel) => <button aria-current={activePanel === panel.id ? "page" : undefined} className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${activePanel === panel.id ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200" : "text-slate-500 hover:text-slate-900"}`} key={panel.id} onClick={() => setActivePanel(panel.id)} type="button">{panel.label}</button>)}</nav>
+        {activePanel === "data" && <div className="grid min-h-[30rem] md:grid-cols-[13.5rem_minmax(0,1fr)]"><aside className="border-b border-slate-100 bg-slate-50/70 p-3 md:border-b-0 md:border-r"><div className="flex items-center justify-between px-2 pb-2"><p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Tables</p><span className="text-xs font-semibold text-slate-400">{tables.length}</span></div>{tablesQuery.isPending ? <p className="px-2 py-3 text-sm text-slate-500">Loading…</p> : tables.length === 0 ? <div className="px-2 py-4"><p className="text-sm leading-5 text-slate-500">No tables yet.</p><button className="mt-3 text-sm font-semibold text-blue-600 hover:text-blue-700" onClick={() => setActivePanel("sql")}>Create with SQL</button></div> : tables.map((table) => <button className={`mb-1 flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm font-medium ${activeTable?.name === table.name ? "bg-white text-blue-700 shadow-sm ring-1 ring-slate-200" : "text-slate-600 hover:bg-white"}`} key={table.name} onClick={() => { setSelectedTable(table.name); setQueryResult(null); }}><span className="truncate">{table.name}</span><span className="size-1.5 shrink-0 rounded-full bg-current opacity-50" /></button>)}</aside><div className="min-w-0 p-5 sm:p-6">{activeTable ? <DatabaseTableGrid data={rowsQuery.data} isLoading={rowsQuery.isPending} tableName={activeTable.name} total={rowsQuery.data?.total ?? 0} /> : <div className="grid h-full min-h-56 place-items-center text-center"><div><Database className="mx-auto text-slate-300" size={28} /><p className="mt-3 text-sm text-slate-500">Create a table, then select it here to browse its rows.</p></div></div>}</div></div>}
+        {activePanel === "sql" && <section className="bg-slate-950"><header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-5 py-4 sm:px-6"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-300">SQL editor</p><p className="mt-1 text-sm text-slate-300">One parameterised SQL statement at a time.</p></div><button className="rounded-lg bg-cyan-300 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-200 disabled:bg-slate-600 disabled:text-slate-300" disabled={queryMutation.isPending || !sql.trim()} onClick={() => queryMutation.mutate()}>{queryMutation.isPending ? "Running…" : "Run query"}</button></header><textarea aria-label="SQL query" className="min-h-72 w-full resize-y border-0 bg-slate-950 p-5 font-mono text-sm leading-6 text-slate-100 outline-none placeholder:text-slate-500 sm:p-6" spellCheck={false} value={sql} onChange={(event) => setSql(event.target.value)} />{queryResult && <div className="border-t border-white/10 bg-slate-900 p-5 sm:p-6"><DatabaseTableGrid data={queryResult} isLoading={false} tableName="Query results" total={queryResult.total} dark /></div>}</section>}
+        {activePanel === "access" && <div className="p-4 sm:p-6"><DatabaseConnection client={client} database={activeDatabase} /></div>}
+      </section>}
+    </div>
+  </div>;
+}
+
+function DatabaseConnection({ client, database }: { client: DriveClient; database: DriveDatabase }) {
+  const queryClient = useQueryClient();
+  const [name, setName] = useState("Production backend");
+  const [access, setAccess] = useState<DatabaseApiKeyScope>("write");
+  const [expiry, setExpiry] = useState("90d");
+  const [created, setCreated] = useState<string | null>(null);
+  const supported = Boolean(client.createDatabaseApiKey && client.listDatabaseApiKeys && client.revokeDatabaseApiKey);
+  const endpoint = `${window.location.origin}${appBasePath === "/" ? "" : appBasePath}/databases/${database.id}/query`;
+  const expiryOptions = [
+    { value: "30d", label: "30 days", durationMs: 30 * 24 * 60 * 60 * 1_000 },
+    { value: "90d", label: "90 days", durationMs: 90 * 24 * 60 * 60 * 1_000 },
+    { value: "365d", label: "1 year", durationMs: 365 * 24 * 60 * 60 * 1_000 },
+    { value: "never", label: "Never", durationMs: null }
+  ] as const;
+  const expiresAt = (value: string) => {
+    const option = expiryOptions.find((item) => item.value === value);
+    return option?.durationMs ? new Date(Date.now() + option.durationMs).toISOString() : null;
+  };
+  const keysQuery = useQuery({ queryKey: ["database-api-keys", database.id], queryFn: () => client.listDatabaseApiKeys!(database.id), enabled: supported });
+  const createMutation = useMutation({
+    mutationFn: () => client.createDatabaseApiKey!({ databaseId: database.id, name: name.trim(), scopes: access === "write" ? ["read", "write"] : ["read"], expiresAt: expiresAt(expiry) }),
+    onSuccess: async (key) => {
+      setCreated(key.apiKey);
+      await queryClient.invalidateQueries({ queryKey: ["database-api-keys", database.id] });
+      toast.success("Database API key created");
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not create database API key")
+  });
+  const revokeMutation = useMutation({
+    mutationFn: (keyId: string) => client.revokeDatabaseApiKey!({ databaseId: database.id, keyId }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["database-api-keys", database.id] });
+      toast.success("Database API key revoked");
+    },
+    onError: () => toast.error("Could not revoke database API key")
+  });
+
+  if (!supported) return <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><h2 className="text-lg font-semibold text-slate-900">Connect from a backend</h2><p className="mt-2 text-sm text-slate-500">Update Zo Drive’s API and browser workspace together to create database-scoped credentials.</p></section>;
+
+  const example = `const response = await fetch("${endpoint}", {\n  method: "POST",\n  headers: {\n    "Authorization": \`Bearer \${process.env.ZO_DATABASE_API_KEY}\`,\n    "Content-Type": "application/json"\n  },\n  body: JSON.stringify({\n    sql: "SELECT * FROM customers WHERE id = ?",\n    params: ["cus_123"]\n  })\n});\n\nconst result = await response.json();`;
+  const keys = keysQuery.data ?? [];
+
+  return <section className="space-y-6">
+    <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600">HTTPS API</p><h3 className="mt-1 text-xl font-semibold text-slate-900">Connect from your backend</h3><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">The SQLite file stays private. Generate a key scoped only to {database.name}, then call this endpoint from your server.</p></div>
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_19rem]">
+      <div className="space-y-5"><div><label className="text-sm font-semibold text-slate-700">Query endpoint</label><div className="mt-2 flex gap-2"><code className="min-w-0 flex-1 overflow-x-auto rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-700">POST {endpoint}</code><button aria-label="Copy database query endpoint" className="rounded-lg border border-slate-300 px-3 text-slate-600 hover:bg-slate-50" onClick={() => void copyText(endpoint, "Database endpoint copied")}><Copy size={18} /></button></div></div><div className="overflow-hidden rounded-xl bg-slate-950"><div className="flex items-center justify-between border-b border-white/10 px-4 py-3"><p className="text-xs font-bold uppercase tracking-[0.14em] text-cyan-300">Node.js example</p><button aria-label="Copy database connection example" className="rounded-md p-1.5 text-slate-300 hover:bg-white/10 hover:text-white" onClick={() => void copyText(example, "Connection example copied")}><Copy size={16} /></button></div><pre className="overflow-x-auto p-4 text-xs leading-6 text-slate-100"><code>{example}</code></pre></div><div className="flex gap-3 rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm leading-6 text-blue-950"><ShieldCheck className="mt-0.5 shrink-0 text-blue-700" size={18} />Use a read-only key for queries. A read-and-write key is required for inserts, schema changes, and other mutations. Keys are shown once and belong in backend environment variables, never browser code.</div></div>
+      <div className="h-fit rounded-xl border border-slate-200 bg-slate-50 p-4"><h4 className="text-sm font-semibold text-slate-900">Create database key</h4><p className="mt-1 text-xs leading-5 text-slate-500">Keys are limited to this database.</p><label className="mt-4 block text-sm font-semibold text-slate-700">Key name<input aria-label="Database API key name" className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" value={name} onChange={(event) => setName(event.target.value)} /></label><fieldset className="mt-4"><legend className="text-sm font-semibold text-slate-700">Access</legend><div className="mt-2 grid gap-2"><button className={`rounded-lg border p-3 text-left text-sm ${access === "write" ? "border-blue-500 bg-blue-50 text-blue-800" : "border-slate-200 bg-white text-slate-600"}`} onClick={() => setAccess("write")} type="button"><strong className="block">Read & write</strong><span className="mt-1 block text-xs">Queries and database changes.</span></button><button className={`rounded-lg border p-3 text-left text-sm ${access === "read" ? "border-blue-500 bg-blue-50 text-blue-800" : "border-slate-200 bg-white text-slate-600"}`} onClick={() => setAccess("read")} type="button"><strong className="block">Read only</strong><span className="mt-1 block text-xs">Tables, rows, and SELECT queries.</span></button></div></fieldset><label className="mt-4 block text-sm font-semibold text-slate-700">Expires<select aria-label="Database API key expiry" className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm" value={expiry} onChange={(event) => setExpiry(event.target.value)}>{expiryOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><button className="mt-5 w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-300" disabled={!name.trim() || createMutation.isPending} onClick={() => createMutation.mutate()}>{createMutation.isPending ? "Creating…" : "Create database key"}</button></div>
+    </div>
+    {created && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-4"><div className="flex gap-3"><ShieldAlert className="mt-0.5 shrink-0 text-amber-700" size={20} /><div className="min-w-0 flex-1"><h3 className="font-semibold text-amber-950">Copy this database key now</h3><p className="mt-1 text-sm text-amber-900">Zo Drive stores only its hash and cannot show it again.</p><div className="mt-3 flex gap-2"><code className="min-w-0 flex-1 overflow-x-auto rounded-lg border border-amber-200 bg-white px-3 py-2.5 text-xs text-slate-800">{created}</code><button aria-label="Copy database API key" className="rounded-lg border border-amber-300 bg-white px-3 text-amber-800 hover:bg-amber-100" onClick={() => void copyText(created, "Database API key copied")}><Copy size={18} /></button></div></div></div></div>}
+    <div className="border-t border-slate-100 pt-5"><h3 className="font-semibold text-slate-900">Active database keys</h3><p className="mt-1 text-sm text-slate-500">These keys can access only {database.name}.</p>{keysQuery.isPending ? <p className="py-5 text-sm text-slate-500">Loading database keys…</p> : keys.length === 0 ? <p className="py-5 text-sm text-slate-500">No database keys yet.</p> : <div className="mt-3 divide-y divide-slate-100">{keys.map((key) => <DatabaseApiKeyRow key={key.id} apiKey={key} onRevoke={() => { if (window.confirm(`Revoke ${key.name}? This cannot be undone.`)) revokeMutation.mutate(key.id); }} />)}</div>}</div>
+  </section>;
+}
+
+function DatabaseApiKeyRow({ apiKey, onRevoke }: { apiKey: DatabaseApiKey; onRevoke: () => void }) {
+  return <div className="flex flex-wrap items-center gap-3 py-3"><span className="grid size-9 place-items-center rounded-lg bg-blue-50 text-blue-700"><KeyRound size={17} /></span><div className="min-w-0 flex-1"><p className="font-semibold text-slate-900">{apiKey.name}</p><p className="mt-0.5 font-mono text-xs text-slate-500">{apiKey.prefix}… · {apiKey.scopes.join(", ")}</p><p className="mt-1 text-xs text-slate-400">{apiKey.lastUsedAt ? `Last used ${formatDate(apiKey.lastUsedAt)}` : "Never used"} · {apiKey.expiresAt ? `Expires ${formatDate(apiKey.expiresAt)}` : "No expiry"}</p></div><button className="rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50" onClick={onRevoke}>Revoke</button></div>;
+}
+
+function DatabaseTableGrid({ data, isLoading, tableName, total, dark = false }: { data?: DatabaseRows; isLoading: boolean; tableName: string; total: number; dark?: boolean }) {
+  const columns = useMemo<ColumnDef<Record<string, unknown>>[]>(() => (data?.columns ?? []).map((name) => ({ accessorKey: name, header: name, cell: (context) => formatDatabaseValue(context.getValue()) })), [data?.columns]);
+  const table = useReactTable({ columns, data: data?.rows ?? [], getCoreRowModel: getCoreRowModel() });
+  if (isLoading) return <div className={`grid min-h-40 place-items-center text-sm ${dark ? "text-slate-400" : "text-slate-500"}`}><LoaderCircle className="mr-2 animate-spin" size={18} /> Loading {tableName}…</div>;
+  if (!data || data.columns.length === 0) return <div className={`grid min-h-40 place-items-center text-center text-sm ${dark ? "text-slate-400" : "text-slate-500"}`}>No rows to display in {tableName}.</div>;
+  return <div className="overflow-x-auto"><div className={`mb-3 text-xs font-medium ${dark ? "text-slate-400" : "text-slate-500"}`}>{total.toLocaleString()} row{total === 1 ? "" : "s"}</div><table className="min-w-full text-left text-sm"><thead className={dark ? "text-slate-400" : "text-slate-500"}>{table.getHeaderGroups().map((group) => <tr key={group.id}>{group.headers.map((header) => <th className="border-b border-current/15 px-3 py-2 font-semibold" key={header.id}>{header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}</th>)}</tr>)}</thead><tbody className={dark ? "text-slate-200" : "text-slate-700"}>{table.getRowModel().rows.map((row) => <tr className={dark ? "border-b border-white/10" : "border-b border-slate-100"} key={row.id}>{row.getVisibleCells().map((cell) => <td className="max-w-72 truncate px-3 py-2.5 font-mono text-xs" key={cell.id} title={formatDatabaseValue(cell.getValue())}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>)}</tr>)}</tbody></table></div>;
+}
+
+function formatDatabaseValue(value: unknown): string {
+  if (value === null || value === undefined) return "NULL";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
+function databaseNameFromFile(fileName: string): string {
+  const name = fileName.trim().replace(/\.(db|sqlite|sqlite3)$/i, "").trim();
+  return (name || "imported-database").slice(0, 80);
+}
+
 function ApiKeys({ client }: { client: DriveClient }) {
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [access, setAccess] = useState<"read" | "write">("write");
   const [expiry, setExpiry] = useState("90d");
   const [created, setCreated] = useState<string | null>(null);
+  const driveUrl = `${window.location.origin}${appBasePath || "/"}`;
   const expiryOptions = [
     { value: "10m", label: "10 minutes", durationMs: 10 * 60 * 1_000 },
     { value: "1h", label: "1 hour", durationMs: 60 * 60 * 1_000 },
@@ -1008,6 +1231,11 @@ function ApiKeys({ client }: { client: DriveClient }) {
           <span className="inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-cyan-200/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100"><KeyRound size={14} /> Device access</span>
           <h2 className="mt-4 text-3xl font-semibold tracking-tight">Scoped keys for your local machines.</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">Create one key per computer or automation. Keys are shown once, stored only as hashes, and can be revoked here without changing your Drive password.</p>
+          <div className="mt-5 flex max-w-3xl flex-wrap items-center gap-2 rounded-xl border border-white/15 bg-white/10 p-3">
+            <span className="text-xs font-bold uppercase tracking-[0.13em] text-cyan-100">Zo Drive URL</span>
+            <code className="min-w-0 flex-1 overflow-x-auto font-mono text-sm text-white">{driveUrl}</code>
+            <button aria-label="Copy Zo Drive URL" className="rounded-lg border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/20" onClick={() => void copyText(driveUrl, "Zo Drive URL copied")} type="button">Copy</button>
+          </div>
         </div>
         <div className="grid gap-5 p-5 md:grid-cols-[minmax(0,1fr)_15rem]">
           <div>

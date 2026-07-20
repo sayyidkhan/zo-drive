@@ -94,6 +94,42 @@ export const driveApiKeySchema = z.object({
 export const createdDriveApiKeySchema = driveApiKeySchema.extend({ apiKey: z.string() });
 export const listDriveApiKeysResponseSchema = z.object({ keys: z.array(driveApiKeySchema) });
 
+export const driveDatabaseSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  engine: z.literal("sqlite"),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+  sizeBytes: z.number().int().nonnegative()
+});
+export const listDriveDatabasesResponseSchema = z.object({ databases: z.array(driveDatabaseSchema) });
+export const databaseTableSchema = z.object({ name: z.string(), schema: z.string() });
+export const listDatabaseTablesResponseSchema = z.object({ tables: z.array(databaseTableSchema) });
+export const databaseRowsSchema = z.object({
+  columns: z.array(z.string()),
+  rows: z.array(z.record(z.string(), z.unknown())),
+  total: z.number().int().nonnegative()
+});
+export const databaseQueryResultSchema = z.object({
+  columns: z.array(z.string()),
+  rows: z.array(z.record(z.string(), z.unknown())),
+  changes: z.number().int().nonnegative(),
+  lastInsertRowid: z.number().int().nullable()
+});
+export const databaseApiKeyScopeSchema = z.enum(["read", "write"]);
+export const databaseApiKeySchema = z.object({
+  id: z.string().uuid(),
+  databaseId: z.string().uuid(),
+  name: z.string(),
+  prefix: z.string(),
+  scopes: z.array(databaseApiKeyScopeSchema),
+  createdAt: z.string().datetime(),
+  expiresAt: z.string().datetime().nullable(),
+  lastUsedAt: z.string().datetime().nullable()
+});
+export const createdDatabaseApiKeySchema = databaseApiKeySchema.extend({ apiKey: z.string() });
+export const listDatabaseApiKeysResponseSchema = z.object({ keys: z.array(databaseApiKeySchema) });
+
 export const shareAccessSchema = z.enum(["public", "passcode"]);
 export const shareKindSchema = z.enum(["share", "transfer"]);
 
@@ -165,6 +201,13 @@ export type AuthStatus = z.infer<typeof authStatusSchema>;
 export type ApiKeyScope = z.infer<typeof apiKeyScopeSchema>;
 export type DriveApiKey = z.infer<typeof driveApiKeySchema>;
 export type CreatedDriveApiKey = z.infer<typeof createdDriveApiKeySchema>;
+export type DriveDatabase = z.infer<typeof driveDatabaseSchema>;
+export type DatabaseTable = z.infer<typeof databaseTableSchema>;
+export type DatabaseRows = z.infer<typeof databaseRowsSchema>;
+export type DatabaseQueryResult = z.infer<typeof databaseQueryResultSchema>;
+export type DatabaseApiKeyScope = z.infer<typeof databaseApiKeyScopeSchema>;
+export type DatabaseApiKey = z.infer<typeof databaseApiKeySchema>;
+export type CreatedDatabaseApiKey = z.infer<typeof createdDatabaseApiKeySchema>;
 export type DriveShare = z.infer<typeof driveShareSchema>;
 export type ShareAccess = z.infer<typeof shareAccessSchema>;
 export type ShareKind = z.infer<typeof shareKindSchema>;
