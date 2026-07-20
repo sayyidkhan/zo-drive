@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createApp } from "./app.js";
+import { InvalidApiKeyRateLimiter } from "./auth/invalid-api-key-rate-limiter.js";
 import { LocalAuthStore } from "./auth/local-auth-store.js";
 import { LocalApiKeyStore } from "./auth/local-api-key-store.js";
 import { SessionService } from "./auth/session.js";
@@ -44,6 +45,29 @@ describe("Zo Drive API", () => {
     await expect(response.json()).resolves.toMatchObject({ error: { code: "UNAUTHORIZED" } });
   });
 
+  it("rate-limits repeated invalid device API key attempts without blocking a valid key", async () => {
+    const root = await mkdtemp(join(tmpdir(), "zo-drive-api-key-rate-limit-"));
+    roots.push(root);
+    const app = createApp({
+      storage: new LocalDriveStorage({ root }),
+      resolveUserId: (request) => request.headers.get("authorization") === "Bearer zdk_valid_key" ? "owner" : null,
+      invalidApiKeyRateLimiter: new InvalidApiKeyRateLimiter({ blockDurationMs: 60_000, maxAttempts: 2 }),
+      trustProxy: true
+    });
+    const clientHeaders = { "x-forwarded-for": "203.0.113.10" };
+
+    expect((await app.request("http://localhost/objects", { headers: { ...clientHeaders, authorization: "Bearer zdk_wrong_key" } })).status).toBe(401);
+    expect((await app.request("http://localhost/objects", { headers: { ...clientHeaders, authorization: "Bearer zdk_valid_key" } })).status).toBe(200);
+    expect((await app.request("http://localhost/objects", { headers: { ...clientHeaders, authorization: "Bearer zdk_wrong_key" } })).status).toBe(401);
+
+    const limited = await app.request("http://localhost/objects", { headers: { ...clientHeaders, authorization: "Bearer zdk_wrong_key" } });
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get("retry-after")).toBe("60");
+    await expect(limited.json()).resolves.toEqual({
+      error: { code: "RATE_LIMITED", message: "Too many failed API key attempts. Try again later." }
+    });
+  });
+
   it("uploads, lists, streams, and moves deleted files to Trash until restored", async () => {
     const app = await createTestApp();
     const uploaded = await app.request("http://localhost/objects", {
@@ -64,6 +88,15 @@ describe("Zo Drive API", () => {
     const downloaded = await app.request("http://localhost/objects/Notes/hello.txt", { headers: { "x-test-user-id": "alice" } });
     expect(downloaded.headers.get("content-type")).toContain("text/plain");
     await expect(downloaded.text()).resolves.toBe("hello from Zo Drive");
+
+    const copied = await app.request("http://localhost/objects/Notes/hello.txt", {
+      method: "PATCH",
+      headers: { "content-type": "application/json", "x-test-user-id": "alice" },
+      body: JSON.stringify({ copyTo: "Archive/hello copy.txt" })
+    });
+    expect(copied.status).toBe(200);
+    await expect(copied.json()).resolves.toMatchObject({ key: "Archive/hello copy.txt", contentType: "text/plain" });
+    await expect((await app.request("http://localhost/objects/Archive/hello%20copy.txt", { headers: { "x-test-user-id": "alice" } })).text()).resolves.toBe("hello from Zo Drive");
 
     const deleted = await app.request("http://localhost/objects/Notes/hello.txt", {
       method: "DELETE",

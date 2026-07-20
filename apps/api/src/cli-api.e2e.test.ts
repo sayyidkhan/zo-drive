@@ -16,7 +16,7 @@ describe("CLI to API integration", () => {
     await Promise.all(roots.splice(0).map((root) => rm(root, { force: true, recursive: true })));
   });
 
-  it("uploads, lists, downloads, and deletes through the complete client stack", async () => {
+  it("uploads, lists, moves, downloads, and deletes through the complete client stack", async () => {
     const root = await mkdtemp(join(tmpdir(), "zo-drive-e2e-"));
     roots.push(root);
     const source = join(root, "report.txt");
@@ -37,13 +37,17 @@ describe("CLI to API integration", () => {
 
     await expect(runCli(["upload", source, "--path", "Reports"], dependencies)).resolves.toBe(0);
     await expect(runCli(["ls", "Reports", "--json"], dependencies)).resolves.toBe(0);
-    await expect(runCli(["download", "Reports/report.txt", "--output", destination], dependencies)).resolves.toBe(0);
+    await expect(runCli(["exists", "Reports/report.txt"], dependencies)).resolves.toBe(0);
+    await expect(runCli(["mv", "Reports/report.txt", "Archive/report.txt"], dependencies)).resolves.toBe(0);
+    await expect(runCli(["download", "Archive/report.txt", "--output", destination], dependencies)).resolves.toBe(0);
     await expect(readFile(destination, "utf8")).resolves.toBe("complete flow");
-    await expect(runCli(["delete", "Reports/report.txt"], dependencies)).resolves.toBe(0);
+    await expect(runCli(["rm", "Archive/report.txt"], dependencies)).resolves.toBe(0);
     await expect(client.list()).resolves.toEqual([]);
 
     expect(output).toContain("Uploaded Reports/report.txt (13 B)\n");
-    expect(output).toContain("Downloaded Reports/report.txt to " + destination + "\n");
-    expect(output).toContain("Deleted Reports/report.txt\n");
+    expect(output).toContain("Found Reports/report.txt\n");
+    expect(output).toContain("Moved Reports/report.txt to Archive/report.txt\n");
+    expect(output).toContain("Downloaded Archive/report.txt to " + destination + "\n");
+    expect(output).toContain("Moved Archive/report.txt to Trash\n");
   });
 });

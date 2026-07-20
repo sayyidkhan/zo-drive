@@ -1,0 +1,123 @@
+# Zo Drive
+
+> Zo Drive is a private, owner-operated file manager. It provides a browser
+> workspace, a TypeScript SDK, and the `zo-drive` command-line client for the
+> same authenticated file store.
+
+This is the agent entry point for a hosted Zo Drive. Read this file before
+using the service. It is intentionally concise and should be kept current
+whenever a user-facing workflow, API route, CLI command, or authentication
+rule changes.
+
+## Service model
+
+- The hosted application normally lives at `/drive`; this file is therefore
+  available at `/drive/llms.txt`.
+- All paths below are relative to the Zo Drive service root. A client whose
+  base URL is `https://drive.example/drive` calls `GET
+  https://drive.example/drive/objects`, for example.
+- The product currently has one owner account. It is not a public,
+  multi-user collaboration service.
+- Browser users authenticate with a signed HttpOnly session cookie. Automation
+  and CLI clients authenticate with `Authorization: Bearer zdk_...` device
+  keys. Treat every device key as a secret.
+- Repeated invalid device-key attempts are rate limited and return `429` with
+  `Retry-After`. Do not retry a rejected key repeatedly; create a new key or
+  reconfigure the client.
+- The health endpoint is public. All private file and account actions require
+  authentication unless explicitly listed as public below.
+
+## Safe operating rules
+
+- Prefer read-only operations first: health, list, folders, usage, and object
+  download.
+- Do not create, overwrite, move, trash, permanently delete, revoke a share,
+  revoke a device key, change a passcode, alter a quota, or submit a form
+  response without the user's explicit instruction.
+- `DELETE /objects/{key}` moves an object to Trash; it is not permanent.
+  Emptying Trash and deleting a Trash item are permanent actions.
+- Never expose, log, or place a bearer device key in a URL.
+- Use a safe relative object key. Do not use absolute paths or path traversal.
+
+## API surface
+
+There is not yet a published OpenAPI document. Use the official TypeScript SDK
+or CLI for typed access when possible. The routes below are the current HTTP
+surface and use JSON except for object upload/download.
+
+### Public routes
+
+- `GET /health` — service health.
+- `GET /shared/{id}` — metadata for a public or passcode-protected shared
+  file.
+- `GET /shared/{id}/content` — shared file content. Protected shares require
+  the `x-zo-drive-share-passcode` request header.
+- `GET /public/forms/{id}` — published form definition.
+- `POST /public/forms/{id}/responses` — submit a form response. This changes
+  data; require explicit user confirmation.
+
+### Authenticated routes
+
+- `GET|POST /folders` — list folders or create one.
+- `GET|POST /objects` — list objects or upload raw file content. Uploads use
+  `x-zo-drive-file-name` and optional `x-zo-drive-path` headers.
+- `GET|PATCH|DELETE /objects/{key}` — download, rename/move/copy, or move an
+  object to Trash. A copy uses `PATCH` with `copyTo`; it does not transfer the
+  file through the client. Existing copy destinations require explicit
+  overwrite approval.
+- `GET|PUT|DELETE /stars/{key}` and `GET /stars` — manage starred objects.
+- `GET /trash`, `PUT /trash/{id}/restore`, `DELETE /trash/{id}`, and
+  `DELETE /trash` — inspect, restore, permanently delete, or empty Trash.
+- `GET /usage` and `PUT /usage/quota` — storage usage and quota.
+- `POST /native-files` and `PUT /native-files/{key}` — create and save Zo
+  native documents, spreadsheets, presentations, forms, and pastes.
+- `GET|POST /api-keys` and `DELETE /api-keys/{id}` — list, create, or revoke
+  device keys. These are browser-session account controls; do not use a
+  device key to manage itself.
+- `GET|POST /shares`, `PATCH /shares/{id}/passcode`, and
+  `DELETE /shares/{id}` — manage file-share and transfer links.
+- `POST /forms` and `GET /forms/{id}/responses` — publish a form and retrieve
+  its responses.
+- `GET /auth/status`, `POST /auth/register`, `POST /auth/login`,
+  `POST /auth/logout`, `PATCH /auth/profile`, `POST /auth/password`, and
+  `DELETE /auth/account` — owner account and browser-session management.
+
+## Official clients and guides
+
+- [Browser and CLI guides](./?docs=1): User-facing documentation for the
+  hosted application.
+- [CLI guide](./?docs=1&mode=cli): Install, configure, and use `zo-drive`.
+- [Browser guide](./?docs=1&mode=gui): Browser workspace and account controls.
+- [Source repository](https://github.com/sayyidkhan/zo-drive): SDK source,
+  endpoint implementations, tests, and deployment instructions.
+
+## CLI workflows
+
+Use the CLI rather than hand-assembling HTTP requests where it covers the
+task:
+
+```text
+zo-drive configure
+zo-drive ls [path]
+zo-drive exists <key>
+zo-drive stat <key> --json
+zo-drive upload <local-file> --path <folder>
+zo-drive download <key> --output <local-file>
+zo-drive mv <source-key> <destination-key>
+zo-drive cp <source-key> <destination-key> [--force]
+zo-drive rm <key>
+zo-drive usage
+zo-drive health --json
+```
+
+`zo-drive upload --dry-run` and `zo-drive download --dry-run` validate an
+operation without transferring file data. `zo-drive rm` moves a file to Trash.
+
+## Maintenance
+
+- Keep this file aligned with `apps/api/src/app.ts`, `packages/sdk/src/index.ts`,
+  the CLI, and the browser documentation.
+- Add an OpenAPI document here when the HTTP API is stabilized, and link it
+  from the API surface section above.
+- Update this file in the same change as any new public route, auth change,
+  destructive behavior change, or renamed workflow.

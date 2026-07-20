@@ -4,11 +4,13 @@ import { fileURLToPath } from "node:url";
 import { dirname, extname, resolve, sep } from "node:path";
 
 import { createApp } from "./app.js";
+import { InvalidApiKeyRateLimiter } from "./auth/invalid-api-key-rate-limiter.js";
 import { LocalAuthStore } from "./auth/local-auth-store.js";
 import { LocalApiKeyStore } from "./auth/local-api-key-store.js";
 import { SessionService } from "./auth/session.js";
 import { LocalShareStore } from "./sharing/local-share-store.js";
 import { LocalFormStore } from "./forms/local-form-store.js";
+import { loadServerConfig } from "./server-config.js";
 import { LocalDriveStorage } from "./storage/local-drive-storage.js";
 
 const dataRoot = requiredEnvironmentVariable("ZO_DRIVE_DATA_ROOT");
@@ -21,6 +23,8 @@ const shareStore = new LocalShareStore({ root: dataRoot });
 const formStore = new LocalFormStore({ root: dataRoot });
 const storage = new LocalDriveStorage({ root: dataRoot });
 const webRoot = process.env.ZO_DRIVE_WEB_ROOT ?? resolve(dirname(fileURLToPath(import.meta.url)), "../../web/dist");
+const apiRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const config = await loadServerConfig(process.env.ZO_DRIVE_CONFIG_PATH ?? resolve(apiRoot, "config.json"));
 
 const app = createApp({
   storage,
@@ -32,6 +36,12 @@ const app = createApp({
     secureCookies: process.env.NODE_ENV === "production"
   },
   apiKeys,
+  invalidApiKeyRateLimiter: new InvalidApiKeyRateLimiter({
+    blockDurationMs: (config.rateLimit?.blockSeconds ?? positiveIntegerEnvironmentVariable("ZO_DRIVE_INVALID_API_KEY_BLOCK_SECONDS", 15 * 60)) * 1_000,
+    maxAttempts: config.rateLimit?.maxAttempts ?? positiveIntegerEnvironmentVariable("ZO_DRIVE_INVALID_API_KEY_MAX_ATTEMPTS", 5),
+    windowMs: (config.rateLimit?.windowSeconds ?? positiveIntegerEnvironmentVariable("ZO_DRIVE_INVALID_API_KEY_WINDOW_SECONDS", 60)) * 1_000
+  }),
+  trustProxy: config.rateLimit?.trustProxy ?? process.env.ZO_DRIVE_TRUST_PROXY === "true",
   sharing: shareStore,
   forms: formStore
 });
@@ -112,6 +122,16 @@ function numberEnvironmentVariable(name: string, fallback: number): number {
   return parsed;
 }
 
+function positiveIntegerEnvironmentVariable(name: string, fallback: number): number {
+  const value = process.env[name];
+  if (!value) return fallback;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new Error(`${name} must be a positive integer`);
+  }
+  return parsed;
+}
+
 function developmentSessionSecret(): string {
   if (process.env.NODE_ENV === "production") {
     throw new Error("ZO_DRIVE_SESSION_SECRET is required in production");
@@ -124,6 +144,7 @@ function contentTypeFor(file: string): string {
     case ".css": return "text/css; charset=utf-8";
     case ".js": return "text/javascript; charset=utf-8";
     case ".json": return "application/json; charset=utf-8";
+    case ".txt": return "text/plain; charset=utf-8";
     case ".svg": return "image/svg+xml";
     case ".png": return "image/png";
     case ".jpg":

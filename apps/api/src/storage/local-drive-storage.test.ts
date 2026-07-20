@@ -56,6 +56,20 @@ describe("LocalDriveStorage", () => {
     await expect(storage.read({ userId: "bob", key: "shared.txt" })).resolves.toMatchObject({ key: "shared.txt" });
   });
 
+  it("copies a file server-side, preserves metadata, and requires explicit overwrite", async () => {
+    const storage = await createStorage();
+    await storage.write({ userId: "alice", key: "Plans/source.txt", content: Buffer.from("copy me"), contentType: "text/plain" });
+    await storage.setStarred({ userId: "alice", key: "Plans/source.txt", starred: true });
+
+    await expect(storage.copyFile({ userId: "alice", key: "Plans/source.txt", destination: "Archive/copy.txt" })).resolves.toMatchObject({ key: "Archive/copy.txt", contentType: "text/plain", starred: true });
+    await expect(readFile(join(storage.root, "v1", "users", "alice", "files", "Archive", "copy.txt"), "utf8")).resolves.toBe("copy me");
+    await expect(storage.read({ userId: "alice", key: "Plans/source.txt" })).resolves.toMatchObject({ key: "Plans/source.txt" });
+    await expect(storage.copyFile({ userId: "alice", key: "Plans/source.txt", destination: "Archive/copy.txt" })).rejects.toMatchObject({ code: "EEXIST" });
+
+    await storage.write({ userId: "alice", key: "Plans/source.txt", content: Buffer.from("new copy"), contentType: "text/plain" });
+    await expect(storage.copyFile({ userId: "alice", key: "Plans/source.txt", destination: "Archive/copy.txt", overwrite: true })).resolves.toMatchObject({ size: 8 });
+  });
+
   it("moves an account's complete file namespace when its username changes", async () => {
     const storage = await createStorage();
     await storage.write({ userId: "sayyid", key: "Notes/plan.txt", content: Buffer.from("ship it"), contentType: "text/plain" });
@@ -131,6 +145,16 @@ describe("LocalDriveStorage", () => {
     await expect(storage.renameFile({ userId: "alice", key: "Notes/plan.txt", name: "strategy.txt" })).resolves.toMatchObject({ key: "Notes/strategy.txt", name: "strategy.txt", contentType: "text/plain", starred: true });
     await expect(storage.read({ userId: "alice", key: "Notes/plan.txt" })).rejects.toMatchObject({ code: "ENOENT" });
     await expect(storage.read({ userId: "alice", key: "Notes/strategy.txt" })).resolves.toMatchObject({ starred: true });
+  });
+
+  it("moves files across folders while preserving metadata", async () => {
+    const storage = await createStorage();
+    await storage.write({ userId: "alice", key: "Notes/plan.txt", content: Buffer.from("ship it"), contentType: "text/plain" });
+    await storage.setStarred({ userId: "alice", key: "Notes/plan.txt", starred: true });
+
+    await expect(storage.moveFile({ userId: "alice", key: "Notes/plan.txt", destination: "Archive/2026/plan.txt" })).resolves.toMatchObject({ key: "Archive/2026/plan.txt", name: "plan.txt", starred: true });
+    await expect(storage.read({ userId: "alice", key: "Notes/plan.txt" })).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(storage.read({ userId: "alice", key: "Archive/2026/plan.txt" })).resolves.toMatchObject({ starred: true });
   });
 
   it("moves files into Trash, restores them with their metadata, and purges expired entries", async () => {

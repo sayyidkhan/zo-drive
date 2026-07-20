@@ -4,6 +4,49 @@ All notable changes to the `zo-drive` command-line tool are recorded here.
 
 ## Unreleased
 
+## v1.2.0 - 2026-07-20
+
+### Added
+
+- `zo-drive cp` copies a Drive file server-side, with an explicit `--force`
+  option for replacing an existing destination.
+- `zo-drive ls` now supports familiar Drive-compatible flags including `-l`,
+  `-a`, `-R`, `-r`, `-S`, `-t`, `-F`, `-p`, `-d`, and `--sort`.
+- Bash-style `zo-drive -lrt` shorthand now maps to `zo-drive ls -lrt`.
+- Uploads of 1 MB or more now show a live terminal progress bar.
+- `zo-drive upload --dry-run` and `zo-drive download --dry-run` validate an
+  upload or download without transferring or writing file data.
+- `zo-drive exists` checks whether an exact file key is present and returns a
+  scriptable success or failure exit code.
+- `zo-drive stat` prints file metadata, with `--json` for structured output.
+- `zo-drive health` reports API latency, authenticated Drive access, storage,
+  and filesystem capacity.
+- `zo-drive mv` moves a file to an exact destination key without downloading
+  and uploading it again.
+- `zo-drive rm` moves a file to Trash using familiar terminal syntax.
+- `zo-drive status` confirms connectivity and shows storage usage.
+- `zo-drive logo` prints the Zo Drive terminal logo without requiring a Drive
+  configuration.
+
+### Changed
+
+- Updated the terminal logo to a concise Zo Drive ASCII design selected for
+  CLI readability.
+- CLI help now opens with the Zo Drive logo and lists the supported help and
+  version aliases.
+- `zo-drive configure` now explains how to create a device key and identify the
+  public Drive URL before prompting for either value.
+- CLI authentication failures now explain how to create a replacement device
+  key and reconnect with `zo-drive configure`.
+- Successful CLI configuration now tells users how to verify the device key
+  with `zo-drive status` or `zo-drive health`.
+- Storage and latency output now uses readable units such as MB and seconds.
+- Dry-run output now uses simpler language and clearly states that no file was
+  uploaded or downloaded.
+- Upload dry runs now state that a missing destination folder will be created.
+- Documented CLI file checks, moves, and safe removal in the README and browser
+  documentation.
+
 ## v1.1.1 - 2026-07-20
 
 ### Fixed

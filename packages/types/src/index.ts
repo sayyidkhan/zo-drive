@@ -41,6 +41,10 @@ export const listFoldersResponseSchema = z.object({
   folders: z.array(driveFolderSchema)
 });
 
+export const healthSchema = z.object({
+  status: z.literal("ok")
+});
+
 export const storageUsageSchema = z.object({
   fileCount: z.number().int().nonnegative(),
   usedBytes: z.number().int().nonnegative(),
@@ -158,6 +162,7 @@ export type DriveTrashItem = z.infer<typeof driveTrashItemSchema>;
 export type ListTrashResponse = z.infer<typeof listTrashResponseSchema>;
 export type DriveFolder = z.infer<typeof driveFolderSchema>;
 export type ListFoldersResponse = z.infer<typeof listFoldersResponseSchema>;
+export type Health = z.infer<typeof healthSchema>;
 export type StorageUsage = z.infer<typeof storageUsageSchema>;
 export type ApiError = z.infer<typeof apiErrorSchema>;
 export type DriveUser = z.infer<typeof driveUserSchema>;

@@ -1,0 +1,8 @@
+{
+  "rateLimit": {
+    "trustProxy": false,
+    "maxAttempts": 5,
+    "windowSeconds": 60,
+    "blockSeconds": 900
+  }
+}

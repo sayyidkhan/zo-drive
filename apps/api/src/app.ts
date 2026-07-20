@@ -4,7 +4,9 @@ import { cors } from "hono/cors";
 import { z } from "zod";
 import { Readable } from "node:stream";
 import { readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 
+import { InvalidApiKeyRateLimiter } from "./auth/invalid-api-key-rate-limiter.js";
 import { LocalAuthStore } from "./auth/local-auth-store.js";
 import { LocalApiKeyStore, type ApiKeyScope } from "./auth/local-api-key-store.js";
 import { SessionService } from "./auth/session.js";
@@ -24,8 +26,10 @@ type CreateAppOptions = {
     secureCookies: boolean;
   };
   apiKeys?: LocalApiKeyStore;
+  invalidApiKeyRateLimiter?: InvalidApiKeyRateLimiter;
   sharing?: LocalShareStore;
   forms?: LocalFormStore;
+  trustProxy?: boolean;
 };
 
 const listQuerySchema = z.object({
@@ -53,8 +57,18 @@ const updateNativeFileSchema = z.object({
     version: z.literal(1)
   }).passthrough()
 });
-const renameFileSchema = z.object({
-  name: z.string().trim().min(1).max(1_024)
+const updateFileSchema = z.object({
+  copyTo: z.string().trim().min(1).max(1_024).optional(),
+  overwrite: z.boolean().optional(),
+  name: z.string().trim().min(1).max(1_024).optional(),
+  destination: z.string().trim().min(1).max(1_024).optional()
+}).superRefine((value, context) => {
+  if ([value.name, value.destination, value.copyTo].filter((item) => item !== undefined).length !== 1) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "Provide a file name, destination, or copy destination" });
+  }
+  if (value.overwrite !== undefined && value.copyTo === undefined) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "Overwrite is only supported when copying a file" });
+  }
 });
 const publishFormSchema = z.object({ key: z.string().min(1).max(1_024) });
 const submitFormResponseSchema = z.object({
@@ -96,7 +110,7 @@ const createApiKeySchema = z.object({
   expiresAt: z.string().datetime().nullable()
 });
 
-export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys, sharing, forms }: CreateAppOptions) {
+export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys, invalidApiKeyRateLimiter = new InvalidApiKeyRateLimiter(), sharing, forms, trustProxy = false }: CreateAppOptions) {
   const app = new Hono();
   const resolveActiveUser: UserResolver = async (request) => {
     const userId = await resolveUserId(request);
@@ -126,6 +140,22 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     app.use("/forms/*", cors(corsOptions));
     app.use("/public/forms/*", cors(corsOptions));
   }
+
+  app.use("*", async (context, next) => {
+    const client = invalidDeviceKeyClient(context.req.raw, trustProxy);
+    if (!client) return await next();
+
+    const retryAfter = invalidApiKeyRateLimiter.retryAfterSeconds(client);
+    if (retryAfter > 0) return rateLimited(context, retryAfter);
+
+    await next();
+    if (context.res.status === 401) {
+      const nextRetryAfter = invalidApiKeyRateLimiter.recordFailure(client);
+      if (nextRetryAfter > 0) context.res = rateLimited(context, nextRetryAfter);
+      return;
+    }
+    if (context.res.status < 400) invalidApiKeyRateLimiter.clear(client);
+  });
 
   app.get("/health", (context) => context.json({ status: "ok" }));
 
@@ -463,12 +493,18 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
   app.patch("/objects/*", async (context) => {
     const userId = await requireUser(context.req.raw, resolveActiveUser);
     if (!userId) return unauthorized(context);
-    const parsed = renameFileSchema.safeParse(await context.req.json().catch(() => null));
-    if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Enter a valid file name" } }, 400);
+    const parsed = updateFileSchema.safeParse(await context.req.json().catch(() => null));
+    if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Enter a valid file name, destination, or copy destination" } }, 400);
     const key = objectKeyFromPath(context.req.path);
-    const object = await storage.renameFile({ userId, key, name: parsed.data.name });
-    if (sharing) await sharing.renameKey({ ownerUserId: userId, fromKey: key, toKey: object.key });
-    if (forms) await forms.renameKey({ ownerUserId: userId, fromKey: key, toKey: object.key });
+    const object = parsed.data.copyTo
+      ? await storage.copyFile({ userId, key, destination: parsed.data.copyTo, overwrite: parsed.data.overwrite })
+      : parsed.data.destination
+        ? await storage.moveFile({ userId, key, destination: parsed.data.destination })
+        : await storage.renameFile({ userId, key, name: parsed.data.name! });
+    if (!parsed.data.copyTo) {
+      if (sharing) await sharing.renameKey({ ownerUserId: userId, fromKey: key, toKey: object.key });
+      if (forms) await forms.renameKey({ ownerUserId: userId, fromKey: key, toKey: object.key });
+    }
     return context.json(object);
   });
 
@@ -538,6 +574,9 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     if (isAlreadyExists(error)) {
       return context.json({ error: { code: "ALREADY_EXISTS", message: "A file with this name already exists" } }, 409);
     }
+    if (isDirectory(error)) {
+      return context.json({ error: { code: "INVALID_REQUEST", message: "This operation supports files only" } }, 400);
+    }
     return context.json({ error: { code: "INTERNAL_ERROR", message: "Unexpected server error" } }, 500);
   });
 
@@ -555,6 +594,22 @@ async function requireBrowserUser(request: Request, auth: NonNullable<CreateAppO
 
 function unauthorized(context: Context) {
   return context.json({ error: { code: "UNAUTHORIZED", message: "Authentication is required" } }, 401);
+}
+
+function rateLimited(context: Context, retryAfter: number) {
+  context.header("retry-after", retryAfter.toString());
+  return context.json({ error: { code: "RATE_LIMITED", message: "Too many failed API key attempts. Try again later." } }, 429);
+}
+
+function invalidDeviceKeyClient(request: Request, trustProxy: boolean): string | null {
+  const authorization = request.headers.get("authorization");
+  const apiKey = authorization?.match(/^Bearer (zdk_[A-Za-z0-9_-]+)$/)?.[1];
+  const path = new URL(request.url).pathname;
+  if (!apiKey || path === "/health" || path.startsWith("/auth/") || path.startsWith("/api-keys") || path.startsWith("/public/") || path.startsWith("/shared/")) return null;
+
+  const forwardedFor = trustProxy ? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() : undefined;
+  if (forwardedFor) return `ip:${forwardedFor}`;
+  return `key:${createHash("sha256").update(apiKey).digest("hex")}`;
 }
 
 function objectKeyFromPath(path: string): string {
@@ -582,6 +637,10 @@ function isNotFound(error: unknown): error is NodeJS.ErrnoException {
 
 function isAlreadyExists(error: unknown): error is NodeJS.ErrnoException {
   return typeof error === "object" && error !== null && "code" in error && error.code === "EEXIST";
+}
+
+function isDirectory(error: unknown): error is NodeJS.ErrnoException {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "EISDIR";
 }
 
 async function describeShare(storage: LocalDriveStorage, share: StoredShare) {
