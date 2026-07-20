@@ -17,3 +17,8 @@ html { font-family: var(--font-sans); }
 body { margin: 0; min-width: 320px; }
 button, input { font: inherit; }
 button { cursor: pointer; }
+
+main:has(input[aria-label="API key name"]) > div > section > div:has(input[aria-label="API key name"]) {
+  width: 100%;
+  max-width: none;
+}

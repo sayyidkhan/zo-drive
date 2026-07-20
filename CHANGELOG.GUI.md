@@ -4,6 +4,12 @@ All notable changes to the Zo Drive browser experience are recorded here.
 
 ## Unreleased
 
+## v0.3.2 - 2026-07-20
+
+### Changed
+
+- Removed file view controls from API Keys and expanded the page to the full Drive content width.
+
 ## v0.3.1 - 2026-07-20
 
 ### Changed
