@@ -32,11 +32,11 @@ describe("DriveApp", () => {
 
       expect(screen.getByRole("heading", { name: "Manage files in your private Drive." })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Share files on your terms" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 0.2.2" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 0.2.3" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
       expect(screen.getByRole("link", { name: "Changelog" })).toHaveAttribute("href", "#changelog");
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("GUI v0.2.2")).toBeInTheDocument();
+      expect(screen.getByText("GUI v0.2.3")).toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
 
       cleanup();
@@ -145,6 +145,7 @@ describe("DriveApp", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close preview" }));
     fireEvent.click(screen.getByRole("button", { name: "View storage breakdown" }));
     expect(await screen.findByRole("dialog", { name: "Storage breakdown" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Storage breakdown content" })).toHaveClass("overflow-y-auto");
     expect(screen.getByText("Photos")).toBeInTheDocument();
     expect(screen.getByText(/Zo system files & other machine data/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Set storage limit to 200 GB" }));

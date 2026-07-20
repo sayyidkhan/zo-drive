@@ -8,6 +8,12 @@ All notable changes to the Zo Drive browser experience are recorded here.
 
 - Split GUI and CLI release history into separate changelogs.
 
+## v0.2.3 - 2026-07-20
+
+### Fixed
+
+- The Storage breakdown dialog now stays within the viewport and scrolls its content.
+
 ## v0.2.2 - 2026-07-20
 
 ### Added

@@ -141,10 +141,15 @@ const appBasePath = normalizeAppBasePath(
 const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "0.2.2";
+const GUI_VERSION = "0.2.3";
 const CLI_VERSION = "0.1.3";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v0.2.3",
+    date: "20 July 2026",
+    changes: ["Made the Storage breakdown dialog fit the viewport with a scrollable content area."]
+  },
   {
     version: "v0.2.2",
     date: "20 July 2026",
@@ -1005,8 +1010,8 @@ function StorageBreakdownDialog({ usage, onClose, onSetQuota }: { usage?: Storag
       aria-label="Storage breakdown"
       onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}
     >
-      <section className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl">
-        <header className="flex items-start justify-between border-b border-slate-100 px-6 py-5">
+      <section className="flex max-h-[calc(100dvh-2rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <header className="shrink-0 flex items-start justify-between border-b border-slate-100 px-6 py-5">
           <div>
             <p className="text-sm font-medium text-blue-600">Zo Drive storage</p>
             <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">Storage breakdown</h2>
@@ -1014,7 +1019,7 @@ function StorageBreakdownDialog({ usage, onClose, onSetQuota }: { usage?: Storag
           </div>
           <button aria-label="Close storage breakdown" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" onClick={onClose}><X size={20} /></button>
         </header>
-        <div className="space-y-7 p-6">
+        <div aria-label="Storage breakdown content" className="min-h-0 flex-1 space-y-7 overflow-y-auto p-6" role="region">
           <section>
             <div className="flex items-baseline justify-between gap-4">
               <div><span className="text-3xl font-semibold tracking-tight text-slate-900">{formatBytes(driveUsed)}</span><span className="ml-2 text-sm text-slate-500">used of {formatBytes(quota)}</span></div>
