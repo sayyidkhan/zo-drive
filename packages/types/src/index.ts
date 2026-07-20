@@ -107,11 +107,13 @@ export const driveDatabaseSchema = z.object({
   sizeBytes: z.number().int().nonnegative()
 });
 export const listDriveDatabasesResponseSchema = z.object({ databases: z.array(driveDatabaseSchema) });
+export const databaseEngineIdSchema = z.enum(["sqlite", "duckdb", "libsql", "pglite", "lancedb", "leveldb", "redis", "kuzu"]);
 export const databaseEngineSchema = z.object({
-  engine: z.literal("sqlite"),
-  name: z.literal("SQLite"),
+  engine: databaseEngineIdSchema,
+  name: z.string(),
   installed: z.boolean(),
-  installedAt: z.string().datetime().nullable()
+  installedAt: z.string().datetime().nullable(),
+  workspaceAvailable: z.boolean()
 });
 export const listDatabaseEnginesResponseSchema = z.object({ engines: z.array(databaseEngineSchema) });
 export const databaseTableSchema = z.object({ name: z.string(), schema: z.string() });
@@ -247,6 +249,7 @@ export type ApiKeyScope = z.infer<typeof apiKeyScopeSchema>;
 export type DriveApiKey = z.infer<typeof driveApiKeySchema>;
 export type CreatedDriveApiKey = z.infer<typeof createdDriveApiKeySchema>;
 export type DriveDatabase = z.infer<typeof driveDatabaseSchema>;
+export type DatabaseEngineId = z.infer<typeof databaseEngineIdSchema>;
 export type DatabaseEngine = z.infer<typeof databaseEngineSchema>;
 export type DatabaseTable = z.infer<typeof databaseTableSchema>;
 export type DatabaseRows = z.infer<typeof databaseRowsSchema>;

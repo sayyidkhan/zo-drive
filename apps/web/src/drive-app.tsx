@@ -62,7 +62,7 @@ import { toast, Toaster } from "sonner";
 import { create } from "zustand";
 
 import { ZoDriveClient } from "@zo-drive/sdk";
-import type { ApiKeyScope, AuthStatus, DatabaseApiKey, DatabaseApiKeyScope, DatabaseImportSettings, DatabaseRows, DriveApiKey, DriveDatabase, DriveFolder, DriveFunction, DriveFunctionRun, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, FunctionRuntime, FunctionVisibility, NativeFileType, PublicShare, PublishedForm, ShareAccess, StorageUsage } from "@zo-drive/types";
+import type { ApiKeyScope, AuthStatus, DatabaseApiKey, DatabaseApiKeyScope, DatabaseEngine, DatabaseEngineId, DatabaseImportSettings, DatabaseRows, DriveApiKey, DriveDatabase, DriveFolder, DriveFunction, DriveFunctionRun, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, FunctionRuntime, FunctionVisibility, NativeFileType, PublicShare, PublishedForm, ShareAccess, StorageUsage } from "@zo-drive/types";
 
 type DriveClient = Pick<ZoDriveClient, "createApiKey" | "createFolder" | "createNativeFile" | "createShare" | "delete" | "download" | "emptyTrash" | "getUsage" | "list" | "listApiKeys" | "listFolders" | "listFormResponses" | "listShares" | "listStarred" | "listTrash" | "permanentlyDeleteTrash" | "publishForm" | "rename" | "restoreTrash" | "revokeApiKey" | "revokeShare" | "saveNativeFile" | "setQuota" | "star" | "unstar" | "updateSharePasscode" | "upload"> & Partial<Pick<ZoDriveClient, "createDatabase" | "createDatabaseApiKey" | "deleteDatabase" | "exportDatabase" | "getDatabaseImportSettings" | "importDatabase" | "installDatabaseEngine" | "listDatabaseApiKeys" | "listDatabaseEngines" | "listDatabases" | "listDatabaseRows" | "listDatabaseTables" | "queryDatabase" | "revokeDatabaseApiKey" | "setDatabaseImportLimit" | "createFunction" | "deleteFunction" | "listFunctions" | "listFunctionRuns" | "runFunction" | "updateFunction">>;
 type AuthClient = Pick<ZoDriveClient, "changePassword" | "deleteAccount" | "getAuthStatus" | "login" | "logout" | "registerInitialUser" | "updateProfile">;
@@ -182,10 +182,15 @@ const appBasePath = normalizeAppBasePath(
 const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.6.0";
+const GUI_VERSION = "1.7.0";
 const CLI_VERSION = "1.2.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.7.0",
+    date: "20 July 2026",
+    changes: ["Made every catalogued database engine installable per Drive and added Redis plus Kuzu. SQLite remains the first engine with an interactive workspace; the rest are clearly marked as installed while their workspaces are built."]
+  },
   {
     version: "v1.6.0",
     date: "21 July 2026",
@@ -1220,13 +1225,18 @@ function Databases({ client }: { client: DriveClient }) {
     onError: (error) => toast.error(error instanceof Error ? error.message : "Could not create the database")
   });
   const installEngineMutation = useMutation({
-    mutationFn: () => client.installDatabaseEngine!("sqlite"),
+    mutationFn: (engine: DatabaseEngineId) => client.installDatabaseEngine!(engine),
     onSuccess: (installation) => {
-      setSqliteInstalledLocally(true);
-      queryClient.setQueryData(["database-engines"], (engines: typeof enginesQuery.data) => engines?.map((engine) => engine.engine === installation.engine ? installation : engine) ?? [installation]);
-      toast.success("SQLite installed. Create or import a database to get started.");
+      if (installation.engine === "sqlite") setSqliteInstalledLocally(true);
+      queryClient.setQueryData(["database-engines"], (engines: typeof enginesQuery.data) => {
+        if (!engines) return [installation];
+        return engines.some((engine) => engine.engine === installation.engine)
+          ? engines.map((engine) => engine.engine === installation.engine ? installation : engine)
+          : [...engines, installation];
+      });
+      toast.success(installation.workspaceAvailable ? `${installation.name} installed. Create or import a database to get started.` : `${installation.name} installed. Its workspace is coming soon.`);
     },
-    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not install SQLite")
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not install the database engine")
   });
   const deleteMutation = useMutation({
     mutationFn: (id: string) => client.deleteDatabase!(id),
@@ -1304,7 +1314,7 @@ function Databases({ client }: { client: DriveClient }) {
   const showWorkspace = databaseView === "instances" && sqliteInstalled;
 
   return <><nav aria-label="Database views" className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm"><button aria-current={!showWorkspace ? "page" : undefined} className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${!showWorkspace ? "bg-slate-900 text-white shadow-sm" : "text-slate-500 hover:text-slate-900"}`} onClick={() => setDatabaseView("catalog")} type="button">Catalog</button><button aria-current={showWorkspace ? "page" : undefined} className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${showWorkspace ? "bg-slate-900 text-white shadow-sm" : "text-slate-500 hover:text-slate-900"}`} disabled={!sqliteInstalled} onClick={() => setDatabaseView("instances")} title={sqliteInstalled ? undefined : "Install SQLite to open your databases"} type="button">Your databases <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-xs ${showWorkspace ? "bg-white/15 text-white" : "bg-slate-100 text-slate-500"}`}>{databases.length}</span></button></nav>
-  {!showWorkspace ? <DatabaseCatalog databaseCount={databases.length} isInstalling={installEngineMutation.isPending} sqliteInstalled={sqliteInstalled} onChooseSQLite={() => setDatabaseView("instances")} onInstallSQLite={() => installEngineMutation.mutate()} onViewDatabases={() => setDatabaseView("instances")} /> : <div className="grid gap-5 md:grid-cols-[15rem_minmax(0,1fr)]">
+  {!showWorkspace ? <DatabaseCatalog databaseCount={databases.length} engineStates={enginesQuery.data ?? []} installingEngine={installEngineMutation.isPending ? installEngineMutation.variables : null} onChooseSQLite={() => setDatabaseView("instances")} onInstallEngine={(engine) => installEngineMutation.mutate(engine)} onViewDatabases={() => setDatabaseView("instances")} /> : <div className="grid gap-5 md:grid-cols-[15rem_minmax(0,1fr)]">
     <aside className="self-stretch overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-100 p-4">
         <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">SQLite</p><h2 className="mt-1 text-lg font-semibold text-slate-900">Your instances</h2></div><span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-500">{databases.length}</span></div>
@@ -1328,23 +1338,26 @@ function Databases({ client }: { client: DriveClient }) {
   </div>}{importSettingsOpen && importSettingsQuery.data && <DatabaseImportSettingsDialog isSaving={updateImportLimitMutation.isPending} onClose={() => setImportSettingsOpen(false)} onSave={(importLimitBytes) => updateImportLimitMutation.mutate(importLimitBytes)} settings={importSettingsQuery.data} />}</>;
 }
 
-function DatabaseCatalog({ databaseCount, isInstalling, onChooseSQLite, onInstallSQLite, onViewDatabases, sqliteInstalled }: { databaseCount: number; isInstalling: boolean; onChooseSQLite: () => void; onInstallSQLite: () => void; onViewDatabases: () => void; sqliteInstalled: boolean | undefined }) {
-  const engines = [
-    { name: "SQLite", category: "Relational", description: "A dependable, single-file SQL database for products, automations, and local apps.", detail: "Embedded · SQL · single file", icon: Database, status: sqliteInstalled ? "Installed" : "Ready to install" },
-    { name: "DuckDB", category: "Analytics", description: "Fast in-process analytics for parquet files, reports, and analytical workloads.", detail: "Columnar · OLAP · embedded", icon: Sigma, status: "Planned" },
-    { name: "libSQL", category: "Relational", description: "A SQLite-compatible engine built for modern app workflows and replication.", detail: "SQL · SQLite-compatible", icon: Cloud, status: "Planned" },
-    { name: "PGlite", category: "Relational", description: "A compact PostgreSQL runtime for local-first applications and familiar Postgres SQL.", detail: "Postgres-compatible · local", icon: HardDrive, status: "Planned" },
-    { name: "LanceDB", category: "Vector", description: "Embedded vector search for AI applications that need retrieval beside structured data.", detail: "Vectors · AI retrieval", icon: Code2, status: "Planned" },
-    { name: "LevelDB", category: "Key-value", description: "A lightweight embedded key-value store for simple high-throughput application state.", detail: "Key-value · embedded", icon: Database, status: "Planned" }
+function DatabaseCatalog({ databaseCount, engineStates, installingEngine, onChooseSQLite, onInstallEngine, onViewDatabases }: { databaseCount: number; engineStates: DatabaseEngine[]; installingEngine: DatabaseEngineId | null | undefined; onChooseSQLite: () => void; onInstallEngine: (engine: DatabaseEngineId) => void; onViewDatabases: () => void }) {
+  const catalog = [
+    { engine: "sqlite" as const, name: "SQLite", category: "Relational", description: "A dependable, single-file SQL database for products, automations, and local apps.", detail: "Embedded · SQL · single file", icon: Database },
+    { engine: "duckdb" as const, name: "DuckDB", category: "Analytics", description: "Fast in-process analytics for parquet files, reports, and analytical workloads.", detail: "Columnar · OLAP · embedded", icon: Sigma },
+    { engine: "libsql" as const, name: "libSQL", category: "Relational", description: "A SQLite-compatible engine built for modern app workflows and replication.", detail: "SQL · SQLite-compatible", icon: Cloud },
+    { engine: "pglite" as const, name: "PGlite", category: "Relational", description: "A compact PostgreSQL runtime for local-first applications and familiar Postgres SQL.", detail: "Postgres-compatible · local", icon: HardDrive },
+    { engine: "lancedb" as const, name: "LanceDB", category: "Vector", description: "Embedded vector search for AI applications that need retrieval beside structured data.", detail: "Vectors · AI retrieval", icon: Code2 },
+    { engine: "leveldb" as const, name: "LevelDB", category: "Key-value", description: "A lightweight embedded key-value store for simple high-throughput application state.", detail: "Key-value · embedded", icon: Database },
+    { engine: "redis" as const, name: "Redis", category: "In-memory", description: "A fast data-structure server for cache, queues, sessions, and real-time application state.", detail: "Cache · streams · key-value", icon: RefreshCw },
+    { engine: "kuzu" as const, name: "Kuzu", category: "Graph", description: "A lightweight embedded graph database for connected data, relationships, and knowledge graphs.", detail: "Graph · Cypher · embedded", icon: Share2 }
   ];
+  const sqliteInstalled = engineStates.some((engine) => engine.engine === "sqlite" && engine.installed);
 
   return <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
     <div className="relative overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 px-7 py-9 text-white md:px-10"><div className="absolute -right-28 -top-32 size-80 rounded-full bg-cyan-400/15 blur-3xl" /><div className="absolute -bottom-36 left-1/3 size-72 rounded-full bg-blue-500/10 blur-3xl" /><div className="relative flex flex-wrap items-start justify-between gap-5"><div><span className="inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-cyan-200/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100"><Database size={14} /> Install before you build</span><h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">Build with Zo Databases</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300 md:text-base">Choose a lightweight open-source engine, install it into your Drive, then create private databases and connect your applications.</p><p className="mt-4 text-xs font-medium text-cyan-100/80">Inspired by DBeaver + Cloud Hosting.</p></div>{sqliteInstalled && databaseCount > 0 && <button className="rounded-lg border border-white/15 bg-white/10 px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-white/20" onClick={onViewDatabases} type="button">View your databases <span className="ml-1.5 rounded-full bg-white/15 px-1.5 py-0.5 text-xs text-cyan-50">{databaseCount}</span></button>}</div></div>
-    <div className="border-b border-slate-100 bg-slate-50 px-6 py-4 sm:px-8"><p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Open-source database catalog</p><p className="mt-1 text-sm text-slate-600">Install an available engine before opening its workspace. Planned engines stay unavailable until Zo Drive can operate them safely.</p></div>
+    <div className="border-b border-slate-100 bg-slate-50 px-6 py-4 sm:px-8"><p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Open-source database catalog</p><p className="mt-1 text-sm text-slate-600">Install an engine to add it to your Drive. SQLite is ready to use today; other installed engines reserve their place while their workspace is built.</p></div>
     <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6 xl:grid-cols-3">
-      {engines.map((engine) => { const Icon = engine.icon; const available = engine.name === "SQLite"; return <article className={`group flex min-h-64 flex-col rounded-2xl border p-5 transition ${available ? "border-blue-300 bg-gradient-to-br from-blue-50 via-white to-white shadow-sm hover:-translate-y-0.5 hover:shadow-md" : "border-slate-200 bg-white hover:border-slate-300"}`} key={engine.name}><div className="flex items-start justify-between gap-3"><span className={`grid size-11 place-items-center rounded-xl ${available ? "bg-blue-600 text-white shadow-sm" : "bg-slate-100 text-slate-500"}`}><Icon size={21} /></span><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${available ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{engine.status}</span></div><div className="mt-5"><p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">{engine.category}</p><h3 className="mt-1.5 text-xl font-semibold text-slate-900">{engine.name}</h3><p className="mt-2 text-sm leading-6 text-slate-600">{engine.description}</p></div><div className="mt-auto pt-5"><p className="text-xs font-medium text-slate-400">{engine.detail}</p>{available && !sqliteInstalled ? <button aria-label="Install SQLite" className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:bg-slate-400" disabled={isInstalling || sqliteInstalled === undefined} onClick={onInstallSQLite} type="button">{isInstalling ? "Installing…" : "Install SQLite"} <Download size={16} /></button> : available ? <button aria-label="Open SQLite workspace" className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-blue-700" onClick={onChooseSQLite} type="button">Open workspace <ArrowUpRight size={16} /></button> : <p className="mt-4 text-sm font-semibold text-slate-400">Not available yet</p>}</div></article>;})}
+      {catalog.map((engine) => { const Icon = engine.icon; const installation = engineStates.find((candidate) => candidate.engine === engine.engine); const installed = installation?.installed === true; const workspaceAvailable = installation?.workspaceAvailable ?? engine.engine === "sqlite"; const installing = installingEngine === engine.engine; return <article className={`group flex min-h-64 flex-col rounded-2xl border p-5 transition ${workspaceAvailable ? "border-blue-300 bg-gradient-to-br from-blue-50 via-white to-white shadow-sm hover:-translate-y-0.5 hover:shadow-md" : "border-slate-200 bg-white hover:border-slate-300"}`} key={engine.engine}><div className="flex items-start justify-between gap-3"><span className={`grid size-11 place-items-center rounded-xl ${workspaceAvailable ? "bg-blue-600 text-white shadow-sm" : "bg-slate-100 text-slate-500"}`}><Icon size={21} /></span><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${installed ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{installed ? "Installed" : "Ready to install"}</span></div><div className="mt-5"><p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">{engine.category}</p><h3 className="mt-1.5 text-xl font-semibold text-slate-900">{engine.name}</h3><p className="mt-2 text-sm leading-6 text-slate-600">{engine.description}</p></div><div className="mt-auto pt-5"><p className="text-xs font-medium text-slate-400">{engine.detail}</p>{!installed ? <button aria-label={`Install ${engine.name}`} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:bg-slate-400" disabled={Boolean(installingEngine)} onClick={() => onInstallEngine(engine.engine)} type="button">{installing ? "Installing…" : `Install ${engine.name}`} <Download size={16} /></button> : workspaceAvailable ? <button aria-label="Open SQLite workspace" className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-blue-700" onClick={onChooseSQLite} type="button">Open workspace <ArrowUpRight size={16} /></button> : <p className="mt-4 text-sm font-semibold text-slate-500">Installed · Workspace coming soon</p>}</div></article>;})}
     </div>
-    <div className="border-t border-slate-100 bg-slate-50 px-6 py-4 text-sm leading-6 text-slate-500 sm:px-8">The catalog is intentionally curated. New engines appear as available only after Zo Drive can provision, secure, back up, and expose them safely.</div>
+    <div className="border-t border-slate-100 bg-slate-50 px-6 py-4 text-sm leading-6 text-slate-500 sm:px-8">Installed engines are private to this Drive. A workspace appears only after Zo Drive can provision, secure, back up, and expose that engine safely.</div>
   </section>;
 }
 

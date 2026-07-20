@@ -4,6 +4,12 @@ All notable changes to the Zo Drive browser experience are recorded here.
 
 ## Unreleased
 
+## v1.7.0 - 2026-07-20
+
+### Added
+
+- Made every catalogued engine installable per Drive and added Redis plus Kuzu. SQLite remains the first engine with an interactive workspace; other installed engines are clearly marked as awaiting their workspace.
+
 ## v1.6.0 - 2026-07-21
 
 ### Added

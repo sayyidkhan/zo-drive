@@ -56,14 +56,32 @@ export type DatabaseImportSettings = {
   maxImportLimitBytes: number;
 };
 
+export const databaseEngineDefinitions = [
+  { engine: "sqlite", name: "SQLite", workspaceAvailable: true },
+  { engine: "duckdb", name: "DuckDB", workspaceAvailable: false },
+  { engine: "libsql", name: "libSQL", workspaceAvailable: false },
+  { engine: "pglite", name: "PGlite", workspaceAvailable: false },
+  { engine: "lancedb", name: "LanceDB", workspaceAvailable: false },
+  { engine: "leveldb", name: "LevelDB", workspaceAvailable: false },
+  { engine: "redis", name: "Redis", workspaceAvailable: false },
+  { engine: "kuzu", name: "Kuzu", workspaceAvailable: false }
+] as const;
+
+export type DatabaseEngineId = typeof databaseEngineDefinitions[number]["engine"];
+
+export function isDatabaseEngineId(value: string): value is DatabaseEngineId {
+  return databaseEngineDefinitions.some((engine) => engine.engine === value);
+}
+
 export type DatabaseEngineInstallation = {
-  engine: "sqlite";
-  name: "SQLite";
+  engine: DatabaseEngineId;
+  name: string;
   installed: boolean;
   installedAt: string | null;
+  workspaceAvailable: boolean;
 };
 
-type StoredDatabaseEngines = { sqlite?: { installedAt: string } };
+type StoredDatabaseEngines = Partial<Record<DatabaseEngineId, { installedAt: string }>>;
 
 export class DatabaseEngineNotInstalledError extends Error {
   constructor() {
@@ -76,16 +94,21 @@ export class LocalDatabaseStore {
   constructor(private readonly root: string) {}
 
   async listEngines(ownerUserId: string): Promise<DatabaseEngineInstallation[]> {
-    const installedAt = await this.sqliteInstalledAt(ownerUserId);
-    return [{ engine: "sqlite", name: "SQLite", installed: Boolean(installedAt), installedAt }];
+    const stored = await this.readEngines(ownerUserId);
+    const sqliteInstalledAt = await this.sqliteInstalledAt(ownerUserId);
+    return databaseEngineDefinitions.map((definition) => {
+      const installedAt = definition.engine === "sqlite" ? sqliteInstalledAt : stored[definition.engine]?.installedAt ?? null;
+      return { ...definition, installed: Boolean(installedAt), installedAt };
+    });
   }
 
-  async installEngine({ ownerUserId, engine }: { ownerUserId: string; engine: "sqlite" }): Promise<DatabaseEngineInstallation> {
-    if (engine !== "sqlite") throw new Error("Unsupported database engine");
+  async installEngine({ ownerUserId, engine }: { ownerUserId: string; engine: DatabaseEngineId }): Promise<DatabaseEngineInstallation> {
+    const definition = databaseEngineDefinitions.find((candidate) => candidate.engine === engine);
+    if (!definition) throw new Error("Unsupported database engine");
     const engines = await this.readEngines(ownerUserId);
-    const installedAt = engines.sqlite?.installedAt ?? new Date().toISOString();
-    if (!engines.sqlite) await this.writeEngines(ownerUserId, { ...engines, sqlite: { installedAt } });
-    return { engine: "sqlite", name: "SQLite", installed: true, installedAt };
+    const installedAt = engines[engine]?.installedAt ?? new Date().toISOString();
+    if (!engines[engine]) await this.writeEngines(ownerUserId, { ...engines, [engine]: { installedAt } });
+    return { ...definition, installed: true, installedAt };
   }
 
   async requireEngineInstalled(ownerUserId: string): Promise<void> {
@@ -319,7 +342,7 @@ export class LocalDatabaseStore {
   private async readEngines(ownerUserId: string): Promise<StoredDatabaseEngines> {
     try {
       const parsed = JSON.parse(await readFile(this.enginesPath(ownerUserId), "utf8")) as StoredDatabaseEngines;
-      return typeof parsed.sqlite?.installedAt === "string" ? parsed : {};
+      return Object.fromEntries(Object.entries(parsed).filter(([engine, value]) => isDatabaseEngineId(engine) && typeof value?.installedAt === "string")) as StoredDatabaseEngines;
     } catch (error: unknown) {
       if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return {};
       throw error;

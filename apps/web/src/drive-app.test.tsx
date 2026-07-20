@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { DatabaseEngineId } from "@zo-drive/types";
 
 import { DriveApp, formulaDisplay } from "./drive-app.js";
 
@@ -36,11 +37,11 @@ describe("DriveApp", () => {
 
       expect(screen.getByRole("heading", { name: "Manage files in your private Drive." })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Share files on your terms" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 1.6.0" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 1.7.0" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI changelog version 1.6.0" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
+      expect(screen.getByRole("link", { name: "GUI changelog version 1.7.0" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("GUI v1.6.0")).toBeInTheDocument();
+      expect(screen.getByText("GUI v1.7.0")).toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
 
       cleanup();
@@ -73,7 +74,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.6.0")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.7.0")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();
@@ -111,6 +112,7 @@ describe("DriveApp", () => {
   });
 
   it("shows storage usage, folders, and files supplied by the shared SDK", async () => {
+    let sqliteInstalled = false;
     const client = {
       list: vi.fn().mockResolvedValue([
         { key: "Notes/hello.txt", name: "hello.txt", size: 5, contentType: "text/plain", updatedAt: "2026-01-01T00:00:00.000Z" },
@@ -144,8 +146,8 @@ describe("DriveApp", () => {
       listApiKeys: vi.fn().mockResolvedValue([]),
       revokeApiKey: vi.fn(),
       listDatabases: vi.fn().mockResolvedValue([{ id: "db-11111111-1111-4111-8111-111111111111", name: "app-data", engine: "sqlite", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", sizeBytes: 4096 }]),
-      listDatabaseEngines: vi.fn().mockResolvedValueOnce([{ engine: "sqlite", name: "SQLite", installed: false, installedAt: null }]).mockResolvedValue([{ engine: "sqlite", name: "SQLite", installed: true, installedAt: "2026-01-01T00:00:00.000Z" }]),
-      installDatabaseEngine: vi.fn().mockResolvedValue({ engine: "sqlite", name: "SQLite", installed: true, installedAt: "2026-07-20T00:00:00.000Z" }),
+      listDatabaseEngines: vi.fn(() => Promise.resolve([{ engine: "sqlite" as const, name: "SQLite", installed: sqliteInstalled, installedAt: sqliteInstalled ? "2026-07-20T00:00:00.000Z" : null, workspaceAvailable: true }])),
+      installDatabaseEngine: vi.fn((engine: DatabaseEngineId) => { if (engine === "sqlite") sqliteInstalled = true; return Promise.resolve({ engine, name: engine === "sqlite" ? "SQLite" : "Redis", installed: true, installedAt: "2026-07-20T00:00:00.000Z", workspaceAvailable: engine === "sqlite" }); }),
       createDatabase: vi.fn(),
       deleteDatabase: vi.fn(),
       importDatabase: vi.fn(),
@@ -215,7 +217,12 @@ describe("DriveApp", () => {
     expect(await screen.findByRole("heading", { name: "Zo Databases" })).toBeInTheDocument();
     expect(screen.getByText("Open-source database catalog")).toBeInTheDocument();
     expect(screen.getByText("DuckDB")).toBeInTheDocument();
-    expect(screen.getAllByText("Planned")).toHaveLength(5);
+    expect(screen.getByText("Redis")).toBeInTheDocument();
+    expect(screen.getByText("Kuzu")).toBeInTheDocument();
+    expect(screen.getByText("LanceDB")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Install Redis" }));
+    await waitFor(() => expect(client.installDatabaseEngine).toHaveBeenCalledWith("redis"));
+    expect(await screen.findByText("Installed · Workspace coming soon")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Install SQLite" }));
     await waitFor(() => expect(client.installDatabaseEngine).toHaveBeenCalledWith("sqlite"));
     fireEvent.click(await screen.findByRole("button", { name: "Open SQLite workspace" }));

@@ -12,7 +12,7 @@ import { LocalApiKeyStore, type ApiKeyScope } from "./auth/local-api-key-store.j
 import { SessionService } from "./auth/session.js";
 import { LocalShareStore, type StoredShare } from "./sharing/local-share-store.js";
 import { LocalFormStore, type PublishedForm } from "./forms/local-form-store.js";
-import { DatabaseEngineNotInstalledError, DatabaseImportError, DatabaseQueryError, LocalDatabaseStore } from "./databases/local-database-store.js";
+import { DatabaseEngineNotInstalledError, DatabaseImportError, DatabaseQueryError, LocalDatabaseStore, isDatabaseEngineId } from "./databases/local-database-store.js";
 import { LocalDatabaseApiKeyStore, type DatabaseApiKeyScope } from "./databases/local-database-api-key-store.js";
 import { LocalFunctionStore, validCron } from "./functions/local-function-store.js";
 import { LocalDriveStorage, StorageQuotaConfigurationError, StorageQuotaExceededError, TrashRestoreConflictError, UnsafeDrivePathError, nativeFileTypes, type DriveFileCategory } from "./storage/local-drive-storage.js";
@@ -441,8 +441,9 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
   app.post("/databases/engines/:engine/install", async (context) => {
     const userId = await requireDatabaseOwner(context.req.raw, resolveActiveUser, auth);
     if (!userId) return unauthorized(context);
-    if (context.req.param("engine") !== "sqlite") return context.json({ error: { code: "ENGINE_UNAVAILABLE", message: "This database engine is not available yet" } }, 404);
-    return context.json(await databases.installEngine({ ownerUserId: userId, engine: "sqlite" }));
+    const engine = context.req.param("engine");
+    if (!isDatabaseEngineId(engine)) return context.json({ error: { code: "ENGINE_UNAVAILABLE", message: "This database engine is not in the catalog" } }, 404);
+    return context.json(await databases.installEngine({ ownerUserId: userId, engine }));
   });
 
   app.post("/databases", async (context) => {
