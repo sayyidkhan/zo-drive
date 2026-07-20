@@ -103,13 +103,20 @@ pnpm build
 zo-drive --help
 ```
 
-#### Connect to your Zo Drive cloud
+#### Connect your local computer to Zo
 
-Point the CLI at your hosted Drive, then sign in with the owner account. The
-login command prints a session-token export; run that export in the same
-terminal before any upload, list, or download command.
+From any local computer with internet access, point the CLI at the public
+`/drive` address of this Zo Computer, then sign in with the Zo Drive owner
+account. This is a direct HTTPS connection to Zo Drive: you do not need SSH,
+Tailscale, or a Zo dashboard session on the local machine.
+
+The login command prints a session-token export; run that export in the same
+terminal before any upload, list, or download command. To keep the Zo Drive
+address across terminal sessions, add the `ZO_DRIVE_API_URL` export to your
+shell startup file, such as `~/.zshrc` or `~/.bashrc`.
 
 ```bash
+# Public /drive address of your Zo Computer
 export ZO_DRIVE_API_URL="https://your-drive.example/drive"
 zo-drive login --username sayyid --password 'your-password'
 
