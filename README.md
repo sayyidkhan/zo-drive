@@ -15,6 +15,7 @@ authentication, or workflow change.
 
 - Hono REST API for upload, list, download/preview, delete, search, and storage usage
 - Database HTTP API for private SQLite databases, with per-database read/write credentials for external backends and validated `.sqlite` import/export with owner-configurable limits
+- Zo Functions: owner-scoped JavaScript and Python handlers with private or public invocation, UTC cron schedules, and run history
 - Owner-account authentication: signed HttpOnly sessions and one-time registration
 - Account controls for username, password, sign-out, and permanent account/data deletion
 - Traversal-safe, user-scoped filesystem data root
@@ -100,7 +101,7 @@ folder.
 
 #### GUI versioning
 
-The browser GUI has its own release track, currently `GUI v1.4.3`. GUI changes
+The browser GUI has its own release track, currently `GUI v1.6.0`. GUI changes
 are deployed to Zo Drive directly; browser users receive the current version by
 loading the page. Use `gui-v*` Git tags to trace a deployed GUI release. CLI
 releases are separate and do not change the GUI version.

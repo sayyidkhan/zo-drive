@@ -23,7 +23,9 @@ describe("DriveApp", () => {
     expect(screen.getByRole("link", { name: "Open Zo Drive" })).toHaveAttribute("href", expect.stringContaining("?app=1"));
     expect(screen.getByRole("link", { name: "Read the docs" })).toHaveAttribute("href", expect.stringContaining("?docs=1"));
     expect(screen.getByText("Zo Drive SaaS Killer Features")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open Zo Functions" })).toHaveAttribute("href", expect.stringContaining("section=functions"));
     expect(screen.getByRole("link", { name: "Open Zo Databases" })).toHaveAttribute("href", expect.stringContaining("section=databases"));
+    expect(screen.getByRole("heading", { name: "Automations that live beside your data." })).toBeInTheDocument();
   });
 
   it("documents separate GUI and CLI workflows", () => {
@@ -34,11 +36,11 @@ describe("DriveApp", () => {
 
       expect(screen.getByRole("heading", { name: "Manage files in your private Drive." })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Share files on your terms" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 1.4.3" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 1.6.0" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI changelog version 1.4.3" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
+      expect(screen.getByRole("link", { name: "GUI changelog version 1.6.0" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("GUI v1.4.3")).toBeInTheDocument();
+      expect(screen.getByText("GUI v1.6.0")).toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
 
       cleanup();
@@ -71,7 +73,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.4.3")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.6.0")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();
@@ -142,6 +144,8 @@ describe("DriveApp", () => {
       listApiKeys: vi.fn().mockResolvedValue([]),
       revokeApiKey: vi.fn(),
       listDatabases: vi.fn().mockResolvedValue([{ id: "db-11111111-1111-4111-8111-111111111111", name: "app-data", engine: "sqlite", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", sizeBytes: 4096 }]),
+      listDatabaseEngines: vi.fn().mockResolvedValueOnce([{ engine: "sqlite", name: "SQLite", installed: false, installedAt: null }]).mockResolvedValue([{ engine: "sqlite", name: "SQLite", installed: true, installedAt: "2026-01-01T00:00:00.000Z" }]),
+      installDatabaseEngine: vi.fn().mockResolvedValue({ engine: "sqlite", name: "SQLite", installed: true, installedAt: "2026-07-20T00:00:00.000Z" }),
       createDatabase: vi.fn(),
       deleteDatabase: vi.fn(),
       importDatabase: vi.fn(),
@@ -153,7 +157,13 @@ describe("DriveApp", () => {
       revokeDatabaseApiKey: vi.fn(),
       listDatabaseTables: vi.fn().mockResolvedValue([{ name: "tasks", schema: "CREATE TABLE tasks (id INTEGER PRIMARY KEY, title TEXT)" }]),
       listDatabaseRows: vi.fn().mockResolvedValue({ columns: ["id", "title"], rows: [{ id: 1, title: "Ship Database Engines" }], total: 1 }),
-      queryDatabase: vi.fn().mockResolvedValue({ columns: ["title"], rows: [{ title: "Ship Database Engines" }], changes: 0, lastInsertRowid: null })
+      queryDatabase: vi.fn().mockResolvedValue({ columns: ["title"], rows: [{ title: "Ship Database Engines" }], changes: 0, lastInsertRowid: null }),
+      listFunctions: vi.fn().mockResolvedValue([]),
+      createFunction: vi.fn(),
+      updateFunction: vi.fn(),
+      deleteFunction: vi.fn(),
+      runFunction: vi.fn(),
+      listFunctionRuns: vi.fn().mockResolvedValue([])
     };
 
     const authClient = {
@@ -196,10 +206,19 @@ describe("DriveApp", () => {
     fireEvent.click(screen.getByRole("button", { name: "Zo Databases" }));
     expect(await screen.findByRole("heading", { name: "Zo Databases" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Build with Zo Databases" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Zo Functions" }));
+    expect(await screen.findByRole("heading", { name: "Zo Functions" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Run small jobs without another service." })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Zo Databases" }));
+    expect(await screen.findByRole("heading", { name: "Zo Databases" })).toBeInTheDocument();
     expect(screen.getByText("Open-source database catalog")).toBeInTheDocument();
     expect(screen.getByText("DuckDB")).toBeInTheDocument();
     expect(screen.getAllByText("Planned")).toHaveLength(5);
-    fireEvent.click(screen.getByRole("button", { name: "Open SQLite workspace" }));
+    fireEvent.click(screen.getByRole("button", { name: "Install SQLite" }));
+    await waitFor(() => expect(client.installDatabaseEngine).toHaveBeenCalledWith("sqlite"));
+    fireEvent.click(await screen.findByRole("button", { name: "Open SQLite workspace" }));
     expect((await screen.findAllByText("app-data")).length).toBe(2);
     expect(await screen.findByText("tasks")).toBeInTheDocument();
     expect(await screen.findByText("Ship Database Engines")).toBeInTheDocument();
@@ -337,7 +356,7 @@ describe("DriveApp", () => {
     expect(restoredRoute.get("section")).toBe("databases");
     expect(restoredRoute.get("database")).toBe("db-11111111-1111-4111-8111-111111111111");
     expect(restoredRoute.get("databasePanel")).toBe("access");
-  });
+  }, 15_000);
 
   it("keeps an upload progress bar visible until the upload finishes", async () => {
     let completeUpload!: (value: { key: string; name: string; size: number; contentType: string; updatedAt: string; starred: boolean }) => void;

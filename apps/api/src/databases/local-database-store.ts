@@ -56,8 +56,41 @@ export type DatabaseImportSettings = {
   maxImportLimitBytes: number;
 };
 
+export type DatabaseEngineInstallation = {
+  engine: "sqlite";
+  name: "SQLite";
+  installed: boolean;
+  installedAt: string | null;
+};
+
+type StoredDatabaseEngines = { sqlite?: { installedAt: string } };
+
+export class DatabaseEngineNotInstalledError extends Error {
+  constructor() {
+    super("Install SQLite before creating or using databases");
+    this.name = "DatabaseEngineNotInstalledError";
+  }
+}
+
 export class LocalDatabaseStore {
   constructor(private readonly root: string) {}
+
+  async listEngines(ownerUserId: string): Promise<DatabaseEngineInstallation[]> {
+    const installedAt = await this.sqliteInstalledAt(ownerUserId);
+    return [{ engine: "sqlite", name: "SQLite", installed: Boolean(installedAt), installedAt }];
+  }
+
+  async installEngine({ ownerUserId, engine }: { ownerUserId: string; engine: "sqlite" }): Promise<DatabaseEngineInstallation> {
+    if (engine !== "sqlite") throw new Error("Unsupported database engine");
+    const engines = await this.readEngines(ownerUserId);
+    const installedAt = engines.sqlite?.installedAt ?? new Date().toISOString();
+    if (!engines.sqlite) await this.writeEngines(ownerUserId, { ...engines, sqlite: { installedAt } });
+    return { engine: "sqlite", name: "SQLite", installed: true, installedAt };
+  }
+
+  async requireEngineInstalled(ownerUserId: string): Promise<void> {
+    if (!(await this.sqliteInstalledAt(ownerUserId))) throw new DatabaseEngineNotInstalledError();
+  }
 
   async list(ownerUserId: string): Promise<DriveDatabase[]> {
     const stored = await this.read(ownerUserId);
@@ -67,6 +100,7 @@ export class LocalDatabaseStore {
   }
 
   async create({ ownerUserId, name }: { ownerUserId: string; name: string }): Promise<DriveDatabase> {
+    await this.requireEngineInstalled(ownerUserId);
     const stored = await this.read(ownerUserId);
     if (stored.databases.some((database) => database.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
       throw Object.assign(new Error("A database with this name already exists"), { code: "EEXIST" });
@@ -107,6 +141,7 @@ export class LocalDatabaseStore {
   }
 
   async import({ ownerUserId, name, bytes, importLimitBytes }: { ownerUserId: string; name: string; bytes: Uint8Array; importLimitBytes: number }): Promise<DriveDatabase> {
+    await this.requireEngineInstalled(ownerUserId);
     if (bytes.byteLength === 0) throw new DatabaseImportError("Choose a SQLite database file to import");
     if (bytes.byteLength > importLimitBytes) throw new DatabaseImportError("This SQLite file exceeds your configured import limit");
     const stored = await this.read(ownerUserId);
@@ -211,6 +246,7 @@ export class LocalDatabaseStore {
     const stored = await this.read(ownerUserId);
     const database = stored.databases.find((candidate) => candidate.id === id);
     if (!database) throw Object.assign(new Error("Database not found"), { code: "ENOENT" });
+    await this.requireEngineInstalled(ownerUserId);
     const sqlite = new Database(this.databasePath(ownerUserId, id));
     try {
       sqlite.pragma("foreign_keys = ON");
@@ -267,6 +303,35 @@ export class LocalDatabaseStore {
 
   private importSettingsPath(ownerUserId: string): string {
     return join(this.ownerDirectory(ownerUserId), "settings.json");
+  }
+
+  private enginesPath(ownerUserId: string): string {
+    return join(this.ownerDirectory(ownerUserId), "engines.json");
+  }
+
+  private async sqliteInstalledAt(ownerUserId: string): Promise<string | null> {
+    const engines = await this.readEngines(ownerUserId);
+    if (engines.sqlite?.installedAt) return engines.sqlite.installedAt;
+    const databases = await this.read(ownerUserId);
+    return databases.databases.length > 0 ? databases.databases[0]?.createdAt ?? new Date().toISOString() : null;
+  }
+
+  private async readEngines(ownerUserId: string): Promise<StoredDatabaseEngines> {
+    try {
+      const parsed = JSON.parse(await readFile(this.enginesPath(ownerUserId), "utf8")) as StoredDatabaseEngines;
+      return typeof parsed.sqlite?.installedAt === "string" ? parsed : {};
+    } catch (error: unknown) {
+      if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return {};
+      throw error;
+    }
+  }
+
+  private async writeEngines(ownerUserId: string, engines: StoredDatabaseEngines): Promise<void> {
+    const path = this.enginesPath(ownerUserId);
+    await mkdir(dirname(path), { recursive: true });
+    const temporary = `${path}.${randomUUID()}.tmp`;
+    await writeFile(temporary, JSON.stringify(engines, null, 2), { encoding: "utf8", mode: 0o600 });
+    await rename(temporary, path);
   }
 
   private async readImportSettings(ownerUserId: string): Promise<{ importLimitBytes: number } | null> {

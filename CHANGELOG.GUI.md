@@ -4,6 +4,18 @@ All notable changes to the Zo Drive browser experience are recorded here.
 
 ## Unreleased
 
+## v1.6.0 - 2026-07-21
+
+### Added
+
+- Added Zo Functions: save and run JavaScript or Python handlers, invoke them privately or through a public endpoint, and schedule enabled functions with UTC cron. Added a dedicated Functions story and launch points on the Drive landing page.
+
+## v1.5.0 - 2026-07-20
+
+### Added
+
+- Added an install-first SQLite workflow. Install SQLite from the catalog before opening its workspace, creating a database, importing a file, or running SQL.
+
 ## v1.4.3 - 2026-07-20
 
 ### Changed

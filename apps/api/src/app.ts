@@ -12,8 +12,9 @@ import { LocalApiKeyStore, type ApiKeyScope } from "./auth/local-api-key-store.j
 import { SessionService } from "./auth/session.js";
 import { LocalShareStore, type StoredShare } from "./sharing/local-share-store.js";
 import { LocalFormStore, type PublishedForm } from "./forms/local-form-store.js";
-import { DatabaseImportError, DatabaseQueryError, LocalDatabaseStore } from "./databases/local-database-store.js";
+import { DatabaseEngineNotInstalledError, DatabaseImportError, DatabaseQueryError, LocalDatabaseStore } from "./databases/local-database-store.js";
 import { LocalDatabaseApiKeyStore, type DatabaseApiKeyScope } from "./databases/local-database-api-key-store.js";
+import { LocalFunctionStore, validCron } from "./functions/local-function-store.js";
 import { LocalDriveStorage, StorageQuotaConfigurationError, StorageQuotaExceededError, TrashRestoreConflictError, UnsafeDrivePathError, nativeFileTypes, type DriveFileCategory } from "./storage/local-drive-storage.js";
 
 export type UserResolver = (request: Request) => string | null | Promise<string | null>;
@@ -33,6 +34,7 @@ type CreateAppOptions = {
   forms?: LocalFormStore;
   databases?: LocalDatabaseStore;
   databaseApiKeys?: LocalDatabaseApiKeyStore;
+  functions?: LocalFunctionStore;
   maxDatabaseImportBytes?: number;
   trustProxy?: boolean;
 };
@@ -133,8 +135,20 @@ const createDatabaseApiKeySchema = z.object({
   scopes: z.array(z.enum(["read", "write"])).min(1).max(2),
   expiresAt: z.string().datetime().nullable()
 });
+const functionIdSchema = z.string().uuid();
+const functionFieldsSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  runtime: z.enum(["javascript", "python"]),
+  source: z.string().min(1).max(50_000),
+  visibility: z.enum(["private", "public"]),
+  cron: z.string().trim().max(100).nullable(),
+  enabled: z.boolean()
+});
+const functionCreateSchema = functionFieldsSchema.extend({ visibility: z.enum(["private", "public"]).default("private"), cron: z.string().trim().max(100).nullable().default(null), enabled: z.boolean().default(true) }).superRefine((value, context) => { if (value.cron && !validCron(value.cron)) context.addIssue({ code: z.ZodIssueCode.custom, message: "Use a valid five-field UTC cron expression" }); });
+const functionUpdateSchema = z.object({ name: z.string().trim().min(1).max(80).optional(), runtime: z.enum(["javascript", "python"]).optional(), source: z.string().min(1).max(50_000).optional(), visibility: z.enum(["private", "public"]).optional(), cron: z.string().trim().max(100).nullable().optional(), enabled: z.boolean().optional() }).superRefine((value, context) => { if (Object.keys(value).length === 0) context.addIssue({ code: z.ZodIssueCode.custom, message: "Provide at least one change" }); if (value.cron && !validCron(value.cron)) context.addIssue({ code: z.ZodIssueCode.custom, message: "Use a valid five-field UTC cron expression" }); });
+const functionRunSchema = z.object({ input: z.unknown().optional().default({}) });
 
-export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys, invalidApiKeyRateLimiter = new InvalidApiKeyRateLimiter(), sharing, forms, databases = new LocalDatabaseStore(storage.root), databaseApiKeys = new LocalDatabaseApiKeyStore({ root: storage.root }), maxDatabaseImportBytes = Number.MAX_SAFE_INTEGER, trustProxy = false }: CreateAppOptions) {
+export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys, invalidApiKeyRateLimiter = new InvalidApiKeyRateLimiter(), sharing, forms, databases = new LocalDatabaseStore(storage.root), databaseApiKeys = new LocalDatabaseApiKeyStore({ root: storage.root }), functions = new LocalFunctionStore(storage.root), maxDatabaseImportBytes = Number.MAX_SAFE_INTEGER, trustProxy = false }: CreateAppOptions) {
   const app = new Hono();
   const resolveActiveUser: UserResolver = async (request) => {
     const userId = await resolveUserId(request);
@@ -165,6 +179,9 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     app.use("/public/forms/*", cors(corsOptions));
     app.use("/databases", cors(corsOptions));
     app.use("/databases/*", cors(corsOptions));
+    app.use("/functions", cors(corsOptions));
+    app.use("/functions/*", cors(corsOptions));
+    app.use("/public/functions/*", cors(corsOptions));
   }
 
   app.use("*", async (context, next) => {
@@ -233,6 +250,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
       await forms?.renameOwner({ fromUserId: userId, toUserId: nextUserId });
       await databases.renameOwner({ fromUserId: userId, toUserId: nextUserId });
       await databaseApiKeys.renameOwner({ fromUserId: userId, toUserId: nextUserId });
+      await functions.renameOwner({ fromUserId: userId, toUserId: nextUserId });
       await apiKeys?.renameOwner({ fromUserId: userId, toUserId: nextUserId });
       const user = await auth.store.renameUser(userId, nextUserId);
       if (!user) return context.json({ error: { code: "PROFILE_UPDATE_FAILED", message: "Could not update the username" } }, 409);
@@ -264,6 +282,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
       await forms?.removeByOwner(userId);
       await databases.removeByOwner(userId);
       await databaseApiKeys.removeByOwner(userId);
+      await functions.removeByOwner(userId);
       await apiKeys?.removeByOwner(userId);
       await auth.store.removeUser(userId);
       context.header("set-cookie", auth.sessions.clearCookieHeader(auth.secureCookies));
@@ -413,6 +432,19 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     return context.json({ databases: await databases.list(userId) });
   });
 
+  app.get("/databases/engines", async (context) => {
+    const userId = await requireDatabaseOwner(context.req.raw, resolveActiveUser, auth);
+    if (!userId) return unauthorized(context);
+    return context.json({ engines: await databases.listEngines(userId) });
+  });
+
+  app.post("/databases/engines/:engine/install", async (context) => {
+    const userId = await requireDatabaseOwner(context.req.raw, resolveActiveUser, auth);
+    if (!userId) return unauthorized(context);
+    if (context.req.param("engine") !== "sqlite") return context.json({ error: { code: "ENGINE_UNAVAILABLE", message: "This database engine is not available yet" } }, 404);
+    return context.json(await databases.installEngine({ ownerUserId: userId, engine: "sqlite" }));
+  });
+
   app.post("/databases", async (context) => {
     const userId = await requireDatabaseOwner(context.req.raw, resolveActiveUser, auth);
     if (!userId) return unauthorized(context);
@@ -516,6 +548,73 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     const userId = await requireDatabaseUser(context.req.raw, context.req.param("id"), databaseQueryScope(parsed.data.sql), resolveActiveUser, databaseApiKeys);
     if (!userId) return unauthorized(context);
     return context.json(await databases.query({ ownerUserId: userId, id: context.req.param("id"), ...parsed.data }));
+  });
+
+  app.post("/public/functions/:id/invoke", async (context) => {
+    const id = context.req.param("id");
+    if (!functionIdSchema.safeParse(id).success) return context.json({ error: { code: "INVALID_REQUEST", message: "Invalid function id" } }, 400);
+    const parsed = functionRunSchema.safeParse(await context.req.json().catch(() => null));
+    if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Provide a valid JSON input value" } }, 400);
+    const found = await functions.findPublic(id);
+    if (!found) return context.json({ error: { code: "NOT_FOUND", message: "Public function not found" } }, 404);
+    const run = await functions.run({ ownerUserId: found.ownerUserId, id, input: parsed.data.input, trigger: "public" });
+    return context.json(run);
+  });
+
+  app.get("/functions", async (context) => {
+    const userId = await requireDatabaseOwner(context.req.raw, resolveActiveUser, auth);
+    if (!userId) return unauthorized(context);
+    return context.json({ functions: await functions.list(userId) });
+  });
+
+  app.post("/functions", async (context) => {
+    const userId = await requireDatabaseOwner(context.req.raw, resolveActiveUser, auth);
+    if (!userId) return unauthorized(context);
+    const parsed = functionCreateSchema.safeParse(await context.req.json().catch(() => null));
+    if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Enter a name, supported runtime, source code, and valid UTC cron expression" } }, 400);
+    return context.json(await functions.create({ ownerUserId: userId, ...parsed.data }), 201);
+  });
+
+  app.patch("/functions/:id", async (context) => {
+    const userId = await requireDatabaseOwner(context.req.raw, resolveActiveUser, auth);
+    if (!userId) return unauthorized(context);
+    const id = context.req.param("id");
+    if (!functionIdSchema.safeParse(id).success) return context.json({ error: { code: "INVALID_REQUEST", message: "Invalid function id" } }, 400);
+    const parsed = functionUpdateSchema.safeParse(await context.req.json().catch(() => null));
+    if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Provide valid function settings and source code" } }, 400);
+    const fn = await functions.update({ ownerUserId: userId, id, changes: parsed.data });
+    if (!fn) return context.json({ error: { code: "NOT_FOUND", message: "Function not found" } }, 404);
+    return context.json(fn);
+  });
+
+  app.delete("/functions/:id", async (context) => {
+    const userId = await requireDatabaseOwner(context.req.raw, resolveActiveUser, auth);
+    if (!userId) return unauthorized(context);
+    const id = context.req.param("id");
+    if (!functionIdSchema.safeParse(id).success) return context.json({ error: { code: "INVALID_REQUEST", message: "Invalid function id" } }, 400);
+    if (!(await functions.remove({ ownerUserId: userId, id }))) return context.json({ error: { code: "NOT_FOUND", message: "Function not found" } }, 404);
+    return context.body(null, 204);
+  });
+
+  app.get("/functions/:id/runs", async (context) => {
+    const userId = await requireDatabaseOwner(context.req.raw, resolveActiveUser, auth);
+    if (!userId) return unauthorized(context);
+    const id = context.req.param("id");
+    if (!functionIdSchema.safeParse(id).success) return context.json({ error: { code: "INVALID_REQUEST", message: "Invalid function id" } }, 400);
+    if (!(await functions.find({ ownerUserId: userId, id }))) return context.json({ error: { code: "NOT_FOUND", message: "Function not found" } }, 404);
+    return context.json({ runs: await functions.listRuns({ ownerUserId: userId, functionId: id }) });
+  });
+
+  app.post("/functions/:id/run", async (context) => {
+    const userId = await requireDatabaseOwner(context.req.raw, resolveActiveUser, auth);
+    if (!userId) return unauthorized(context);
+    const id = context.req.param("id");
+    if (!functionIdSchema.safeParse(id).success) return context.json({ error: { code: "INVALID_REQUEST", message: "Invalid function id" } }, 400);
+    const parsed = functionRunSchema.safeParse(await context.req.json().catch(() => null));
+    if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Provide a valid JSON input value" } }, 400);
+    const run = await functions.run({ ownerUserId: userId, id, input: parsed.data.input, trigger: "manual" });
+    if (!run) return context.json({ error: { code: "NOT_FOUND", message: "Function not found" } }, 404);
+    return context.json(run);
   });
 
   app.post("/folders", async (context) => {
@@ -714,6 +813,9 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     }
     if (error instanceof DatabaseQueryError) {
       return context.json({ error: { code: "DATABASE_QUERY_ERROR", message: error.message } }, 400);
+    }
+    if (error instanceof DatabaseEngineNotInstalledError) {
+      return context.json({ error: { code: "DATABASE_ENGINE_NOT_INSTALLED", message: error.message } }, 409);
     }
     if (error instanceof DatabaseImportError) {
       return context.json({ error: { code: "DATABASE_IMPORT_ERROR", message: error.message } }, 400);

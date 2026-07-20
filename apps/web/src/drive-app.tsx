@@ -62,14 +62,14 @@ import { toast, Toaster } from "sonner";
 import { create } from "zustand";
 
 import { ZoDriveClient } from "@zo-drive/sdk";
-import type { ApiKeyScope, AuthStatus, DatabaseApiKey, DatabaseApiKeyScope, DatabaseImportSettings, DatabaseRows, DriveApiKey, DriveDatabase, DriveFolder, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, NativeFileType, PublicShare, PublishedForm, ShareAccess, StorageUsage } from "@zo-drive/types";
+import type { ApiKeyScope, AuthStatus, DatabaseApiKey, DatabaseApiKeyScope, DatabaseImportSettings, DatabaseRows, DriveApiKey, DriveDatabase, DriveFolder, DriveFunction, DriveFunctionRun, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, FunctionRuntime, FunctionVisibility, NativeFileType, PublicShare, PublishedForm, ShareAccess, StorageUsage } from "@zo-drive/types";
 
-type DriveClient = Pick<ZoDriveClient, "createApiKey" | "createFolder" | "createNativeFile" | "createShare" | "delete" | "download" | "emptyTrash" | "getUsage" | "list" | "listApiKeys" | "listFolders" | "listFormResponses" | "listShares" | "listStarred" | "listTrash" | "permanentlyDeleteTrash" | "publishForm" | "rename" | "restoreTrash" | "revokeApiKey" | "revokeShare" | "saveNativeFile" | "setQuota" | "star" | "unstar" | "updateSharePasscode" | "upload"> & Partial<Pick<ZoDriveClient, "createDatabase" | "createDatabaseApiKey" | "deleteDatabase" | "exportDatabase" | "getDatabaseImportSettings" | "importDatabase" | "listDatabaseApiKeys" | "listDatabases" | "listDatabaseRows" | "listDatabaseTables" | "queryDatabase" | "revokeDatabaseApiKey" | "setDatabaseImportLimit">>;
+type DriveClient = Pick<ZoDriveClient, "createApiKey" | "createFolder" | "createNativeFile" | "createShare" | "delete" | "download" | "emptyTrash" | "getUsage" | "list" | "listApiKeys" | "listFolders" | "listFormResponses" | "listShares" | "listStarred" | "listTrash" | "permanentlyDeleteTrash" | "publishForm" | "rename" | "restoreTrash" | "revokeApiKey" | "revokeShare" | "saveNativeFile" | "setQuota" | "star" | "unstar" | "updateSharePasscode" | "upload"> & Partial<Pick<ZoDriveClient, "createDatabase" | "createDatabaseApiKey" | "deleteDatabase" | "exportDatabase" | "getDatabaseImportSettings" | "importDatabase" | "installDatabaseEngine" | "listDatabaseApiKeys" | "listDatabaseEngines" | "listDatabases" | "listDatabaseRows" | "listDatabaseTables" | "queryDatabase" | "revokeDatabaseApiKey" | "setDatabaseImportLimit" | "createFunction" | "deleteFunction" | "listFunctions" | "listFunctionRuns" | "runFunction" | "updateFunction">>;
 type AuthClient = Pick<ZoDriveClient, "changePassword" | "deleteAccount" | "getAuthStatus" | "login" | "logout" | "registerInitialUser" | "updateProfile">;
 type SharedClient = Pick<ZoDriveClient, "downloadShared" | "getPublicShare">;
 type PublicFormClient = Pick<ZoDriveClient, "getPublicForm" | "submitFormResponse">;
 type ViewMode = "grid" | "list";
-type DriveSection = "api-keys" | "databases" | "home" | "my-drive" | "pastes" | "profile" | "shared" | "starred" | "transfer" | "trash";
+type DriveSection = "api-keys" | "databases" | "functions" | "home" | "my-drive" | "pastes" | "profile" | "shared" | "starred" | "transfer" | "trash";
 type DatabasePanel = "data" | "sql" | "access";
 type DatabaseView = "catalog" | "instances";
 type AdvancedFileType = "document" | "spreadsheet" | "presentation" | "form" | "paste" | "image" | "video" | "audio" | "pdf" | "other";
@@ -115,7 +115,7 @@ const defaultRecentFilters: RecentFilters = {
   type: "any"
 };
 
-const driveSections: DriveSection[] = ["api-keys", "databases", "home", "my-drive", "pastes", "profile", "shared", "starred", "transfer", "trash"];
+const driveSections: DriveSection[] = ["api-keys", "databases", "functions", "home", "my-drive", "pastes", "profile", "shared", "starred", "transfer", "trash"];
 const databasePanels: DatabasePanel[] = ["data", "sql", "access"];
 const databaseViews: DatabaseView[] = ["catalog", "instances"];
 
@@ -182,10 +182,20 @@ const appBasePath = normalizeAppBasePath(
 const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.4.3";
+const GUI_VERSION = "1.6.0";
 const CLI_VERSION = "1.2.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.6.0",
+    date: "21 July 2026",
+    changes: ["Added Zo Functions: owner-scoped JavaScript and Python handlers with private or public invocation, UTC cron schedules, manual runs, execution history, and dedicated landing-page launch points."]
+  },
+  {
+    version: "v1.5.0",
+    date: "20 July 2026",
+    changes: ["Added an install-first SQLite workflow. Install the engine before opening its workspace, creating databases, importing files, or running SQL."]
+  },
   {
     version: "v1.4.3",
     date: "20 July 2026",
@@ -412,7 +422,7 @@ function LandingPage() {
               <div className="mt-7 space-y-3">
                 {[['Product/Launch', '4 files', 'bg-amber-100 text-amber-700'], ['Design/Assets', '18 files', 'bg-violet-100 text-violet-700'], ['Reports/2026', '7 files', 'bg-emerald-100 text-emerald-700']].map(([name, count, tone]) => <div className="flex items-center gap-3 rounded-xl border border-slate-100 p-3.5" key={name}><span className={`grid size-10 place-items-center rounded-xl ${tone}`}><Folder size={19} /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-800">{name}</span><span className="text-xs text-slate-400">{count}</span></span><MoreHorizontal size={18} className="text-slate-300" /></div>)}
               </div>
-              <div className="mt-5"><div className="mb-3 flex items-center justify-between"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Zo Drive SaaS Killer Features</p><span className="text-[10px] font-medium text-slate-400">Built in</span></div><div className="grid grid-cols-2 gap-3"><div className="rounded-xl bg-slate-950 p-4 text-white"><Code2 size={18} className="text-cyan-300" /><p className="mt-4 text-sm font-semibold">Zo Paste</p><p className="mt-1 text-xs leading-5 text-slate-400">Share code securely.</p></div><div className="rounded-xl bg-blue-50 p-4 text-blue-950"><Send size={18} className="text-blue-600" /><p className="mt-4 text-sm font-semibold">Zo Transfer</p><p className="mt-1 text-xs leading-5 text-blue-700/70">Deliver files your way.</p></div><a aria-label="Open Zo Databases" className="col-span-2 rounded-xl bg-emerald-50 p-4 text-emerald-950 transition hover:bg-emerald-100" href={`${driveAppUrl()}&section=databases&databaseView=catalog`}><Database size={18} className="text-emerald-600" /><p className="mt-4 text-sm font-semibold">Zo Databases</p><p className="mt-1 text-xs leading-5 text-emerald-800/70">Private databases, built into your Drive.</p></a></div></div>
+              <div className="mt-5"><div className="mb-3 flex items-center justify-between"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Zo Drive SaaS Killer Features</p><span className="text-[10px] font-medium text-slate-400">Built in</span></div><div className="grid grid-cols-2 gap-3"><div className="rounded-xl bg-slate-950 p-4 text-white"><Code2 size={18} className="text-cyan-300" /><p className="mt-4 text-sm font-semibold">Zo Paste</p><p className="mt-1 text-xs leading-5 text-slate-400">Share code securely.</p></div><div className="rounded-xl bg-blue-50 p-4 text-blue-950"><Send size={18} className="text-blue-600" /><p className="mt-4 text-sm font-semibold">Zo Transfer</p><p className="mt-1 text-xs leading-5 text-blue-700/70">Deliver files your way.</p></div><a aria-label="Open Zo Functions" className="col-span-2 rounded-xl bg-violet-50 p-4 text-violet-950 transition hover:bg-violet-100" href={`${driveAppUrl()}&section=functions`}><Terminal size={18} className="text-violet-600" /><p className="mt-4 text-sm font-semibold">Zo Functions</p><p className="mt-1 text-xs leading-5 text-violet-800/70">Run code and schedule your automations.</p></a><a aria-label="Open Zo Databases" className="col-span-2 rounded-xl bg-emerald-50 p-4 text-emerald-950 transition hover:bg-emerald-100" href={`${driveAppUrl()}&section=databases&databaseView=catalog`}><Database size={18} className="text-emerald-600" /><p className="mt-4 text-sm font-semibold">Zo Databases</p><p className="mt-1 text-xs leading-5 text-emerald-800/70">Private databases, built into your Drive.</p></a></div></div>
             </div>
           </div>
         </div>
@@ -420,6 +430,8 @@ function LandingPage() {
     </div>
 
     <section className="border-y border-slate-200 bg-white py-20 sm:py-24"><div className="mx-auto max-w-7xl px-5 sm:px-8"><div className="max-w-2xl"><p className="text-sm font-bold uppercase tracking-[0.15em] text-blue-600">The Zo Drive edge</p><h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">A decentralised cloud, not another rented file bucket.</h2><p className="mt-4 text-base leading-7 text-slate-600">Keep the convenience of cloud storage while keeping the storage itself on the machine you control.</p></div><div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{features.map((feature) => <article className="rounded-2xl border border-slate-200 bg-[#f9fbfc] p-6" key={feature.title}><span className="grid size-10 place-items-center rounded-xl bg-blue-100 text-blue-700">{feature.icon}</span><h3 className="mt-5 font-semibold text-slate-950">{feature.title}</h3><p className="mt-2 text-sm leading-6 text-slate-600">{feature.copy}</p></article>)}</div></div></section>
+
+    <section className="mx-auto grid max-w-7xl gap-10 px-5 py-20 sm:px-8 lg:grid-cols-[.92fr_1.08fr] lg:items-center lg:py-28"><div><p className="text-sm font-bold uppercase tracking-[0.15em] text-violet-700">Zo Functions</p><h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">Automations that live beside your data.</h2><p className="mt-4 max-w-xl text-base leading-7 text-slate-600">Write a small handler, keep the source in your Drive, then run it manually, on a schedule, or through a deliberate public endpoint. No separate server to deploy or maintain.</p><div className="mt-7 space-y-3 text-sm font-medium text-slate-700"><p className="flex items-center gap-3"><span className="grid size-6 place-items-center rounded-full bg-violet-100 text-violet-700"><Check size={14} /></span> JavaScript and Python handlers</p><p className="flex items-center gap-3"><span className="grid size-6 place-items-center rounded-full bg-violet-100 text-violet-700"><Check size={14} /></span> Private by default, public only when you choose</p><p className="flex items-center gap-3"><span className="grid size-6 place-items-center rounded-full bg-violet-100 text-violet-700"><Check size={14} /></span> UTC cron schedules and visible run history</p></div><a aria-label="Open Zo Functions workspace" className="mt-8 inline-flex items-center gap-2 rounded-xl bg-violet-700 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-700/20 transition hover:-translate-y-0.5 hover:bg-violet-800" href={`${driveAppUrl()}&section=functions`}><Terminal size={17} /> Open Zo Functions <ArrowUpRight size={16} /></a></div><div className="overflow-hidden rounded-[1.6rem] border border-slate-800 bg-slate-950 shadow-2xl shadow-violet-950/15"><div className="flex items-center justify-between border-b border-white/10 bg-slate-900 px-5 py-4"><div className="flex items-center gap-2 text-sm font-semibold text-white"><Terminal size={17} className="text-violet-300" /> weekly-report.js</div><span className="rounded-full bg-violet-300/10 px-2.5 py-1 text-xs font-semibold text-violet-200">private</span></div><div className="grid gap-5 p-5 sm:grid-cols-[minmax(0,1fr)_10rem]"><pre className="overflow-x-auto rounded-xl bg-[#111827] p-4 text-xs leading-6 text-slate-200"><code><span className="text-violet-300">export default async function</span> <span className="text-sky-300">handler</span>(input) {'{'}{`\n`}  <span className="text-violet-300">return</span> {'{'}{`\n`}    report: <span className="text-amber-300">"weekly"</span>,{`\n`}    generatedAt: <span className="text-sky-300">new Date</span>().toISOString(){`\n`}  {'}'};{`\n`}{'}'}</code></pre><div className="space-y-3"><div className="rounded-xl border border-white/10 bg-white/5 p-3"><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Schedule</p><code className="mt-2 block text-sm font-semibold text-violet-200">0 9 * * 1</code><p className="mt-1 text-xs leading-5 text-slate-400">Every Monday, 09:00 UTC</p></div><div className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 p-3"><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-300">Latest run</p><p className="mt-2 text-sm font-semibold text-emerald-100">Success</p><p className="mt-1 text-xs text-emerald-200/70">Completed in 143 ms</p></div></div></div></div></section>
 
     <section className="mx-auto grid max-w-7xl gap-8 px-5 py-20 sm:px-8 lg:grid-cols-[1fr_.9fr] lg:items-center"><div><p className="text-sm font-bold uppercase tracking-[0.15em] text-blue-600">Bring your own workflow</p><h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">Your storage, accessible your way.</h2><p className="mt-4 max-w-xl text-base leading-7 text-slate-600">The browser experience is built for everyday file work. The bundled command-line tool and TypeScript SDK let your own machines send files directly into the same private Drive.</p><a className="mt-6 inline-flex items-center gap-2 text-sm font-bold text-blue-700 hover:text-blue-900" href={docsUrl()}>See upload guides <ArrowUpRight size={16} /></a></div><div className="rounded-2xl bg-slate-950 p-5 shadow-xl shadow-slate-900/15 sm:p-7"><div className="flex items-center gap-2 text-xs font-semibold text-slate-400"><Terminal size={16} /> Terminal</div><pre className="mt-5 overflow-x-auto text-sm leading-7 text-slate-200"><code><span className="text-cyan-300">zo-drive</span> upload ./launch-plan.pdf <span className="text-amber-300">--path</span> Product/Launch{`\n\n`}<span className="text-slate-500"># Uploaded Product/Launch/launch-plan.pdf</span></code></pre></div></section>
 
@@ -673,7 +685,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
       modifiedAfter: isRecent ? recentDateRange?.after : advancedDateRange?.after,
       modifiedBefore: isRecent ? recentDateRange?.before : advancedDateRange?.before
     }),
-    enabled: section !== "api-keys" && section !== "databases" && section !== "shared" && section !== "starred" && section !== "transfer" && section !== "trash"
+    enabled: section !== "api-keys" && section !== "databases" && section !== "functions" && section !== "shared" && section !== "starred" && section !== "transfer" && section !== "trash"
   });
   const foldersQuery = useQuery({
     queryKey: ["folders", currentPath],
@@ -985,6 +997,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
             <div className={`${sidebarOpen ? "my-3" : "mx-auto my-3 w-7"} border-t border-slate-200`} role="separator" />
             <button aria-label="Zo Paste" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "pastes" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"} ${collapsedNavigationTooltip(sidebarOpen)}`} data-tooltip="Zo Paste" onClick={() => { setSection("pastes"); setCurrentPath(""); }} title="Zo Paste"><Code2 size={18} />{sidebarOpen && <span>Zo Paste</span>}</button>
             <button aria-label="Zo Transfer" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "transfer" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"} ${collapsedNavigationTooltip(sidebarOpen)}`} data-tooltip="Zo Transfer" onClick={() => { setSection("transfer"); setCurrentPath(""); }} title="Zo Transfer"><Send size={18} />{sidebarOpen && <span>Zo Transfer</span>}</button>
+            <button aria-label="Zo Functions" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "functions" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"} ${collapsedNavigationTooltip(sidebarOpen)}`} data-tooltip="Zo Functions" onClick={() => { setSection("functions"); setCurrentPath(""); }} title="Zo Functions"><Terminal size={18} />{sidebarOpen && <span>Zo Functions</span>}</button>
             <button aria-label="Zo Databases" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "databases" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"} ${collapsedNavigationTooltip(sidebarOpen)}`} data-tooltip="Zo Databases" onClick={() => { updateDriveUrl({ database: null, databasePanel: null, databaseView: "catalog", table: null }); setSection("databases"); setCurrentPath(""); }} title="Zo Databases"><Database size={18} />{sidebarOpen && <span>Zo Databases</span>}</button>
           </nav>
 
@@ -995,9 +1008,10 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
           <div className="mb-7 flex flex-wrap items-center justify-between gap-4">
             <div>
               {section === "my-drive" && currentPath && <FolderNavigation currentPath={currentPath} onNavigate={setCurrentPath} />}
-              <h1 className={`${section === "my-drive" && currentPath ? "mt-3" : ""} text-2xl font-semibold tracking-tight text-slate-900`}>{search || advancedSearchActive ? "Search results" : section === "api-keys" ? "API Keys" : section === "databases" ? "Zo Databases" : section === "profile" ? "Profile & controls" : section === "home" ? "Recent" : section === "pastes" ? "Zo Paste" : section === "transfer" ? "Zo Transfer" : section === "shared" ? "Shared with others" : section === "starred" ? "Starred" : section === "trash" ? "Trash" : currentPath ? currentPath.split("/").at(-1) : "Files"}</h1>
+              <h1 className={`${section === "my-drive" && currentPath ? "mt-3" : ""} text-2xl font-semibold tracking-tight text-slate-900`}>{search || advancedSearchActive ? "Search results" : section === "api-keys" ? "API Keys" : section === "databases" ? "Zo Databases" : section === "functions" ? "Zo Functions" : section === "profile" ? "Profile & controls" : section === "home" ? "Recent" : section === "pastes" ? "Zo Paste" : section === "transfer" ? "Zo Transfer" : section === "shared" ? "Shared with others" : section === "starred" ? "Starred" : section === "trash" ? "Trash" : currentPath ? currentPath.split("/").at(-1) : "Files"}</h1>
               {section === "api-keys" && <p className="mt-1 text-sm text-slate-500">Provision and revoke scoped access for local computers and automations.</p>}
               {section === "databases" && <p className="mt-1 text-sm text-slate-500">Choose a lightweight open-source database, then keep its data private in your Drive.</p>}
+              {section === "functions" && <p className="mt-1 text-sm text-slate-500">Store, run, and schedule small JavaScript or Python functions.</p>}
               {section === "profile" && <p className="mt-1 text-sm text-slate-500">Manage the owner account for this private drive.</p>}
               {section === "home" && <p className="mt-1 text-sm text-slate-500">Files you recently created, uploaded, or updated.</p>}
               {section === "pastes" && <p className="mt-1 text-sm text-slate-500">Create, keep, and securely share code or text snippets.</p>}
@@ -1005,7 +1019,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
               {section === "shared" && <p className="mt-1 text-sm text-slate-500">Manage links you have shared outside your drive.</p>}
               {section === "trash" && <p className="mt-1 text-sm text-slate-500">Items are permanently deleted 30 days after being moved here.</p>}
             </div>
-            {section === "trash" && trashItems.length > 0 ? <button className="rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50" onClick={() => void emptyTrash()}>Empty trash</button> : section === "pastes" ? <button className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800" onClick={() => startNativeFile("paste")}><Plus size={17} /> New paste</button> : section !== "home" && section !== "transfer" && section !== "api-keys" && section !== "databases" && section !== "profile" && <div className="flex rounded-lg border border-slate-200 bg-white p-1">
+            {section === "trash" && trashItems.length > 0 ? <button className="rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50" onClick={() => void emptyTrash()}>Empty trash</button> : section === "pastes" ? <button className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800" onClick={() => startNativeFile("paste")}><Plus size={17} /> New paste</button> : section !== "home" && section !== "transfer" && section !== "api-keys" && section !== "databases" && section !== "functions" && section !== "profile" && <div className="flex rounded-lg border border-slate-200 bg-white p-1">
               <button aria-label="List view" className={`rounded-md p-2 ${viewMode === "list" ? "bg-slate-100 text-slate-900" : "text-slate-400"}`} onClick={() => setViewMode("list")}><List size={18} /></button>
               <button aria-label="Grid view" className={`rounded-md p-2 ${viewMode === "grid" ? "bg-slate-100 text-slate-900" : "text-slate-400"}`} onClick={() => setViewMode("grid")}><Grid2X2 size={18} /></button>
             </div>}
@@ -1013,7 +1027,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
 
           {section === "home" && <RecentFiltersBar filters={recentFilters} onChange={setRecentFilters} />}
 
-          {section === "api-keys" ? <ApiKeys client={client} /> : section === "databases" ? <Databases client={client} /> : section === "profile" ? <AccountScreen client={authClient} onAccountDeleted={onAccountDeleted} user={user} /> : section === "transfer" ? <ZoTransfer client={client} onCreated={async () => { await refresh(); await queryClient.invalidateQueries({ queryKey: ["shares"] }); }} /> : section === "pastes" ? <ZoPaste files={displayedFiles} isError={filesQuery.isError} isLoading={isLoading} onCreate={() => startNativeFile("paste")} onDelete={(key) => deleteMutation.mutate(key)} onPreview={openPreview} onRetry={() => void filesQuery.refetch()} onShare={(file) => { setShareSettings(null); setShareFile(file); }} onToggleStar={(file) => starMutation.mutate({ key: file.key, starred: file.starred })} /> : isLoading ? (
+          {section === "api-keys" ? <ApiKeys client={client} /> : section === "databases" ? <Databases client={client} /> : section === "functions" ? <Functions client={client} /> : section === "profile" ? <AccountScreen client={authClient} onAccountDeleted={onAccountDeleted} user={user} /> : section === "transfer" ? <ZoTransfer client={client} onCreated={async () => { await refresh(); await queryClient.invalidateQueries({ queryKey: ["shares"] }); }} /> : section === "pastes" ? <ZoPaste files={displayedFiles} isError={filesQuery.isError} isLoading={isLoading} onCreate={() => startNativeFile("paste")} onDelete={(key) => deleteMutation.mutate(key)} onPreview={openPreview} onRetry={() => void filesQuery.refetch()} onShare={(file) => { setShareSettings(null); setShareFile(file); }} onToggleStar={(file) => starMutation.mutate({ key: file.key, starred: file.starred })} /> : isLoading ? (
             <div className="grid h-64 place-items-center text-sm text-slate-500"><LoaderCircle className="mr-2 animate-spin" size={20} /> Loading your drive…</div>
           ) : (section === "shared" ? sharesQuery.isError : section === "starred" ? starredQuery.isError : section === "trash" ? trashQuery.isError : filesQuery.isError) ? (
             <EmptyState
@@ -1061,10 +1075,78 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
         return updatedUsage;
       }} />}
       {uploadDialogOpen && <UploadDialog onClose={() => setUploadDialogOpen(false)} onChooseFiles={() => { setUploadDialogOpen(false); fileInput.current?.click(); }} onChooseFolder={() => { setUploadDialogOpen(false); folderInput.current?.click(); }} onDrop={(dataTransfer) => { setUploadDialogOpen(false); return uploadDroppedItems(dataTransfer); }} />}
-      {uploads.length === 0 && section !== "databases" && <button aria-label="Open upload menu" className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-900/25 transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200" onClick={() => setUploadDialogOpen(true)}><Upload size={18} /> Upload</button>}
+      {uploads.length === 0 && section !== "databases" && section !== "functions" && <button aria-label="Open upload menu" className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-900/25 transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200" onClick={() => setUploadDialogOpen(true)}><Upload size={18} /> Upload</button>}
       {uploads.length > 0 && <UploadProgress uploads={uploads} />}
     </main>
   );
+}
+
+function Functions({ client }: { client: DriveClient }) {
+  const queryClient = useQueryClient();
+  const supported = Boolean(client.createFunction && client.deleteFunction && client.listFunctions && client.listFunctionRuns && client.runFunction && client.updateFunction);
+  const functionsQuery = useQuery({ queryKey: ["functions"], queryFn: () => client.listFunctions!(), enabled: supported });
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [name, setName] = useState("hello-world");
+  const [runtime, setRuntime] = useState<FunctionRuntime>("javascript");
+  const [source, setSource] = useState(defaultFunctionSource("javascript"));
+  const [visibility, setVisibility] = useState<FunctionVisibility>("private");
+  const [cron, setCron] = useState("");
+  const [enabled, setEnabled] = useState(true);
+  const [input, setInput] = useState("{\n  \"name\": \"Zo\"\n}");
+  const selected = (functionsQuery.data ?? []).find((fn) => fn.id === selectedId) ?? null;
+  const runsQuery = useQuery({ queryKey: ["function-runs", selectedId], queryFn: () => client.listFunctionRuns!(selectedId!), enabled: supported && Boolean(selectedId) });
+
+  useEffect(() => {
+    if (selected || selectedId) return;
+    const first = functionsQuery.data?.[0];
+    if (first) loadFunction(first);
+  }, [functionsQuery.data, selected, selectedId]);
+
+  function loadFunction(fn: DriveFunction) {
+    setSelectedId(fn.id); setName(fn.name); setRuntime(fn.runtime); setSource(fn.source); setVisibility(fn.visibility); setCron(fn.cron ?? ""); setEnabled(fn.enabled);
+  }
+
+  function newFunction() {
+    setSelectedId(null); setName("hello-world"); setRuntime("javascript"); setSource(defaultFunctionSource("javascript")); setVisibility("private"); setCron(""); setEnabled(true); setInput("{\n  \"name\": \"Zo\"\n}");
+  }
+
+  const saveMutation = useMutation({
+    mutationFn: () => selectedId ? client.updateFunction!({ id: selectedId, name: name.trim(), runtime, source, visibility, cron: cron.trim() || null, enabled }) : client.createFunction!({ name: name.trim(), runtime, source, visibility, cron: cron.trim() || null, enabled }),
+    onSuccess: async (fn) => { loadFunction(fn); await queryClient.invalidateQueries({ queryKey: ["functions"] }); toast.success(selectedId ? "Function saved" : "Function created"); },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not save function")
+  });
+  const runMutation = useMutation({
+    mutationFn: () => { let parsed: unknown; try { parsed = JSON.parse(input); } catch { throw new Error("Input must be valid JSON"); } return client.runFunction!(selectedId!, parsed); },
+    onSuccess: async (run) => { await queryClient.invalidateQueries({ queryKey: ["function-runs", selectedId] }); await queryClient.invalidateQueries({ queryKey: ["functions"] }); toast[run.status === "success" ? "success" : "error"](run.status === "success" ? "Function completed" : `Function ${run.status}`); },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not run function")
+  });
+  const deleteMutation = useMutation({
+    mutationFn: () => client.deleteFunction!(selectedId!),
+    onSuccess: async () => { newFunction(); await queryClient.invalidateQueries({ queryKey: ["functions"] }); toast.success("Function deleted"); },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not delete function")
+  });
+
+  if (!supported) return <section className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm"><h2 className="text-xl font-semibold text-slate-900">Functions are unavailable</h2><p className="mt-2 text-sm text-slate-500">Update the Zo Drive API and browser workspace together to use Zo Functions.</p></section>;
+  const endpoint = selected && selected.visibility === "public" ? `${window.location.origin}${appBasePath === "/" ? "" : appBasePath}/public/functions/${selected.id}/invoke` : null;
+  const runs = runsQuery.data ?? [];
+  return <div className="space-y-5">
+    <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 px-7 py-8 text-white shadow-sm md:px-9"><div className="absolute -right-20 -top-28 size-72 rounded-full bg-cyan-300/15 blur-3xl" /><div className="relative"><span className="inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-cyan-200/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100"><Terminal size={14} /> Serverless code, in your Drive</span><h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">Run small jobs without another service.</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">Store JavaScript or Python handlers, run them privately, expose an invocation endpoint when needed, and schedule enabled functions with UTC cron.</p></div></section>
+    <div className="grid gap-5 xl:grid-cols-[16rem_minmax(0,1fr)]"><aside className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="flex items-center justify-between border-b border-slate-100 p-4"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Functions</p><p className="mt-1 text-sm font-semibold text-slate-900">{(functionsQuery.data ?? []).length} saved</p></div><button aria-label="New function" className="grid size-9 place-items-center rounded-lg bg-blue-600 text-white hover:bg-blue-700" onClick={newFunction}><Plus size={18} /></button></div>{functionsQuery.isPending ? <p className="p-5 text-sm text-slate-500">Loading functions…</p> : (functionsQuery.data ?? []).length === 0 ? <p className="p-5 text-sm leading-6 text-slate-500">Create a function to get started.</p> : <div className="p-2">{functionsQuery.data?.map((fn) => <button className={`mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left ${fn.id === selectedId ? "bg-blue-600 text-white shadow-sm" : "text-slate-700 hover:bg-slate-50"}`} key={fn.id} onClick={() => loadFunction(fn)}><span className={`grid size-9 place-items-center rounded-lg ${fn.id === selectedId ? "bg-white/15" : "bg-slate-100 text-slate-500"}`}><Terminal size={17} /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{fn.name}</span><span className={`mt-0.5 block text-xs ${fn.id === selectedId ? "text-blue-100" : "text-slate-400"}`}>{fn.runtime} · {fn.enabled ? "enabled" : "paused"}</span></span></button>)}</div>}</aside>
+    <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50 px-5 py-4"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600">{selected ? "Function editor" : "New function"}</p><p className="mt-1 text-sm text-slate-500">Handlers receive JSON input and must return JSON-serialisable data.</p></div><div className="flex gap-2"><button className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-white disabled:text-slate-400" disabled={!selectedId || deleteMutation.isPending} onClick={() => { if (window.confirm(`Delete ${name}?`)) deleteMutation.mutate(); }}>Delete</button><button className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-300" disabled={!name.trim() || !source.trim() || saveMutation.isPending} onClick={() => saveMutation.mutate()}>{saveMutation.isPending ? "Saving…" : selected ? "Save changes" : "Create function"}</button></div></div>
+      <div className="grid gap-5 p-5 lg:grid-cols-[minmax(0,1fr)_17rem]"><div><div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-slate-700">Name<input aria-label="Function name" className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" maxLength={80} value={name} onChange={(event) => setName(event.target.value)} /></label><label className="text-sm font-semibold text-slate-700">Runtime<select aria-label="Function runtime" className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" value={runtime} onChange={(event) => { const next = event.target.value as FunctionRuntime; setRuntime(next); if (!selected) setSource(defaultFunctionSource(next)); }}><option value="javascript">JavaScript</option><option value="python">Python</option></select></label></div><label className="mt-4 block text-sm font-semibold text-slate-700">Source code<textarea aria-label="Function source code" className="mt-1.5 min-h-80 w-full resize-y rounded-xl border border-slate-800 bg-slate-950 p-4 font-mono text-xs leading-6 text-slate-100 outline-none focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100" spellCheck={false} value={source} onChange={(event) => setSource(event.target.value)} /></label></div>
+        <div className="space-y-4"><fieldset><legend className="text-sm font-semibold text-slate-700">Invocation</legend><div className="mt-2 grid gap-2"><button className={`rounded-lg border p-3 text-left text-sm ${visibility === "private" ? "border-blue-500 bg-blue-50 text-blue-800" : "border-slate-200 text-slate-600"}`} onClick={() => setVisibility("private")} type="button"><strong className="block">Private</strong><span className="mt-1 block text-xs">Only your Drive session can run it.</span></button><button className={`rounded-lg border p-3 text-left text-sm ${visibility === "public" ? "border-blue-500 bg-blue-50 text-blue-800" : "border-slate-200 text-slate-600"}`} onClick={() => setVisibility("public")} type="button"><strong className="block">Public endpoint</strong><span className="mt-1 block text-xs">Anyone can invoke it; source stays private.</span></button></div></fieldset><label className="block text-sm font-semibold text-slate-700">UTC cron (optional)<input aria-label="Function cron schedule" className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-mono text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" placeholder="0 9 * * 1-5" value={cron} onChange={(event) => setCron(event.target.value)} /><span className="mt-1 block text-xs font-normal leading-5 text-slate-500">Five fields: minute hour day month weekday. Example: weekdays at 09:00 UTC.</span></label><label className="flex cursor-pointer items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm font-semibold text-slate-700">Enabled<input aria-label="Function enabled" checked={enabled} className="size-4 accent-blue-600" type="checkbox" onChange={(event) => setEnabled(event.target.checked)} /></label>{endpoint && <div className="rounded-xl border border-cyan-200 bg-cyan-50 p-3"><p className="text-xs font-bold uppercase tracking-wide text-cyan-800">Public invoke URL</p><code className="mt-2 block break-all text-xs leading-5 text-cyan-950">POST {endpoint}</code><button className="mt-2 text-xs font-semibold text-cyan-800 hover:text-cyan-950" onClick={() => void copyText(endpoint, "Public function endpoint copied")}>Copy endpoint</button></div>}</div></div>
+      {selectedId && <div className="grid gap-5 border-t border-slate-100 bg-slate-50 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"><div><div className="flex items-center justify-between"><div><h3 className="font-semibold text-slate-900">Test run</h3><p className="mt-1 text-xs text-slate-500">Run the saved function with any JSON value.</p></div><button className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:bg-slate-300" disabled={runMutation.isPending} onClick={() => runMutation.mutate()}>{runMutation.isPending ? "Running…" : "Run now"}</button></div><textarea aria-label="Function input JSON" className="mt-3 min-h-32 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 font-mono text-xs leading-6 text-slate-100 outline-none focus:border-cyan-400" spellCheck={false} value={input} onChange={(event) => setInput(event.target.value)} /></div><div><h3 className="font-semibold text-slate-900">Recent runs</h3><p className="mt-1 text-xs text-slate-500">Last 30 runs, including scheduled and public invocations.</p><div className="mt-3 max-h-52 space-y-2 overflow-auto">{runsQuery.isPending ? <p className="text-sm text-slate-500">Loading runs…</p> : runs.length === 0 ? <p className="text-sm text-slate-500">No runs yet.</p> : runs.map((run) => <FunctionRunRow key={run.id} run={run} />)}</div></div></div>}
+    </section></div>
+  </div>;
+}
+
+function FunctionRunRow({ run }: { run: DriveFunctionRun }) {
+  const [open, setOpen] = useState(false);
+  return <article className="rounded-lg border border-slate-200 bg-white p-3"><button className="flex w-full items-center gap-2 text-left" onClick={() => setOpen((value) => !value)}><span className={`size-2 rounded-full ${run.status === "success" ? "bg-emerald-500" : run.status === "timeout" ? "bg-amber-500" : "bg-red-500"}`} /><span className="flex-1 text-xs font-semibold text-slate-700">{run.trigger} · {run.status}</span><span className="text-xs text-slate-400">{formatDate(run.finishedAt)}</span></button>{open && <pre className="mt-3 max-h-40 overflow-auto rounded-md bg-slate-950 p-3 text-xs leading-5 text-slate-100"><code>{run.status === "success" ? JSON.stringify(run.output, null, 2) : run.logs || "No error output"}</code></pre>}</article>;
+}
+
+function defaultFunctionSource(runtime: FunctionRuntime): string {
+  return runtime === "javascript" ? `export default async function handler(input) {\n  return { message: \`Hello, \${input.name ?? "world"}!\`, input };\n}` : `def handler(input):\n    return {"message": f"Hello, {input.get('name', 'world')}!", "input": input}`;
 }
 
 function Databases({ client }: { client: DriveClient }) {
@@ -1074,24 +1156,28 @@ function Databases({ client }: { client: DriveClient }) {
   const [selectedTable, setSelectedTable] = useState<string | null>(() => new URLSearchParams(window.location.search).get("table"));
   const [activePanel, setActivePanel] = useState<DatabasePanel>(currentDatabasePanel);
   const [databaseView, setDatabaseView] = useState<DatabaseView>(currentDatabaseView);
+  const [sqliteInstalledLocally, setSqliteInstalledLocally] = useState(false);
   const [importSettingsOpen, setImportSettingsOpen] = useState(false);
   const [sql, setSql] = useState("SELECT name, sql FROM sqlite_master WHERE type = 'table' ORDER BY name");
   const [queryResult, setQueryResult] = useState<DatabaseRows | null>(null);
   const importInput = useRef<HTMLInputElement>(null);
-  const supported = Boolean(client.listDatabases && client.createDatabase && client.deleteDatabase && client.exportDatabase && client.getDatabaseImportSettings && client.importDatabase && client.listDatabaseTables && client.listDatabaseRows && client.queryDatabase && client.setDatabaseImportLimit);
+  const supported = Boolean(client.listDatabases && client.createDatabase && client.deleteDatabase && client.exportDatabase && client.getDatabaseImportSettings && client.importDatabase && client.installDatabaseEngine && client.listDatabaseApiKeys && client.listDatabaseEngines && client.listDatabaseTables && client.listDatabaseRows && client.queryDatabase && client.setDatabaseImportLimit);
+  const enginesQuery = useQuery({ queryKey: ["database-engines"], queryFn: () => client.listDatabaseEngines!(), enabled: supported });
+  const sqliteEngine = enginesQuery.data?.find((engine) => engine.engine === "sqlite");
+  const sqliteInstalled = sqliteInstalledLocally || sqliteEngine?.installed === true;
   const databasesQuery = useQuery({
     queryKey: ["databases"],
     queryFn: () => client.listDatabases!(),
     enabled: supported
   });
   const databases = databasesQuery.data ?? [];
-  const importSettingsQuery = useQuery({ queryKey: ["database-import-settings"], queryFn: () => client.getDatabaseImportSettings!(), enabled: supported });
+  const importSettingsQuery = useQuery({ queryKey: ["database-import-settings"], queryFn: () => client.getDatabaseImportSettings!(), enabled: supported && sqliteInstalled });
   const selectedDatabase = databases.find((database) => database.id === selectedId) ?? databases[0] ?? null;
   const activeDatabase = databaseView === "instances" ? selectedDatabase : null;
   const tablesQuery = useQuery({
     queryKey: ["database-tables", activeDatabase?.id],
     queryFn: () => client.listDatabaseTables!(activeDatabase!.id),
-    enabled: supported && Boolean(activeDatabase)
+    enabled: supported && sqliteInstalled && Boolean(activeDatabase)
   });
   const tables = tablesQuery.data ?? [];
   const activeTable = tables.find((table) => table.name === selectedTable) ?? tables[0] ?? null;
@@ -1119,7 +1205,7 @@ function Databases({ client }: { client: DriveClient }) {
   const rowsQuery = useQuery({
     queryKey: ["database-rows", activeDatabase?.id, activeTable?.name],
     queryFn: () => client.listDatabaseRows!({ id: activeDatabase!.id, table: activeTable!.name }),
-    enabled: supported && Boolean(activeDatabase && activeTable)
+    enabled: supported && sqliteInstalled && Boolean(activeDatabase && activeTable)
   });
   const createMutation = useMutation({
     mutationFn: () => client.createDatabase!(name.trim()),
@@ -1132,6 +1218,15 @@ function Databases({ client }: { client: DriveClient }) {
       toast.success(`${database.name} created`);
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Could not create the database")
+  });
+  const installEngineMutation = useMutation({
+    mutationFn: () => client.installDatabaseEngine!("sqlite"),
+    onSuccess: (installation) => {
+      setSqliteInstalledLocally(true);
+      queryClient.setQueryData(["database-engines"], (engines: typeof enginesQuery.data) => engines?.map((engine) => engine.engine === installation.engine ? installation : engine) ?? [installation]);
+      toast.success("SQLite installed. Create or import a database to get started.");
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not install SQLite")
   });
   const deleteMutation = useMutation({
     mutationFn: (id: string) => client.deleteDatabase!(id),
@@ -1206,8 +1301,10 @@ function Databases({ client }: { client: DriveClient }) {
     { id: "access" as const, label: "Backend access" }
   ];
 
-  return <><nav aria-label="Database views" className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm"><button aria-current={databaseView === "catalog" ? "page" : undefined} className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${databaseView === "catalog" ? "bg-slate-900 text-white shadow-sm" : "text-slate-500 hover:text-slate-900"}`} onClick={() => setDatabaseView("catalog")} type="button">Catalog</button><button aria-current={databaseView === "instances" ? "page" : undefined} className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${databaseView === "instances" ? "bg-slate-900 text-white shadow-sm" : "text-slate-500 hover:text-slate-900"}`} onClick={() => setDatabaseView("instances")} type="button">Your databases <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-xs ${databaseView === "instances" ? "bg-white/15 text-white" : "bg-slate-100 text-slate-500"}`}>{databases.length}</span></button></nav>
-  {databaseView === "catalog" ? <DatabaseCatalog databaseCount={databases.length} onChooseSQLite={() => setDatabaseView("instances")} onViewDatabases={() => setDatabaseView("instances")} /> : <div className="grid gap-5 md:grid-cols-[15rem_minmax(0,1fr)]">
+  const showWorkspace = databaseView === "instances" && sqliteInstalled;
+
+  return <><nav aria-label="Database views" className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm"><button aria-current={!showWorkspace ? "page" : undefined} className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${!showWorkspace ? "bg-slate-900 text-white shadow-sm" : "text-slate-500 hover:text-slate-900"}`} onClick={() => setDatabaseView("catalog")} type="button">Catalog</button><button aria-current={showWorkspace ? "page" : undefined} className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${showWorkspace ? "bg-slate-900 text-white shadow-sm" : "text-slate-500 hover:text-slate-900"}`} disabled={!sqliteInstalled} onClick={() => setDatabaseView("instances")} title={sqliteInstalled ? undefined : "Install SQLite to open your databases"} type="button">Your databases <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-xs ${showWorkspace ? "bg-white/15 text-white" : "bg-slate-100 text-slate-500"}`}>{databases.length}</span></button></nav>
+  {!showWorkspace ? <DatabaseCatalog databaseCount={databases.length} isInstalling={installEngineMutation.isPending} sqliteInstalled={sqliteInstalled} onChooseSQLite={() => setDatabaseView("instances")} onInstallSQLite={() => installEngineMutation.mutate()} onViewDatabases={() => setDatabaseView("instances")} /> : <div className="grid gap-5 md:grid-cols-[15rem_minmax(0,1fr)]">
     <aside className="self-stretch overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-100 p-4">
         <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">SQLite</p><h2 className="mt-1 text-lg font-semibold text-slate-900">Your instances</h2></div><span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-500">{databases.length}</span></div>
@@ -1231,9 +1328,9 @@ function Databases({ client }: { client: DriveClient }) {
   </div>}{importSettingsOpen && importSettingsQuery.data && <DatabaseImportSettingsDialog isSaving={updateImportLimitMutation.isPending} onClose={() => setImportSettingsOpen(false)} onSave={(importLimitBytes) => updateImportLimitMutation.mutate(importLimitBytes)} settings={importSettingsQuery.data} />}</>;
 }
 
-function DatabaseCatalog({ databaseCount, onChooseSQLite, onViewDatabases }: { databaseCount: number; onChooseSQLite: () => void; onViewDatabases: () => void }) {
+function DatabaseCatalog({ databaseCount, isInstalling, onChooseSQLite, onInstallSQLite, onViewDatabases, sqliteInstalled }: { databaseCount: number; isInstalling: boolean; onChooseSQLite: () => void; onInstallSQLite: () => void; onViewDatabases: () => void; sqliteInstalled: boolean | undefined }) {
   const engines = [
-    { name: "SQLite", category: "Relational", description: "A dependable, single-file SQL database for products, automations, and local apps.", detail: "Embedded · SQL · single file", icon: Database, status: "Available now" },
+    { name: "SQLite", category: "Relational", description: "A dependable, single-file SQL database for products, automations, and local apps.", detail: "Embedded · SQL · single file", icon: Database, status: sqliteInstalled ? "Installed" : "Ready to install" },
     { name: "DuckDB", category: "Analytics", description: "Fast in-process analytics for parquet files, reports, and analytical workloads.", detail: "Columnar · OLAP · embedded", icon: Sigma, status: "Planned" },
     { name: "libSQL", category: "Relational", description: "A SQLite-compatible engine built for modern app workflows and replication.", detail: "SQL · SQLite-compatible", icon: Cloud, status: "Planned" },
     { name: "PGlite", category: "Relational", description: "A compact PostgreSQL runtime for local-first applications and familiar Postgres SQL.", detail: "Postgres-compatible · local", icon: HardDrive, status: "Planned" },
@@ -1242,10 +1339,10 @@ function DatabaseCatalog({ databaseCount, onChooseSQLite, onViewDatabases }: { d
   ];
 
   return <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-    <div className="relative overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 px-7 py-9 text-white md:px-10"><div className="absolute -right-28 -top-32 size-80 rounded-full bg-cyan-400/15 blur-3xl" /><div className="absolute -bottom-36 left-1/3 size-72 rounded-full bg-blue-500/10 blur-3xl" /><div className="relative flex flex-wrap items-start justify-between gap-5"><div><span className="inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-cyan-200/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100"><Database size={14} /> Ready to build</span><h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">Build with Zo Databases</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300 md:text-base">Choose a lightweight open-source engine, then keep its data private in your Drive. SQLite is ready today; the catalog shows what is next.</p><p className="mt-4 text-xs font-medium text-cyan-100/80">Built for data you control.</p></div>{databaseCount > 0 && <button className="rounded-lg border border-white/15 bg-white/10 px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-white/20" onClick={onViewDatabases} type="button">View your databases <span className="ml-1.5 rounded-full bg-white/15 px-1.5 py-0.5 text-xs text-cyan-50">{databaseCount}</span></button>}</div></div>
-    <div className="border-b border-slate-100 bg-slate-50 px-6 py-4 sm:px-8"><p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Open-source database catalog</p><p className="mt-1 text-sm text-slate-600">Select an engine to see what it is built for. Available engines open directly in Zo Drive.</p></div>
+    <div className="relative overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 px-7 py-9 text-white md:px-10"><div className="absolute -right-28 -top-32 size-80 rounded-full bg-cyan-400/15 blur-3xl" /><div className="absolute -bottom-36 left-1/3 size-72 rounded-full bg-blue-500/10 blur-3xl" /><div className="relative flex flex-wrap items-start justify-between gap-5"><div><span className="inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-cyan-200/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100"><Database size={14} /> Install before you build</span><h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">Build with Zo Databases</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300 md:text-base">Choose a lightweight open-source engine, install it into your Drive, then create private databases and connect your applications.</p><p className="mt-4 text-xs font-medium text-cyan-100/80">Inspired by DBeaver + Cloud Hosting.</p></div>{sqliteInstalled && databaseCount > 0 && <button className="rounded-lg border border-white/15 bg-white/10 px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-white/20" onClick={onViewDatabases} type="button">View your databases <span className="ml-1.5 rounded-full bg-white/15 px-1.5 py-0.5 text-xs text-cyan-50">{databaseCount}</span></button>}</div></div>
+    <div className="border-b border-slate-100 bg-slate-50 px-6 py-4 sm:px-8"><p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Open-source database catalog</p><p className="mt-1 text-sm text-slate-600">Install an available engine before opening its workspace. Planned engines stay unavailable until Zo Drive can operate them safely.</p></div>
     <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6 xl:grid-cols-3">
-      {engines.map((engine) => { const Icon = engine.icon; const available = engine.status === "Available now"; return <article className={`group flex min-h-64 flex-col rounded-2xl border p-5 transition ${available ? "border-blue-300 bg-gradient-to-br from-blue-50 via-white to-white shadow-sm hover:-translate-y-0.5 hover:shadow-md" : "border-slate-200 bg-white hover:border-slate-300"}`} key={engine.name}><div className="flex items-start justify-between gap-3"><span className={`grid size-11 place-items-center rounded-xl ${available ? "bg-blue-600 text-white shadow-sm" : "bg-slate-100 text-slate-500"}`}><Icon size={21} /></span><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${available ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{engine.status}</span></div><div className="mt-5"><p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">{engine.category}</p><h3 className="mt-1.5 text-xl font-semibold text-slate-900">{engine.name}</h3><p className="mt-2 text-sm leading-6 text-slate-600">{engine.description}</p></div><div className="mt-auto pt-5"><p className="text-xs font-medium text-slate-400">{engine.detail}</p>{available ? <button aria-label="Open SQLite workspace" className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-blue-700" onClick={onChooseSQLite} type="button">Open workspace <ArrowUpRight size={16} /></button> : <p className="mt-4 text-sm font-semibold text-slate-400">Not available yet</p>}</div></article>;})}
+      {engines.map((engine) => { const Icon = engine.icon; const available = engine.name === "SQLite"; return <article className={`group flex min-h-64 flex-col rounded-2xl border p-5 transition ${available ? "border-blue-300 bg-gradient-to-br from-blue-50 via-white to-white shadow-sm hover:-translate-y-0.5 hover:shadow-md" : "border-slate-200 bg-white hover:border-slate-300"}`} key={engine.name}><div className="flex items-start justify-between gap-3"><span className={`grid size-11 place-items-center rounded-xl ${available ? "bg-blue-600 text-white shadow-sm" : "bg-slate-100 text-slate-500"}`}><Icon size={21} /></span><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${available ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{engine.status}</span></div><div className="mt-5"><p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">{engine.category}</p><h3 className="mt-1.5 text-xl font-semibold text-slate-900">{engine.name}</h3><p className="mt-2 text-sm leading-6 text-slate-600">{engine.description}</p></div><div className="mt-auto pt-5"><p className="text-xs font-medium text-slate-400">{engine.detail}</p>{available && !sqliteInstalled ? <button aria-label="Install SQLite" className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:bg-slate-400" disabled={isInstalling || sqliteInstalled === undefined} onClick={onInstallSQLite} type="button">{isInstalling ? "Installing…" : "Install SQLite"} <Download size={16} /></button> : available ? <button aria-label="Open SQLite workspace" className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-blue-700" onClick={onChooseSQLite} type="button">Open workspace <ArrowUpRight size={16} /></button> : <p className="mt-4 text-sm font-semibold text-slate-400">Not available yet</p>}</div></article>;})}
     </div>
     <div className="border-t border-slate-100 bg-slate-50 px-6 py-4 text-sm leading-6 text-slate-500 sm:px-8">The catalog is intentionally curated. New engines appear as available only after Zo Drive can provision, secure, back up, and expose them safely.</div>
   </section>;

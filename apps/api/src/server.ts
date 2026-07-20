@@ -10,6 +10,7 @@ import { LocalApiKeyStore } from "./auth/local-api-key-store.js";
 import { SessionService } from "./auth/session.js";
 import { LocalShareStore } from "./sharing/local-share-store.js";
 import { LocalFormStore } from "./forms/local-form-store.js";
+import { LocalFunctionStore } from "./functions/local-function-store.js";
 import { loadServerConfig } from "./server-config.js";
 import { LocalDriveStorage } from "./storage/local-drive-storage.js";
 
@@ -21,6 +22,7 @@ const sessions = new SessionService(sessionSecret);
 const apiKeys = new LocalApiKeyStore({ root: dataRoot });
 const shareStore = new LocalShareStore({ root: dataRoot });
 const formStore = new LocalFormStore({ root: dataRoot });
+const functionStore = new LocalFunctionStore(dataRoot);
 const storage = new LocalDriveStorage({ root: dataRoot });
 const maxDatabaseImportBytes = positiveIntegerEnvironmentVariable("ZO_DRIVE_MAX_DATABASE_IMPORT_BYTES", Number.MAX_SAFE_INTEGER);
 const webRoot = process.env.ZO_DRIVE_WEB_ROOT ?? resolve(dirname(fileURLToPath(import.meta.url)), "../../web/dist");
@@ -45,6 +47,7 @@ const app = createApp({
   trustProxy: config.rateLimit?.trustProxy ?? process.env.ZO_DRIVE_TRUST_PROXY === "true",
   sharing: shareStore,
   forms: formStore,
+  functions: functionStore,
   maxDatabaseImportBytes
 });
 
@@ -59,6 +62,18 @@ async function purgeExpiredTrash() {
 void purgeExpiredTrash();
 const trashCleanup = setInterval(() => void purgeExpiredTrash(), 60 * 60 * 1_000);
 trashCleanup.unref();
+
+async function runScheduledFunctions() {
+  try {
+    await functionStore.runDue();
+  } catch (error) {
+    console.error("Zo Functions scheduler failed", error);
+  }
+}
+
+void runScheduledFunctions();
+const functionScheduler = setInterval(() => void runScheduledFunctions(), 60_000);
+functionScheduler.unref();
 
 // A hosted Zo Drive is one private HTTP service. Serving the compiled UI from
 // the API keeps session cookies and browser requests on the same origin.

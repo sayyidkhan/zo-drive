@@ -107,6 +107,13 @@ export const driveDatabaseSchema = z.object({
   sizeBytes: z.number().int().nonnegative()
 });
 export const listDriveDatabasesResponseSchema = z.object({ databases: z.array(driveDatabaseSchema) });
+export const databaseEngineSchema = z.object({
+  engine: z.literal("sqlite"),
+  name: z.literal("SQLite"),
+  installed: z.boolean(),
+  installedAt: z.string().datetime().nullable()
+});
+export const listDatabaseEnginesResponseSchema = z.object({ engines: z.array(databaseEngineSchema) });
 export const databaseTableSchema = z.object({ name: z.string(), schema: z.string() });
 export const listDatabaseTablesResponseSchema = z.object({ tables: z.array(databaseTableSchema) });
 export const databaseRowsSchema = z.object({
@@ -138,6 +145,34 @@ export const databaseApiKeySchema = z.object({
 });
 export const createdDatabaseApiKeySchema = databaseApiKeySchema.extend({ apiKey: z.string() });
 export const listDatabaseApiKeysResponseSchema = z.object({ keys: z.array(databaseApiKeySchema) });
+
+export const functionRuntimeSchema = z.enum(["javascript", "python"]);
+export const functionVisibilitySchema = z.enum(["private", "public"]);
+export const driveFunctionSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  runtime: functionRuntimeSchema,
+  source: z.string(),
+  visibility: functionVisibilitySchema,
+  cron: z.string().nullable(),
+  enabled: z.boolean(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+  lastRunAt: z.string().datetime().nullable(),
+  lastRunStatus: z.enum(["success", "error", "timeout"]).nullable()
+});
+export const functionRunSchema = z.object({
+  id: z.string().uuid(),
+  functionId: z.string().uuid(),
+  startedAt: z.string().datetime(),
+  finishedAt: z.string().datetime(),
+  status: z.enum(["success", "error", "timeout"]),
+  output: z.unknown().nullable(),
+  logs: z.string(),
+  trigger: z.enum(["manual", "public", "schedule"])
+});
+export const listDriveFunctionsResponseSchema = z.object({ functions: z.array(driveFunctionSchema) });
+export const listFunctionRunsResponseSchema = z.object({ runs: z.array(functionRunSchema) });
 
 export const shareAccessSchema = z.enum(["public", "passcode"]);
 export const shareKindSchema = z.enum(["share", "transfer"]);
@@ -212,6 +247,7 @@ export type ApiKeyScope = z.infer<typeof apiKeyScopeSchema>;
 export type DriveApiKey = z.infer<typeof driveApiKeySchema>;
 export type CreatedDriveApiKey = z.infer<typeof createdDriveApiKeySchema>;
 export type DriveDatabase = z.infer<typeof driveDatabaseSchema>;
+export type DatabaseEngine = z.infer<typeof databaseEngineSchema>;
 export type DatabaseTable = z.infer<typeof databaseTableSchema>;
 export type DatabaseRows = z.infer<typeof databaseRowsSchema>;
 export type DatabaseQueryResult = z.infer<typeof databaseQueryResultSchema>;
@@ -219,6 +255,10 @@ export type DatabaseImportSettings = z.infer<typeof databaseImportSettingsSchema
 export type DatabaseApiKeyScope = z.infer<typeof databaseApiKeyScopeSchema>;
 export type DatabaseApiKey = z.infer<typeof databaseApiKeySchema>;
 export type CreatedDatabaseApiKey = z.infer<typeof createdDatabaseApiKeySchema>;
+export type FunctionRuntime = z.infer<typeof functionRuntimeSchema>;
+export type FunctionVisibility = z.infer<typeof functionVisibilitySchema>;
+export type DriveFunction = z.infer<typeof driveFunctionSchema>;
+export type DriveFunctionRun = z.infer<typeof functionRunSchema>;
 export type DriveShare = z.infer<typeof driveShareSchema>;
 export type ShareAccess = z.infer<typeof shareAccessSchema>;
 export type ShareKind = z.infer<typeof shareKindSchema>;

@@ -3,17 +3,21 @@ import {
   authStatusSchema,
   createdDatabaseApiKeySchema,
   databaseImportSettingsSchema,
+  databaseEngineSchema,
   databaseQueryResultSchema,
   databaseRowsSchema,
   databaseTableSchema,
   createdDriveApiKeySchema,
   driveDatabaseSchema,
+  driveFunctionSchema,
   driveUserSchema,
   driveShareSchema,
   formResponseSchema,
   listFormResponsesSchema,
   listDriveApiKeysResponseSchema,
   listDriveDatabasesResponseSchema,
+  listDriveFunctionsResponseSchema,
+  listDatabaseEnginesResponseSchema,
   listDatabaseApiKeysResponseSchema,
   listDatabaseTablesResponseSchema,
   listSharesResponseSchema,
@@ -26,9 +30,11 @@ import {
   listFoldersResponseSchema,
   listObjectsResponseSchema,
   listTrashResponseSchema,
+  listFunctionRunsResponseSchema,
+  functionRunSchema,
   storageUsageSchema
 } from "@zo-drive/types";
-import type { ApiKeyScope, AuthStatus, CreatedDatabaseApiKey, CreatedDriveApiKey, DatabaseApiKey, DatabaseApiKeyScope, DatabaseImportSettings, DatabaseQueryResult, DatabaseRows, DatabaseTable, DriveApiKey, DriveDatabase, DriveFolder, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, Health, NativeFileType, PublicShare, PublishedForm, ShareAccess, ShareKind, StorageUsage } from "@zo-drive/types";
+import type { ApiKeyScope, AuthStatus, CreatedDatabaseApiKey, CreatedDriveApiKey, DatabaseApiKey, DatabaseApiKeyScope, DatabaseEngine, DatabaseImportSettings, DatabaseQueryResult, DatabaseRows, DatabaseTable, DriveApiKey, DriveDatabase, DriveFolder, DriveFunction, DriveFunctionRun, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, FunctionRuntime, FunctionVisibility, Health, NativeFileType, PublicShare, PublishedForm, ShareAccess, ShareKind, StorageUsage } from "@zo-drive/types";
 
 type Fetcher = typeof fetch;
 
@@ -235,6 +241,16 @@ export class ZoDriveClient {
     return listDriveDatabasesResponseSchema.parse(await response.json()).databases;
   }
 
+  async listDatabaseEngines(): Promise<DatabaseEngine[]> {
+    const response = await this.request("/databases/engines", { method: "GET" });
+    return listDatabaseEnginesResponseSchema.parse(await response.json()).engines;
+  }
+
+  async installDatabaseEngine(engine: "sqlite"): Promise<DatabaseEngine> {
+    const response = await this.request(`/databases/engines/${engine}/install`, { method: "POST" });
+    return databaseEngineSchema.parse(await response.json());
+  }
+
   async createDatabase(name: string): Promise<DriveDatabase> {
     const response = await this.request("/databases", { body: JSON.stringify({ name }), headers: { "content-type": "application/json" }, method: "POST" });
     return driveDatabaseSchema.parse(await response.json());
@@ -295,6 +311,35 @@ export class ZoDriveClient {
 
   async revokeDatabaseApiKey({ databaseId, keyId }: { databaseId: string; keyId: string }): Promise<void> {
     await this.request(`/databases/${encodeURIComponent(databaseId)}/api-keys/${encodeURIComponent(keyId)}`, { method: "DELETE" });
+  }
+
+  async listFunctions(): Promise<DriveFunction[]> {
+    const response = await this.request("/functions", { method: "GET" });
+    return listDriveFunctionsResponseSchema.parse(await response.json()).functions;
+  }
+
+  async createFunction({ name, runtime, source, visibility = "private", cron = null, enabled = true }: { name: string; runtime: FunctionRuntime; source: string; visibility?: FunctionVisibility; cron?: string | null; enabled?: boolean }): Promise<DriveFunction> {
+    const response = await this.request("/functions", { body: JSON.stringify({ name, runtime, source, visibility, cron, enabled }), headers: { "content-type": "application/json" }, method: "POST" });
+    return driveFunctionSchema.parse(await response.json());
+  }
+
+  async updateFunction({ id, name, runtime, source, visibility, cron, enabled }: { id: string; name?: string; runtime?: FunctionRuntime; source?: string; visibility?: FunctionVisibility; cron?: string | null; enabled?: boolean }): Promise<DriveFunction> {
+    const response = await this.request(`/functions/${encodeURIComponent(id)}`, { body: JSON.stringify({ name, runtime, source, visibility, cron, enabled }), headers: { "content-type": "application/json" }, method: "PATCH" });
+    return driveFunctionSchema.parse(await response.json());
+  }
+
+  async deleteFunction(id: string): Promise<void> {
+    await this.request(`/functions/${encodeURIComponent(id)}`, { method: "DELETE" });
+  }
+
+  async runFunction(id: string, input: unknown = {}): Promise<DriveFunctionRun> {
+    const response = await this.request(`/functions/${encodeURIComponent(id)}/run`, { body: JSON.stringify({ input }), headers: { "content-type": "application/json" }, method: "POST" });
+    return functionRunSchema.parse(await response.json());
+  }
+
+  async listFunctionRuns(id: string): Promise<DriveFunctionRun[]> {
+    const response = await this.request(`/functions/${encodeURIComponent(id)}/runs`, { method: "GET" });
+    return listFunctionRunsResponseSchema.parse(await response.json()).runs;
   }
 
   async getAuthStatus(): Promise<AuthStatus> {

@@ -45,8 +45,54 @@ describe("Zo Drive API", () => {
     await expect(response.json()).resolves.toMatchObject({ error: { code: "UNAUTHORIZED" } });
   });
 
+  it("stores, runs, and publicly invokes owner-scoped functions", async () => {
+    const app = await createTestApp();
+    const created = await app.request("http://localhost/functions", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-test-user-id": "alice" },
+      body: JSON.stringify({ name: "greet", runtime: "javascript", source: "export default async function handler(input) { return { greeting: `Hello ${input.name}` }; }", visibility: "private", cron: "0 9 * * 1-5", enabled: true })
+    });
+    expect(created.status).toBe(201);
+    const fn = await created.json() as { id: string; visibility: string };
+    expect(fn.visibility).toBe("private");
+
+    const privateRun = await app.request(`http://localhost/functions/${fn.id}/run`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-test-user-id": "alice" },
+      body: JSON.stringify({ input: { name: "Zo" } })
+    });
+    expect(privateRun.status).toBe(200);
+    await expect(privateRun.json()).resolves.toMatchObject({ status: "success", output: { greeting: "Hello Zo" }, trigger: "manual" });
+
+    const privatePublicAttempt = await app.request(`http://localhost/public/functions/${fn.id}/invoke`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ input: { name: "World" } }) });
+    expect(privatePublicAttempt.status).toBe(404);
+
+    const updated = await app.request(`http://localhost/functions/${fn.id}`, { method: "PATCH", headers: { "content-type": "application/json", "x-test-user-id": "alice" }, body: JSON.stringify({ visibility: "public" }) });
+    expect(updated.status).toBe(200);
+    const publicRun = await app.request(`http://localhost/public/functions/${fn.id}/invoke`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ input: { name: "World" } }) });
+    expect(publicRun.status).toBe(200);
+    await expect(publicRun.json()).resolves.toMatchObject({ status: "success", output: { greeting: "Hello World" }, trigger: "public" });
+
+    const otherUser = await app.request("http://localhost/functions", { headers: { "x-test-user-id": "bob" } });
+    await expect(otherUser.json()).resolves.toEqual({ functions: [] });
+    const invalidCron = await app.request("http://localhost/functions", { method: "POST", headers: { "content-type": "application/json", "x-test-user-id": "alice" }, body: JSON.stringify({ name: "bad-cron", runtime: "python", source: "def handler(input): return input", cron: "every day", enabled: true }) });
+    expect(invalidCron.status).toBe(400);
+  });
+
   it("creates, browses, queries, and deletes an isolated SQLite database", async () => {
     const app = await createTestApp();
+    const engines = await app.request("http://localhost/databases/engines", { headers: { "x-test-user-id": "alice" } });
+    await expect(engines.json()).resolves.toEqual({ engines: [{ engine: "sqlite", name: "SQLite", installed: false, installedAt: null }] });
+    const blockedBeforeInstall = await app.request("http://localhost/databases", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-test-user-id": "alice" },
+      body: JSON.stringify({ name: "app-data" })
+    });
+    expect(blockedBeforeInstall.status).toBe(409);
+    await expect(blockedBeforeInstall.json()).resolves.toMatchObject({ error: { code: "DATABASE_ENGINE_NOT_INSTALLED" } });
+    const installed = await app.request("http://localhost/databases/engines/sqlite/install", { method: "POST", headers: { "x-test-user-id": "alice" } });
+    expect(installed.status).toBe(200);
+    await expect(installed.json()).resolves.toMatchObject({ engine: "sqlite", name: "SQLite", installed: true, installedAt: expect.any(String) });
     const created = await app.request("http://localhost/databases", {
       method: "POST",
       headers: { "content-type": "application/json", "x-test-user-id": "alice" },
@@ -134,6 +180,7 @@ describe("Zo Drive API", () => {
 
   it("issues database-scoped keys for external backends and enforces their access", async () => {
     const app = await createTestApp();
+    expect((await app.request("http://localhost/databases/engines/sqlite/install", { method: "POST", headers: { "x-test-user-id": "alice" } })).status).toBe(200);
     const createDatabase = async (name: string) => {
       const response = await app.request("http://localhost/databases", {
         method: "POST",
