@@ -71,6 +71,7 @@ type PublicFormClient = Pick<ZoDriveClient, "getPublicForm" | "submitFormRespons
 type ViewMode = "grid" | "list";
 type DriveSection = "api-keys" | "databases" | "home" | "my-drive" | "pastes" | "profile" | "shared" | "starred" | "transfer" | "trash";
 type DatabasePanel = "data" | "sql" | "access";
+type DatabaseView = "catalog" | "instances";
 type AdvancedFileType = "document" | "spreadsheet" | "presentation" | "form" | "paste" | "image" | "video" | "audio" | "pdf" | "other";
 type AdvancedFilters = {
   contentQuery: string;
@@ -116,6 +117,7 @@ const defaultRecentFilters: RecentFilters = {
 
 const driveSections: DriveSection[] = ["api-keys", "databases", "home", "my-drive", "pastes", "profile", "shared", "starred", "transfer", "trash"];
 const databasePanels: DatabasePanel[] = ["data", "sql", "access"];
+const databaseViews: DatabaseView[] = ["catalog", "instances"];
 
 function currentDriveSection(): DriveSection {
   const section = new URLSearchParams(window.location.search).get("section");
@@ -125,6 +127,12 @@ function currentDriveSection(): DriveSection {
 function currentDatabasePanel(): DatabasePanel {
   const panel = new URLSearchParams(window.location.search).get("databasePanel");
   return databasePanels.includes(panel as DatabasePanel) ? panel as DatabasePanel : "data";
+}
+
+function currentDatabaseView(): DatabaseView {
+  const view = new URLSearchParams(window.location.search).get("databaseView");
+  if (databaseViews.includes(view as DatabaseView)) return view as DatabaseView;
+  return new URLSearchParams(window.location.search).get("database") ? "instances" : "catalog";
 }
 
 function updateDriveUrl(changes: Record<string, string | null>) {
@@ -169,10 +177,15 @@ const appBasePath = normalizeAppBasePath(
 const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.3.1";
+const GUI_VERSION = "1.4.0";
 const CLI_VERSION = "1.2.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.4.0",
+    date: "20 July 2026",
+    changes: ["Added an open-source lightweight database catalog with SQLite available now and clearly labelled planned engines.", "Added configurable import limits for SQLite database files."]
+  },
   {
     version: "v1.3.1",
     date: "20 July 2026",
@@ -952,7 +965,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
             <div className={`${sidebarOpen ? "my-3" : "mx-auto my-3 w-7"} border-t border-slate-200`} role="separator" />
             <button aria-label="Zo Paste" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "pastes" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => { setSection("pastes"); setCurrentPath(""); }} title="Zo Paste"><Code2 size={18} />{sidebarOpen && <span>Zo Paste</span>}</button>
             <button aria-label="Zo Transfer" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "transfer" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => { setSection("transfer"); setCurrentPath(""); }} title="Zo Transfer"><Send size={18} />{sidebarOpen && <span>Zo Transfer</span>}</button>
-            <button aria-label="Zo Databases" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "databases" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => { setSection("databases"); setCurrentPath(""); }} title="Zo Databases"><Database size={18} />{sidebarOpen && <span>Zo Databases</span>}</button>
+            <button aria-label="Zo Databases" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "databases" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => { updateDriveUrl({ database: null, databasePanel: null, databaseView: "catalog", table: null }); setSection("databases"); setCurrentPath(""); }} title="Zo Databases"><Database size={18} />{sidebarOpen && <span>Zo Databases</span>}</button>
           </nav>
 
           {sidebarOpen && <UsageCard usage={usageQuery.data} onOpenBreakdown={() => setStorageBreakdownOpen(true)} />}
@@ -962,9 +975,9 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
           <div className="mb-7 flex flex-wrap items-center justify-between gap-4">
             <div>
               {section === "my-drive" && currentPath && <FolderNavigation currentPath={currentPath} onNavigate={setCurrentPath} />}
-              <h1 className={`${section === "my-drive" && currentPath ? "mt-3" : ""} text-2xl font-semibold tracking-tight text-slate-900`}>{search || advancedSearchActive ? "Search results" : section === "api-keys" ? "API Keys" : section === "databases" ? "SQLite databases" : section === "profile" ? "Profile & controls" : section === "home" ? "Recent" : section === "pastes" ? "Zo Paste" : section === "transfer" ? "Zo Transfer" : section === "shared" ? "Shared with others" : section === "starred" ? "Starred" : section === "trash" ? "Trash" : currentPath ? currentPath.split("/").at(-1) : "Files"}</h1>
+              <h1 className={`${section === "my-drive" && currentPath ? "mt-3" : ""} text-2xl font-semibold tracking-tight text-slate-900`}>{search || advancedSearchActive ? "Search results" : section === "api-keys" ? "API Keys" : section === "databases" ? "Zo Databases" : section === "profile" ? "Profile & controls" : section === "home" ? "Recent" : section === "pastes" ? "Zo Paste" : section === "transfer" ? "Zo Transfer" : section === "shared" ? "Shared with others" : section === "starred" ? "Starred" : section === "trash" ? "Trash" : currentPath ? currentPath.split("/").at(-1) : "Files"}</h1>
               {section === "api-keys" && <p className="mt-1 text-sm text-slate-500">Provision and revoke scoped access for local computers and automations.</p>}
-              {section === "databases" && <p className="mt-1 text-sm text-slate-500">Create SQLite databases, inspect data, and run parameterised SQL from your private Drive.</p>}
+              {section === "databases" && <p className="mt-1 text-sm text-slate-500">Choose a lightweight open-source database, then keep its data private in your Drive.</p>}
               {section === "profile" && <p className="mt-1 text-sm text-slate-500">Manage the owner account for this private drive.</p>}
               {section === "home" && <p className="mt-1 text-sm text-slate-500">Files you recently created, uploaded, or updated.</p>}
               {section === "pastes" && <p className="mt-1 text-sm text-slate-500">Create, keep, and securely share code or text snippets.</p>}
@@ -1040,6 +1053,7 @@ function Databases({ client }: { client: DriveClient }) {
   const [selectedId, setSelectedId] = useState<string | null>(() => new URLSearchParams(window.location.search).get("database"));
   const [selectedTable, setSelectedTable] = useState<string | null>(() => new URLSearchParams(window.location.search).get("table"));
   const [activePanel, setActivePanel] = useState<DatabasePanel>(currentDatabasePanel);
+  const [databaseView, setDatabaseView] = useState<DatabaseView>(currentDatabaseView);
   const [importSettingsOpen, setImportSettingsOpen] = useState(false);
   const [sql, setSql] = useState("SELECT name, sql FROM sqlite_master WHERE type = 'table' ORDER BY name");
   const [queryResult, setQueryResult] = useState<DatabaseRows | null>(null);
@@ -1052,7 +1066,8 @@ function Databases({ client }: { client: DriveClient }) {
   });
   const databases = databasesQuery.data ?? [];
   const importSettingsQuery = useQuery({ queryKey: ["database-import-settings"], queryFn: () => client.getDatabaseImportSettings!(), enabled: supported });
-  const activeDatabase = databases.find((database) => database.id === selectedId) ?? databases[0] ?? null;
+  const selectedDatabase = databases.find((database) => database.id === selectedId) ?? databases[0] ?? null;
+  const activeDatabase = databaseView === "instances" ? selectedDatabase : null;
   const tablesQuery = useQuery({
     queryKey: ["database-tables", activeDatabase?.id],
     queryFn: () => client.listDatabaseTables!(activeDatabase!.id),
@@ -1064,10 +1079,11 @@ function Databases({ client }: { client: DriveClient }) {
   useEffect(() => {
     updateDriveUrl({
       database: activeDatabase?.id ?? null,
+      databaseView: databaseView === "catalog" ? "catalog" : null,
       databasePanel: activeDatabase ? activePanel : null,
       table: activeDatabase && activePanel === "data" ? activeTable?.name ?? null : null
     });
-  }, [activeDatabase?.id, activePanel, activeTable?.name]);
+  }, [activeDatabase?.id, activePanel, activeTable?.name, databaseView]);
 
   useEffect(() => {
     const restoreWorkspace = () => {
@@ -1075,6 +1091,7 @@ function Databases({ client }: { client: DriveClient }) {
       setSelectedId(params.get("database"));
       setSelectedTable(params.get("table"));
       setActivePanel(currentDatabasePanel());
+      setDatabaseView(currentDatabaseView());
     };
     window.addEventListener("popstate", restoreWorkspace);
     return () => window.removeEventListener("popstate", restoreWorkspace);
@@ -1090,6 +1107,7 @@ function Databases({ client }: { client: DriveClient }) {
       setName("");
       setSelectedId(database.id);
       setSelectedTable(null);
+      setDatabaseView("instances");
       await queryClient.invalidateQueries({ queryKey: ["databases"] });
       toast.success(`${database.name} created`);
     },
@@ -1113,6 +1131,7 @@ function Databases({ client }: { client: DriveClient }) {
       setSelectedTable(null);
       setQueryResult(null);
       setActivePanel("data");
+      setDatabaseView("instances");
       await queryClient.invalidateQueries({ queryKey: ["databases"] });
       toast.success(`${database.name} imported`);
     },
@@ -1167,7 +1186,8 @@ function Databases({ client }: { client: DriveClient }) {
     { id: "access" as const, label: "Backend access" }
   ];
 
-  return <><div className="grid gap-5 md:grid-cols-[15rem_minmax(0,1fr)]">
+  return <><nav aria-label="Database views" className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm"><button aria-current={databaseView === "catalog" ? "page" : undefined} className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${databaseView === "catalog" ? "bg-slate-900 text-white shadow-sm" : "text-slate-500 hover:text-slate-900"}`} onClick={() => setDatabaseView("catalog")} type="button">Catalog</button><button aria-current={databaseView === "instances" ? "page" : undefined} className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${databaseView === "instances" ? "bg-slate-900 text-white shadow-sm" : "text-slate-500 hover:text-slate-900"}`} onClick={() => setDatabaseView("instances")} type="button">Your databases <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-xs ${databaseView === "instances" ? "bg-white/15 text-white" : "bg-slate-100 text-slate-500"}`}>{databases.length}</span></button></nav>
+  {databaseView === "catalog" ? <DatabaseCatalog databaseCount={databases.length} onChooseSQLite={() => setDatabaseView("instances")} onViewDatabases={() => setDatabaseView("instances")} /> : <div className="grid gap-5 md:grid-cols-[15rem_minmax(0,1fr)]">
     <aside className="self-stretch overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-100 p-4">
         <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">SQLite</p><h2 className="mt-1 text-lg font-semibold text-slate-900">Your instances</h2></div><span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-500">{databases.length}</span></div>
@@ -1176,7 +1196,7 @@ function Databases({ client }: { client: DriveClient }) {
         <button className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:text-slate-400" disabled={importMutation.isPending} onClick={() => importInput.current?.click()} type="button"><Upload size={16} />{importMutation.isPending ? "Importing…" : "Import SQLite file"}</button>
         <button className="mt-2 w-full text-center text-xs font-medium text-slate-500 hover:text-blue-600" onClick={() => setImportSettingsOpen(true)} type="button">Import limit: {formatBytes(importSettingsQuery.data?.importLimitBytes ?? 0)}</button>
       </div>
-      {databasesQuery.isPending ? <p className="p-5 text-sm text-slate-500">Loading databases…</p> : databases.length === 0 ? <p className="p-5 text-sm leading-6 text-slate-500">Create a private SQLite database to get started.</p> : <div className="p-2">{databases.map((database) => <button className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${activeDatabase?.id === database.id ? "bg-blue-600 text-white shadow-sm" : "text-slate-700 hover:bg-slate-50"}`} key={database.id} onClick={() => { setSelectedId(database.id); setSelectedTable(null); setQueryResult(null); setActivePanel("data"); }}><span className={`grid size-9 place-items-center rounded-lg ${activeDatabase?.id === database.id ? "bg-white/15 text-white" : "bg-slate-100 text-slate-500"}`}><Database size={18} /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{database.name}</span><span className={`mt-0.5 block text-xs font-medium ${activeDatabase?.id === database.id ? "text-blue-100" : "text-slate-400"}`}>{formatBytes(database.sizeBytes)}</span></span></button>)}</div>}
+      {databasesQuery.isPending ? <p className="p-5 text-sm text-slate-500">Loading databases…</p> : databases.length === 0 ? <p className="p-5 text-sm leading-6 text-slate-500">Create a private SQLite database to get started.</p> : <div className="p-2">{databases.map((database) => <button className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${activeDatabase?.id === database.id ? "bg-blue-600 text-white shadow-sm" : "text-slate-700 hover:bg-slate-50"}`} key={database.id} onClick={() => { setSelectedId(database.id); setSelectedTable(null); setQueryResult(null); setActivePanel("data"); setDatabaseView("instances"); }}><span className={`grid size-9 place-items-center rounded-lg ${activeDatabase?.id === database.id ? "bg-white/15 text-white" : "bg-slate-100 text-slate-500"}`}><Database size={18} /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{database.name}</span><span className={`mt-0.5 block text-xs font-medium ${activeDatabase?.id === database.id ? "text-blue-100" : "text-slate-400"}`}>{formatBytes(database.sizeBytes)}</span></span></button>)}</div>}
     </aside>
 
     <div className="min-w-0">
@@ -1188,7 +1208,28 @@ function Databases({ client }: { client: DriveClient }) {
         {activePanel === "access" && <div className="p-4 sm:p-6"><DatabaseConnection client={client} database={activeDatabase} /></div>}
       </section>}
     </div>
-  </div>{importSettingsOpen && importSettingsQuery.data && <DatabaseImportSettingsDialog isSaving={updateImportLimitMutation.isPending} onClose={() => setImportSettingsOpen(false)} onSave={(importLimitBytes) => updateImportLimitMutation.mutate(importLimitBytes)} settings={importSettingsQuery.data} />}</>;
+  </div>}{importSettingsOpen && importSettingsQuery.data && <DatabaseImportSettingsDialog isSaving={updateImportLimitMutation.isPending} onClose={() => setImportSettingsOpen(false)} onSave={(importLimitBytes) => updateImportLimitMutation.mutate(importLimitBytes)} settings={importSettingsQuery.data} />}</>;
+}
+
+function DatabaseCatalog({ databaseCount, onChooseSQLite, onViewDatabases }: { databaseCount: number; onChooseSQLite: () => void; onViewDatabases: () => void }) {
+  const engines = [
+    { name: "SQLite", category: "Relational", description: "A dependable, single-file SQL database for products, automations, and local apps.", detail: "Embedded · SQL · single file", icon: Database, status: "Available now" },
+    { name: "DuckDB", category: "Analytics", description: "Fast in-process analytics for parquet files, reports, and analytical workloads.", detail: "Columnar · OLAP · embedded", icon: Sigma, status: "Planned" },
+    { name: "libSQL", category: "Relational", description: "A SQLite-compatible engine built for modern app workflows and replication.", detail: "SQL · SQLite-compatible", icon: Cloud, status: "Planned" },
+    { name: "PGlite", category: "Relational", description: "A compact PostgreSQL runtime for local-first applications and familiar Postgres SQL.", detail: "Postgres-compatible · local", icon: HardDrive, status: "Planned" },
+    { name: "LanceDB", category: "Vector", description: "Embedded vector search for AI applications that need retrieval beside structured data.", detail: "Vectors · AI retrieval", icon: Code2, status: "Planned" },
+    { name: "LevelDB", category: "Key-value", description: "A lightweight embedded key-value store for simple high-throughput application state.", detail: "Key-value · embedded", icon: Database, status: "Planned" }
+  ];
+
+  return <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <div className="border-b border-slate-100 bg-[radial-gradient(circle_at_top_right,_rgba(37,99,235,0.13),_transparent_38%),linear-gradient(135deg,_#ffffff,_#f8fbff)] px-6 py-8 sm:px-8">
+      <div className="flex flex-wrap items-start justify-between gap-5"><div><p className="text-xs font-bold uppercase tracking-[0.17em] text-blue-600">Open-source database catalog</p><h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">Choose your data engine.</h2><p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">Start with SQLite today. This catalog maps the lightweight engines Zo Drive is designed to support as the platform expands.</p></div>{databaseCount > 0 && <button className="rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50" onClick={onViewDatabases} type="button">View your databases <span className="ml-1.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500">{databaseCount}</span></button>}</div>
+    </div>
+    <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6 xl:grid-cols-3">
+      {engines.map((engine) => { const Icon = engine.icon; const available = engine.status === "Available now"; return <article className={`group flex min-h-64 flex-col rounded-2xl border p-5 transition ${available ? "border-blue-200 bg-gradient-to-br from-blue-50 via-white to-white shadow-sm hover:-translate-y-0.5 hover:shadow-md" : "border-slate-200 bg-white"}`} key={engine.name}><div className="flex items-start justify-between gap-3"><span className={`grid size-11 place-items-center rounded-xl ${available ? "bg-blue-600 text-white shadow-sm" : "bg-slate-100 text-slate-500"}`}><Icon size={21} /></span><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${available ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{engine.status}</span></div><div className="mt-5"><p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">{engine.category}</p><h3 className="mt-1.5 text-xl font-semibold text-slate-900">{engine.name}</h3><p className="mt-2 text-sm leading-6 text-slate-600">{engine.description}</p></div><div className="mt-auto pt-5"><p className="text-xs font-medium text-slate-400">{engine.detail}</p>{available ? <button aria-label="Open SQLite workspace" className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-blue-700" onClick={onChooseSQLite} type="button">Open workspace <ArrowUpRight size={16} /></button> : <p className="mt-4 text-sm font-semibold text-slate-400">Not available yet</p>}</div></article>;})}
+    </div>
+    <div className="border-t border-slate-100 bg-slate-50 px-6 py-4 text-sm leading-6 text-slate-500 sm:px-8">The catalog is intentionally curated. New engines will appear as available only after Zo Drive can provision, secure, back up, and expose them safely.</div>
+  </section>;
 }
 
 function DatabaseImportSettingsDialog({ isSaving, onClose, onSave, settings }: { isSaving: boolean; onClose: () => void; onSave: (importLimitBytes: number) => void; settings: DatabaseImportSettings }) {

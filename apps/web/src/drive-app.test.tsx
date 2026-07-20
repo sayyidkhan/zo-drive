@@ -33,11 +33,11 @@ describe("DriveApp", () => {
 
       expect(screen.getByRole("heading", { name: "Manage files in your private Drive." })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Share files on your terms" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 1.3.1" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 1.4.0" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI changelog version 1.3.1" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
+      expect(screen.getByRole("link", { name: "GUI changelog version 1.4.0" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("GUI v1.3.1")).toBeInTheDocument();
+      expect(screen.getByText("GUI v1.4.0")).toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
 
       cleanup();
@@ -70,7 +70,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.3.1")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.4.0")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();
@@ -189,7 +189,12 @@ describe("DriveApp", () => {
     expect(screen.queryByRole("button", { name: "List view" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Grid view" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Zo Databases" }));
-    expect(await screen.findByRole("heading", { name: "SQLite databases" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Zo Databases" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Choose your data engine." })).toBeInTheDocument();
+    expect(screen.getByText("Open-source database catalog")).toBeInTheDocument();
+    expect(screen.getByText("DuckDB")).toBeInTheDocument();
+    expect(screen.getAllByText("Planned")).toHaveLength(5);
+    fireEvent.click(screen.getByRole("button", { name: "Open SQLite workspace" }));
     expect((await screen.findAllByText("app-data")).length).toBe(2);
     expect(await screen.findByText("tasks")).toBeInTheDocument();
     expect(await screen.findByText("Ship Database Engines")).toBeInTheDocument();
@@ -321,7 +326,7 @@ describe("DriveApp", () => {
     window.history.pushState({}, "", "?section=databases&database=db-11111111-1111-4111-8111-111111111111&databasePanel=access");
     cleanup();
     render(<DriveApp client={client} authClient={authClient} />);
-    expect(await screen.findByRole("heading", { name: "SQLite databases" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Zo Databases" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Connect from your backend" })).toBeInTheDocument();
     const restoredRoute = new URLSearchParams(window.location.search);
     expect(restoredRoute.get("section")).toBe("databases");

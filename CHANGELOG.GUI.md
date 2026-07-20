@@ -4,8 +4,11 @@ All notable changes to the Zo Drive browser experience are recorded here.
 
 ## Unreleased
 
+## v1.4.0 - 2026-07-20
+
 ### Added
 
+- Added an open-source lightweight database catalog, with SQLite available now and planned engines clearly labelled.
 - Added validated SQLite import and consistent `.sqlite` export from Database Engines, with an owner-configurable import limit.
 
 ### Changed
