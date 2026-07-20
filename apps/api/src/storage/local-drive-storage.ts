@@ -105,6 +105,8 @@ type WriteDriveFile = StorageTarget & {
 type CreateNativeDriveFile = StorageTarget & { type: NativeFileType };
 type UpdateNativeDriveFile = StorageTarget & { content: Record<string, unknown> & { format: "zo-native"; type: NativeFileType; version: 1 } };
 type RenameDriveFile = StorageTarget & { name: string };
+type MoveDriveFile = StorageTarget & { destination: string };
+type CopyDriveFile = StorageTarget & { destination: string; overwrite?: boolean };
 
 type ListDriveFiles = {
   userId: string;
@@ -269,11 +271,19 @@ export class LocalDriveStorage {
       throw new UnsafeDrivePathError("File names cannot contain path separators");
     }
     const parent = dirname(normalizedKey);
-    const nextKey = this.normalizeKey(parent === "." ? normalizedName : `${parent}/${normalizedName}`, { allowEmpty: false });
+    return this.moveFile({ userId, key: normalizedKey, destination: parent === "." ? normalizedName : `${parent}/${normalizedName}` });
+  }
+
+  async moveFile({ userId, key, destination }: MoveDriveFile): Promise<DriveFile> {
+    const normalizedKey = this.normalizeKey(key, { allowEmpty: false });
+    const nextKey = this.normalizeKey(destination, { allowEmpty: false });
     if (nextKey === normalizedKey) return this.read({ userId, key: normalizedKey });
 
     const source = this.resolveFilePath(userId, normalizedKey);
     const target = this.resolveFilePath(userId, nextKey);
+    if (!(await stat(source)).isFile()) {
+      throw Object.assign(new Error("Only files can be moved"), { code: "EISDIR" });
+    }
     try {
       await stat(target);
       throw Object.assign(new Error("A file with this name already exists"), { code: "EEXIST" });
@@ -282,6 +292,7 @@ export class LocalDriveStorage {
     }
 
     const [starredKeys, storedContentTypes] = await Promise.all([this.readStarredKeys(userId), this.readContentTypes(userId)]);
+    await mkdir(dirname(target), { recursive: true });
     await rename(source, target);
     if (starredKeys.delete(normalizedKey)) {
       starredKeys.add(nextKey);
@@ -294,6 +305,54 @@ export class LocalDriveStorage {
       await this.writeContentTypes(userId, storedContentTypes);
     }
     return this.describe(target, nextKey, starredKeys.has(nextKey), storedContentTypes.get(nextKey));
+  }
+
+  async copyFile({ userId, key, destination, overwrite = false }: CopyDriveFile): Promise<DriveFile> {
+    return this.withWriteLock(userId, async () => {
+      const normalizedKey = this.normalizeKey(key, { allowEmpty: false });
+      const nextKey = this.normalizeKey(destination, { allowEmpty: false });
+      if (nextKey === normalizedKey) return this.read({ userId, key: normalizedKey });
+
+      const source = this.resolveFilePath(userId, normalizedKey);
+      const target = this.resolveFilePath(userId, nextKey);
+      const sourceStat = await stat(source);
+      if (!sourceStat.isFile()) throw Object.assign(new Error("Only files can be copied"), { code: "EISDIR" });
+      let existingSize = 0;
+      let destinationExists = false;
+      try {
+        const destinationStat = await stat(target);
+        if (!destinationStat.isFile()) throw Object.assign(new Error("A file with this name already exists"), { code: "EEXIST" });
+        destinationExists = true;
+        existingSize = destinationStat.size;
+      } catch (error: unknown) {
+        if (!isNotFound(error)) throw error;
+      }
+      if (destinationExists && !overwrite) throw Object.assign(new Error("A file with this name already exists"), { code: "EEXIST" });
+
+      const usage = await this.getUsage({ userId });
+      const writableBytes = Math.max(0, usage.quotaBytes - usage.usedBytes + existingSize);
+      if (sourceStat.size > writableBytes) throw new StorageQuotaExceededError();
+
+      const [starredKeys, storedContentTypes] = await Promise.all([this.readStarredKeys(userId), this.readContentTypes(userId)]);
+      await mkdir(dirname(target), { recursive: true });
+      const temporaryTarget = join(dirname(target), `.${basename(target)}.${randomUUID()}.copying`);
+      try {
+        await pipeline(createReadStream(source), quotaLimitedStream(writableBytes), createWriteStream(temporaryTarget));
+        await rename(temporaryTarget, target);
+      } catch (error) {
+        await rm(temporaryTarget, { force: true });
+        throw error;
+      }
+
+      if (starredKeys.has(normalizedKey)) starredKeys.add(nextKey);
+      else starredKeys.delete(nextKey);
+      await this.writeStarredKeys(userId, starredKeys);
+      const contentType = storedContentTypes.get(normalizedKey);
+      if (contentType) storedContentTypes.set(nextKey, contentType);
+      else storedContentTypes.delete(nextKey);
+      await this.writeContentTypes(userId, storedContentTypes);
+      return this.describe(target, nextKey, starredKeys.has(nextKey), storedContentTypes.get(nextKey));
+    });
   }
 
   async read({ userId, key }: StorageTarget): Promise<ReadDriveFile> {

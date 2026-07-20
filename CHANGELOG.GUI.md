@@ -24,9 +24,18 @@ All notable changes to the Zo Drive browser experience are recorded here.
 
 - Added database-scoped API credentials, copyable HTTPS query endpoints, and Node.js connection examples in Database Engines.
 
+## v1.1.5 - 2026-07-20
+
+### Added
+
+- Published an agent-facing `/drive/llms.txt` index covering Zo Drive's
+  supported workflows, API surface, authentication, and safety rules.
+
 ### Changed
 
 - Moved the GUI and CLI changelogs into dedicated versioned release-history pages, linked from the top-right of the documentation header.
+- Updated the browser CLI guide with file checks, server-side moves, and
+  Trash-backed removal.
 
 ## v1.2.0 - 2026-07-20
 

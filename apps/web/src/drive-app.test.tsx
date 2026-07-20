@@ -53,9 +53,14 @@ describe("DriveApp", () => {
       expect(screen.getAllByText(/zo-drive configure/).length).toBeGreaterThanOrEqual(3);
       expect(screen.getByText(/without exposing either in shell history/)).toBeInTheDocument();
       expect(screen.getByText(/You do not need SSH, Tailscale/)).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "CLI version 1.1.0" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "CLI version 1.2.0" })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "CLI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("CLI v1.1.0")).toBeInTheDocument();
+      expect(screen.getByText("CLI v1.2.0")).toBeInTheDocument();
+      expect(screen.getAllByText(/zo-drive exists/).length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText(/zo-drive health/).length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText(/zo-drive stat/).length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText(/zo-drive mv/).length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText(/zo-drive rm/).length).toBeGreaterThanOrEqual(1);
       expect(screen.getByText(/cli-v Git release tag/)).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Automate uploads in code" })).toBeInTheDocument();
       expect(screen.getAllByText(/@zo-drive\/sdk/).length).toBeGreaterThanOrEqual(1);
@@ -73,7 +78,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "CLI changelog" })).toBeInTheDocument();
-      expect(screen.getAllByText("CLI v1.1.0").length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText("CLI v1.2.0").length).toBeGreaterThanOrEqual(1);
     } finally {
       window.history.pushState({}, "", originalPath);
     }

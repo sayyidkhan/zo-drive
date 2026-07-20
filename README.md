@@ -6,6 +6,11 @@ Release histories are maintained in [CHANGELOG.GUI.md](CHANGELOG.GUI.md) and
 [CHANGELOG.CLI.md](CHANGELOG.CLI.md). See [AGENTS.md](AGENTS.md) for the
 GUI/CLI versioning and release policy.
 
+For AI agents interacting with a hosted Drive, use the machine-oriented
+[`/drive/llms.txt`](apps/web/public/llms.txt) entry point before the
+human-oriented documentation. Keep it updated with any public API,
+authentication, or workflow change.
+
 ## What works now
 
 - Hono REST API for upload, list, download/preview, delete, search, and storage usage
@@ -162,12 +167,86 @@ With the local connection saved, upload directly to Drive:
 
 ```bash
 zo-drive upload ./launch-plan.pdf --path Product/Launch
+# Validate the connection, file, quota, and destination without transferring it.
+zo-drive upload ./launch-plan.pdf --path Product/Launch --dry-run
+```
+
+Uploads of 1 MB or more show a live progress bar in an interactive terminal.
+
+To confirm a remote file exists before downloading it, without creating a
+local file:
+
+```bash
+zo-drive download Product/Launch/launch-plan.pdf --output ./launch-plan.pdf --dry-run
+```
+
+#### Find a file
+
+List a folder or use `exists` when you need a scriptable yes/no check. `exists`
+returns exit code `0` when the exact file is present and `1` when it is absent.
+
+```bash
+zo-drive ls Product/Launch
+zo-drive exists Product/Launch/launch-plan.pdf
+zo-drive stat Product/Launch/launch-plan.pdf
+# Use --json when a script needs structured metadata.
+zo-drive stat Product/Launch/launch-plan.pdf --json
+```
+
+`zo-drive ls` supports familiar listing flags: `-l` for size and time, `-t`
+for newest first, `-S` for largest first, `-r` to reverse, `-a` for hidden
+names, and `-R` for nested folders. Run `zo-drive ls --help` for the full
+Drive-compatible list. Unix-only fields such as owners, permissions, inodes,
+and symlinks do not exist in Zo Drive.
+
+#### Move or remove a file
+
+Move a file by supplying its exact destination key. `rm` moves the file to Zo
+Drive Trash; it does not permanently delete the file.
+
+```bash
+zo-drive mv Product/Launch/launch-plan.pdf Archive/2026/launch-plan.pdf
+zo-drive rm Archive/2026/launch-plan.pdf
+```
+
+Copy a Drive file without downloading it to your computer. By default, copying
+does not replace an existing destination; add `--force` only when you intend
+to replace it.
+
+```bash
+zo-drive cp Product/Launch/launch-plan.pdf Archive/2026/launch-plan-copy.pdf
+zo-drive cp Product/Launch/launch-plan.pdf Archive/2026/launch-plan-copy.pdf --force
+```
+
+#### Check Drive status
+
+Confirm the connection and storage usage:
+
+```bash
+zo-drive status
+```
+
+For an operator-focused check of API latency, authentication, storage, and
+filesystem capacity, use:
+
+```bash
+zo-drive health
+zo-drive health --json
+```
+
+`health` does not report Zo Computer CPU, memory, uptime, or process health;
+those belong to the Zo Computer platform rather than the Drive service.
+
+Print the logo on its own for a terminal profile, demo, or script:
+
+```bash
+zo-drive logo
 ```
 
 #### CLI updates and versioning
 
 The CLI has its own independent release track. This checkout reports `CLI
-v1.1.1`; check an installed copy with `zo-drive --version`.
+v1.2.0`; check an installed copy with `zo-drive --version`.
 
 For a developer checkout linked with npm, rebuild after pulling changes; the
 existing link then uses the updated build:
@@ -240,6 +319,23 @@ The test suite includes a full CLI → SDK → API → data-root flow: upload, l
 
 On its first visit, Zo Drive shows **Create your owner account**, not the drive. Registration is available only while no user exists; immediately after creation, all visitors see **Sign in** and every drive endpoint requires a valid session. Passwords are salted and hashed with scrypt; the browser session is an HttpOnly, signed cookie.
 
-For deployment, set a unique `ZO_DRIVE_SESSION_SECRET` (at least 32 characters; for example `openssl rand -base64 48`), create the owner account before making the site public, run over HTTPS, and use a same-origin reverse proxy for the web app and API. Never expose `ZO_DRIVE_DATA_ROOT` itself. The username is also the user's storage namespace, so renaming it migrates their files and invalidates existing sessions. This is deliberately an owner-only product: it has no public self-registration or collaborative in-app sharing. Add a database-backed identity system, account recovery, rate limiting, and invitations before turning it into a multi-user service.
+For deployment, set a unique `ZO_DRIVE_SESSION_SECRET` (at least 32 characters; for example `openssl rand -base64 48`), create the owner account before making the site public, run over HTTPS, and use a same-origin reverse proxy for the web app and API. Never expose `ZO_DRIVE_DATA_ROOT` itself. The username is also the user's storage namespace, so renaming it migrates their files and invalidates existing sessions. This is deliberately an owner-only product: it has no public self-registration or collaborative in-app sharing. Add a database-backed identity system, account recovery, and invitations before turning it into a multi-user service.
+
+Device API keys are protected against repeated invalid attempts: five failed `zdk_…` keys in one minute block further attempts for 15 minutes and return `429 Too Many Requests` with `Retry-After`. By default the limiter uses a one-way key fingerprint and never stores the raw key.
+
+Configure these settings in `apps/api/config.json` (start from `apps/api/config.example.json`):
+
+```json
+{
+  "rateLimit": {
+    "trustProxy": true,
+    "maxAttempts": 5,
+    "windowSeconds": 60,
+    "blockSeconds": 900
+  }
+}
+```
+
+Set `trustProxy` to `true` only when your reverse proxy sanitizes and sets `X-Forwarded-For`; it applies the limit per client IP. The config file is Git-ignored. For a nonstandard location, use `ZO_DRIVE_CONFIG_PATH=/absolute/path/to/config.json`. The existing rate-limit environment variables remain fallbacks only when a value is omitted from the JSON config.
 
 Share links are deliberately read-only. Public links can open the file directly; passcode links require the passcode for file content; expired and revoked links return no file. On Zo, serve the web app and API from the same origin so public links such as `https://your-drive.zo.com/?share={id}` work without cross-site cookie constraints.

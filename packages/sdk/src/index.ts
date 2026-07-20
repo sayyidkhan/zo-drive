@@ -21,13 +21,14 @@ import {
   publicShareSchema,
   driveFolderSchema,
   driveObjectSchema,
+  healthSchema,
   driveTrashItemSchema,
   listFoldersResponseSchema,
   listObjectsResponseSchema,
   listTrashResponseSchema,
   storageUsageSchema
 } from "@zo-drive/types";
-import type { ApiKeyScope, AuthStatus, CreatedDatabaseApiKey, CreatedDriveApiKey, DatabaseApiKey, DatabaseApiKeyScope, DatabaseImportSettings, DatabaseQueryResult, DatabaseRows, DatabaseTable, DriveApiKey, DriveDatabase, DriveFolder, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, NativeFileType, PublicShare, PublishedForm, ShareAccess, ShareKind, StorageUsage } from "@zo-drive/types";
+import type { ApiKeyScope, AuthStatus, CreatedDatabaseApiKey, CreatedDriveApiKey, DatabaseApiKey, DatabaseApiKeyScope, DatabaseImportSettings, DatabaseQueryResult, DatabaseRows, DatabaseTable, DriveApiKey, DriveDatabase, DriveFolder, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, Health, NativeFileType, PublicShare, PublishedForm, ShareAccess, ShareKind, StorageUsage } from "@zo-drive/types";
 
 type Fetcher = typeof fetch;
 
@@ -100,11 +101,17 @@ export class ZoDriveClient {
     return listObjectsResponseSchema.parse(await response.json()).objects;
   }
 
+  async getHealth(): Promise<Health> {
+    const response = await this.request("/health", { method: "GET" });
+    return healthSchema.parse(await response.json());
+  }
+
   async upload({ file, fileName, path, onProgress }: UploadOptions): Promise<DriveObject> {
     const headers = this.uploadHeaders(file, fileName, path);
-    if (onProgress && this.fetcher === fetch && typeof XMLHttpRequest !== "undefined") {
+    if (onProgress && typeof XMLHttpRequest !== "undefined") {
       return this.uploadWithProgress(file, headers, onProgress);
     }
+    if (onProgress) return this.uploadWithStreamProgress(file, headers, onProgress);
     const response = await this.request("/objects", { body: file, headers, method: "POST" });
     return driveObjectSchema.parse(await response.json());
   }
@@ -145,6 +152,24 @@ export class ZoDriveClient {
   async rename(key: string, name: string): Promise<DriveObject> {
     const response = await this.request(`/objects/${encodeDriveKey(key)}`, {
       body: JSON.stringify({ name }),
+      headers: { "content-type": "application/json" },
+      method: "PATCH"
+    });
+    return driveObjectSchema.parse(await response.json());
+  }
+
+  async move(key: string, destination: string): Promise<DriveObject> {
+    const response = await this.request(`/objects/${encodeDriveKey(key)}`, {
+      body: JSON.stringify({ destination }),
+      headers: { "content-type": "application/json" },
+      method: "PATCH"
+    });
+    return driveObjectSchema.parse(await response.json());
+  }
+
+  async copy(key: string, destination: string, { overwrite = false }: { overwrite?: boolean } = {}): Promise<DriveObject> {
+    const response = await this.request(`/objects/${encodeDriveKey(key)}`, {
+      body: JSON.stringify({ copyTo: destination, overwrite }),
       headers: { "content-type": "application/json" },
       method: "PATCH"
     });
@@ -469,6 +494,20 @@ export class ZoDriveClient {
       onProgress({ loaded: 0, total: file.size });
       xhr.send(file);
     });
+  }
+
+  private async uploadWithStreamProgress(file: Blob, headers: Headers, onProgress: (progress: UploadProgress) => void): Promise<DriveObject> {
+    let loaded = 0;
+    onProgress({ loaded, total: file.size });
+    const body = file.stream().pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        loaded += chunk.byteLength;
+        onProgress({ loaded, total: file.size });
+        controller.enqueue(chunk);
+      }
+    }));
+    const response = await this.request("/objects", { body, duplex: "half", headers, method: "POST" } as RequestInit);
+    return driveObjectSchema.parse(await response.json());
   }
 }
 

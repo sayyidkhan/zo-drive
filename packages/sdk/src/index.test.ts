@@ -18,6 +18,14 @@ describe("ZoDriveClient", () => {
     );
   });
 
+  it("reads the service health endpoint", async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ status: "ok" }), { status: 200 }));
+    const client = new ZoDriveClient({ baseUrl: "https://drive.example", fetcher });
+
+    await expect(client.getHealth()).resolves.toEqual({ status: "ok" });
+    expect(fetcher).toHaveBeenCalledWith("https://drive.example/health", expect.objectContaining({ method: "GET" }));
+  });
+
   it("sends advanced file search options through the list endpoint", async () => {
     const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ objects: [] }), { status: 200 }));
     const client = new ZoDriveClient({ baseUrl: "https://drive.example", fetcher });
@@ -42,6 +50,27 @@ describe("ZoDriveClient", () => {
     expect(headers.get("content-type")).toBe("text/plain");
     expect(headers.get("x-zo-drive-path")).toBe("Notes");
     expect(headers.get("x-zo-drive-file-name")).toBe("hello.txt");
+  });
+
+  it("reports streaming upload progress outside the browser", async () => {
+    const fetcher = vi.fn(async (_url: RequestInfo | URL, request?: RequestInit) => {
+      const reader = (request?.body as ReadableStream<Uint8Array>).getReader();
+      let contents = "";
+      for (;;) {
+        const chunk = await reader.read();
+        if (chunk.done) break;
+        contents += new TextDecoder().decode(chunk.value);
+      }
+      expect(contents).toBe("hello");
+      return new Response(JSON.stringify({ key: "hello.txt", name: "hello.txt", size: 5, contentType: "text/plain", updatedAt: "2026-01-01T00:00:00.000Z" }), { status: 201 });
+    });
+    const progress: Array<{ loaded: number; total: number }> = [];
+    const client = new ZoDriveClient({ baseUrl: "https://drive.example", fetcher: fetcher as unknown as typeof fetch });
+
+    await client.upload({ file: new Blob(["hello"], { type: "text/plain" }), fileName: "hello.txt", onProgress: (event) => progress.push(event) });
+
+    expect(progress).toEqual([{ loaded: 0, total: 5 }, { loaded: 5, total: 5 }]);
+    expect(fetcher).toHaveBeenCalledWith("https://drive.example/objects", expect.objectContaining({ duplex: "half", method: "POST" }));
   });
 
   it("surfaces typed API errors", async () => {
@@ -99,6 +128,24 @@ describe("ZoDriveClient", () => {
 
     await expect(client.rename("Projects/Notes", "Strategy")).resolves.toEqual(file);
     expect(fetcher).toHaveBeenCalledWith("https://drive.example/objects/Projects/Notes", expect.objectContaining({ method: "PATCH" }));
+  });
+
+  it("moves files through the API", async () => {
+    const file = { key: "Archive/Notes", name: "Notes", size: 10, contentType: "application/vnd.zo.document+json", nativeType: "document", updatedAt: "2026-01-01T00:00:00.000Z", starred: false };
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify(file), { status: 200 }));
+    const client = new ZoDriveClient({ baseUrl: "https://drive.example", fetcher });
+
+    await expect(client.move("Projects/Notes", "Archive/Notes")).resolves.toEqual(file);
+    expect(fetcher).toHaveBeenCalledWith("https://drive.example/objects/Projects/Notes", expect.objectContaining({ body: JSON.stringify({ destination: "Archive/Notes" }), method: "PATCH" }));
+  });
+
+  it("copies files through the API without downloading them", async () => {
+    const file = { key: "Archive/Notes copy", name: "Notes copy", size: 10, contentType: "application/vnd.zo.document+json", nativeType: "document", updatedAt: "2026-01-01T00:00:00.000Z", starred: false };
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify(file), { status: 200 }));
+    const client = new ZoDriveClient({ baseUrl: "https://drive.example", fetcher });
+
+    await expect(client.copy("Projects/Notes", "Archive/Notes copy", { overwrite: true })).resolves.toEqual(file);
+    expect(fetcher).toHaveBeenCalledWith("https://drive.example/objects/Projects/Notes", expect.objectContaining({ body: JSON.stringify({ copyTo: "Archive/Notes copy", overwrite: true }), method: "PATCH" }));
   });
 
   it("lists and updates starred files through the API", async () => {

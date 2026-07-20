@@ -170,7 +170,7 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
 const GUI_VERSION = "1.3.1";
-const CLI_VERSION = "1.1.0";
+const CLI_VERSION = "1.2.0";
 
 const GUI_CHANGELOG = [
   {
@@ -187,6 +187,11 @@ const GUI_CHANGELOG = [
     version: "v1.2.0",
     date: "20 July 2026",
     changes: ["Added Database Engines: create private SQLite databases, browse tables and rows, and run SQL in the Zo Drive workspace."]
+  },
+  {
+    version: "v1.1.5",
+    date: "20 July 2026",
+    changes: ["Updated the browser CLI guide with file checks, server-side moves, and Trash-backed removal."]
   },
   {
     version: "v1.1.4",
@@ -261,6 +266,11 @@ const GUI_CHANGELOG = [
 ];
 
 const CLI_CHANGELOG = [
+  {
+    version: "v1.2.0",
+    date: "20 July 2026",
+    changes: ["Added zo-drive health for API, authenticated access, storage, and filesystem checks.", "Added zo-drive exists for scriptable file checks and zo-drive stat for file metadata.", "Added server-side zo-drive mv and Trash-backed zo-drive rm commands."]
+  },
   {
     version: "v1.1.0",
     date: "20 July 2026",
@@ -398,7 +408,7 @@ function DocsGuidesPage({ mode }: { mode: "gui" | "cli" }) {
   const serverUrl = `${window.location.origin}${appBasePath}`;
   const cliInstall = `git clone https://github.com/sayyidkhan/zo-drive.git\ncd zo-drive\npnpm install\npnpm build\n(cd apps/cli && npm link)\nzo-drive --help`;
   const cliConnect = `zo-drive configure\n\n# Zo Drive URL: ${serverUrl}\n# Zo Drive API key: [input hidden]`;
-  const cliUpload = `zo-drive upload ./launch-plan.pdf --path Product/Launch`;
+  const cliUpload = `zo-drive health\nzo-drive upload ./launch-plan.pdf --path Product/Launch\nzo-drive exists Product/Launch/launch-plan.pdf\nzo-drive stat Product/Launch/launch-plan.pdf --json\nzo-drive mv Product/Launch/launch-plan.pdf Archive/2026/launch-plan.pdf\nzo-drive rm Archive/2026/launch-plan.pdf`;
   const cliUpdate = `cd zo-drive\ngit pull --ff-only\npnpm install --frozen-lockfile\npnpm build\nzo-drive --help`;
   const cliRelease = `cd zo-drive\ngit fetch origin --tags\ngit tag --sort=-v:refname | head -n 1\ngit checkout <release-tag>\npnpm install --frozen-lockfile\npnpm build`;
   const sdkUpload = `import { readFile } from "node:fs/promises";\nimport { ZoDriveClient } from "@zo-drive/sdk";\n\nconst client = new ZoDriveClient({\n  baseUrl: "${serverUrl}",\n  headers: { authorization: \`Bearer \${process.env.ZO_DRIVE_API_KEY}\` }\n});\n\nconst bytes = await readFile("./launch-plan.pdf");\nawait client.upload({\n  file: new Blob([bytes], { type: "application/pdf" }),\n  fileName: "launch-plan.pdf",\n  path: "Product/Launch"\n});`;
@@ -416,7 +426,7 @@ function DocsGuidesPage({ mode }: { mode: "gui" | "cli" }) {
     : [
         { id: "installation", eyebrow: "Installation", icon: <Terminal size={20} />, title: "Install zo-drive on your machine", body: "Set up the zo-drive command once, then use it from any folder on your machine.", steps: ["Clone the Zo Drive repository, install dependencies, and build the workspace.", "Run npm link inside apps/cli to make the zo-drive command available globally in your terminal.", "Confirm the installation by running zo-drive --help."] },
         { id: "connection", eyebrow: "Local-to-cloud connection", icon: <Cloud size={20} />, title: "Connect your local computer to Zo", body: "zo-drive connects from your local terminal to this Zo Computer over its public HTTPS /drive address. You do not need SSH, Tailscale, or a Zo dashboard session on the local machine.", steps: ["Create a named, scoped key in Zo Drive > API Keys for this computer.", "Run zo-drive configure. It asks for the public Zo Drive URL and your device key without exposing either in shell history.", "The command saves the connection in ~/.config/zo-drive/config.json with owner-only permissions. Future zo-drive commands use it automatically."] },
-        { id: "cli", eyebrow: "Command line", icon: <Terminal size={20} />, title: "Upload with zo-drive", body: "Once configured, send files directly to your private Drive.", steps: ["The command reads the device key from its protected local configuration.", "Run zo-drive upload with a local file path and optional destination folder.", "Use zo-drive ls, download, delete, mkdir, and usage against the same private Drive."] },
+        { id: "cli", eyebrow: "Command line", icon: <Terminal size={20} />, title: "Manage files with zo-drive", body: "Once configured, check Drive health, upload, inspect, verify, move, and safely remove files from your private Drive.", steps: ["Run zo-drive health to check API latency, authenticated access, storage, and filesystem capacity.", "Run zo-drive upload with a local file path and optional destination folder.", "Use stat for metadata, exists for scriptable checks, mv with an exact destination key, and rm to move a file to Trash."] },
         { id: "updates", eyebrow: "CLI releases", icon: <RefreshCw size={20} />, title: `CLI version ${CLI_VERSION}`, body: "The local CLI has its own release track. Pull and rebuild when a CLI update is released; you do not need to install it again.", steps: ["Run zo-drive --version to check the installed CLI version.", "Use the main branch when you want the latest changes as they are pushed.", "Use a cli-v Git release tag when you want a fixed, reproducible CLI version on a machine."] },
         { id: "sdk", eyebrow: "TypeScript SDK", icon: <Database size={20} />, title: "Automate uploads in code", body: "Use the shared @zo-drive/sdk package from this repository for scripts, jobs and app integrations.", steps: ["Build the workspace SDK with pnpm --filter @zo-drive/sdk build.", "Store a scoped API key in your automation secret manager and send it as a Bearer token.", "Create ZoDriveClient with your Drive URL, then call upload with a Blob, filename and optional folder path."] }
       ];
