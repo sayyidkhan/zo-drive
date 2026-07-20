@@ -153,6 +153,9 @@ describe("DriveApp", () => {
     expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
     fireEvent.click(screen.getByRole("button", { name: "API Keys" }));
     expect(await screen.findByRole("heading", { name: "API Keys" })).toBeInTheDocument();
+    for (const expiry of ["10 minutes", "1 hour", "12 hours", "1 day", "7 days", "10 days", "14 days"]) {
+      expect(screen.getByRole("option", { name: expiry })).toBeInTheDocument();
+    }
     expect(screen.queryByRole("button", { name: "API Keys" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "List view" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Grid view" })).not.toBeInTheDocument();
