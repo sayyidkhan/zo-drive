@@ -33,11 +33,11 @@ describe("DriveApp", () => {
 
       expect(screen.getByRole("heading", { name: "Manage files in your private Drive." })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Share files on your terms" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 1.1.1" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 1.1.2" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI changelog version 1.1.1" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
+      expect(screen.getByRole("link", { name: "GUI changelog version 1.1.2" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("GUI v1.1.1")).toBeInTheDocument();
+      expect(screen.getByText("GUI v1.1.2")).toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
 
       cleanup();
@@ -64,7 +64,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.1.1")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.1.2")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();

@@ -141,10 +141,15 @@ const appBasePath = normalizeAppBasePath(
 const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.1.1";
+const GUI_VERSION = "1.1.2";
 const CLI_VERSION = "1.0.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.1.2",
+    date: "20 July 2026",
+    changes: ["Expanded Profile & controls to fill the available Drive workspace width."]
+  },
   {
     version: "v1.1.1",
     date: "20 July 2026",
@@ -480,7 +485,7 @@ function AccountScreen({ user, client, onAccountDeleted }: { user: DriveUser; cl
   });
 
   return (
-    <div className="max-w-5xl space-y-6">
+    <div className="w-full space-y-6">
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 px-6 py-8 text-white"><span className="inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-cyan-200/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100"><UserRound size={14} /> Owner account</span><h2 className="mt-4 text-3xl font-semibold tracking-tight">Your private Drive, under your control.</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">Manage the owner sign-in details for this Drive. Device API keys remain separate, so a lost machine can be revoked without changing your password.</p></div>
         <div className="space-y-5 p-5">
