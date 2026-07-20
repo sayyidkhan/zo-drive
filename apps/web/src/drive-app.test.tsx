@@ -32,7 +32,10 @@ describe("DriveApp", () => {
 
       expect(screen.getByRole("heading", { name: "Manage files in your private Drive." })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Share files on your terms" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 0.2.0" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 0.2.1" })).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "Changelog" })).toHaveAttribute("href", "#changelog");
+      expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
+      expect(screen.getByText("GUI v0.2.1")).toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
 
       cleanup();
@@ -47,6 +50,8 @@ describe("DriveApp", () => {
       expect(screen.getByText(/export ZO_DRIVE_API_URL=/)).toBeInTheDocument();
       expect(screen.getByText(/You do not need SSH, Tailscale/)).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "CLI version 0.1.3" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "CLI changelog" })).toBeInTheDocument();
+      expect(screen.getByText("CLI v0.1.3")).toBeInTheDocument();
       expect(screen.getByText(/cli-v Git release tag/)).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Automate uploads in code" })).toBeInTheDocument();
       expect(screen.getAllByText(/@zo-drive\/sdk/).length).toBeGreaterThanOrEqual(1);
