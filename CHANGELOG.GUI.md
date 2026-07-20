@@ -8,6 +8,12 @@ All notable changes to the Zo Drive browser experience are recorded here.
 
 - Split GUI and CLI release history into separate changelogs.
 
+## v0.2.2 - 2026-07-20
+
+### Added
+
+- A visible Landing page link in the documentation header.
+
 ## v0.2.1 - 2026-07-20
 
 ### Added
