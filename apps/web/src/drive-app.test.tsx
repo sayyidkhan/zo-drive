@@ -40,7 +40,12 @@ describe("DriveApp", () => {
 
       expect(screen.getByRole("heading", { name: "Upload from your machine." })).toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "CLI" })[0]).toHaveAttribute("aria-current", "page");
-      expect(screen.getByRole("heading", { name: "Upload from your machine" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Install zo-drive on your machine" })).toBeInTheDocument();
+      expect(screen.getByText(/npm link inside apps\/cli/)).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Connect to your Zo Drive cloud" })).toBeInTheDocument();
+      expect(screen.getByText(/export ZO_DRIVE_API_URL=/)).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Keep zo-drive current" })).toBeInTheDocument();
+      expect(screen.getByText(/Git release tag/)).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Automate uploads in code" })).toBeInTheDocument();
       expect(screen.getAllByText(/@zo-drive\/sdk/).length).toBeGreaterThanOrEqual(1);
     } finally {

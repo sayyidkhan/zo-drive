@@ -89,22 +89,66 @@ folder.
 
 ### CLI
 
-On the machine that will upload files, clone this repository and build the CLI:
+#### Installation
+
+On the machine that will upload files, clone this repository, build it, then
+link the CLI globally once. This makes `zo-drive` available from any folder:
 
 ```bash
+git clone https://github.com/sayyidkhan/zo-drive.git
+cd zo-drive
 pnpm install
-pnpm --filter @zo-drive/cli build
+pnpm build
+(cd apps/cli && npm link)
+zo-drive --help
 ```
 
-Sign in once to create a session token, export the printed value, then upload:
+#### Connect to your Zo Drive cloud
+
+Point the CLI at your hosted Drive, then sign in with the owner account. The
+login command prints a session-token export; run that export in the same
+terminal before any upload, list, or download command.
 
 ```bash
-ZO_DRIVE_API_URL="https://your-drive.example/drive" \
-node apps/cli/dist/index.js login --username sayyid --password 'your-password'
+export ZO_DRIVE_API_URL="https://your-drive.example/drive"
+zo-drive login --username sayyid --password 'your-password'
 
-# Export the ZO_DRIVE_SESSION_TOKEN printed by login, then:
-ZO_DRIVE_API_URL="https://your-drive.example/drive" \
-node apps/cli/dist/index.js upload ./launch-plan.pdf --path Product/Launch
+# Run the ZO_DRIVE_SESSION_TOKEN export printed by login, then:
+zo-drive usage
+```
+
+#### Upload a file
+
+With the cloud address and session token exported, upload directly to Drive:
+
+```bash
+zo-drive upload ./launch-plan.pdf --path Product/Launch
+```
+
+#### Updates and versioning
+
+The global `zo-drive` command remains linked to the repository checkout, so a
+rebuild updates the existing command without running `npm link` again. Use the
+`main` branch for the latest pushed changes:
+
+```bash
+cd zo-drive
+git pull --ff-only
+pnpm install --frozen-lockfile
+pnpm build
+zo-drive --help
+```
+
+Stable releases are marked with Git tags. To pin a machine to a release, fetch
+the tags, choose the version returned by the third command, then rebuild:
+
+```bash
+cd zo-drive
+git fetch origin --tags
+git tag --sort=-v:refname | head -n 1
+git checkout <release-tag>
+pnpm install --frozen-lockfile
+pnpm build
 ```
 
 ### TypeScript SDK
