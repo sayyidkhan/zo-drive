@@ -1,10 +1,12 @@
 import {
   apiErrorSchema,
   authStatusSchema,
+  createdDriveApiKeySchema,
   driveUserSchema,
   driveShareSchema,
   formResponseSchema,
   listFormResponsesSchema,
+  listDriveApiKeysResponseSchema,
   listSharesResponseSchema,
   publishedFormSchema,
   publicShareSchema,
@@ -16,7 +18,7 @@ import {
   listTrashResponseSchema,
   storageUsageSchema
 } from "@zo-drive/types";
-import type { AuthStatus, DriveFolder, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, NativeFileType, PublicShare, PublishedForm, ShareAccess, ShareKind, StorageUsage } from "@zo-drive/types";
+import type { ApiKeyScope, AuthStatus, CreatedDriveApiKey, DriveApiKey, DriveFolder, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, NativeFileType, PublicShare, PublishedForm, ShareAccess, ShareKind, StorageUsage } from "@zo-drive/types";
 
 type Fetcher = typeof fetch;
 
@@ -199,6 +201,20 @@ export class ZoDriveClient {
     return authStatusSchema.parse(await response.json());
   }
 
+  async listApiKeys(): Promise<DriveApiKey[]> {
+    const response = await this.request("/api-keys", { method: "GET" });
+    return listDriveApiKeysResponseSchema.parse(await response.json()).keys;
+  }
+
+  async createApiKey({ name, scopes, expiresAt }: { name: string; scopes: ApiKeyScope[]; expiresAt: string | null }): Promise<CreatedDriveApiKey> {
+    const response = await this.request("/api-keys", { body: JSON.stringify({ name, scopes, expiresAt }), headers: { "content-type": "application/json" }, method: "POST" });
+    return createdDriveApiKeySchema.parse(await response.json());
+  }
+
+  async revokeApiKey(id: string): Promise<void> {
+    await this.request(`/api-keys/${encodeURIComponent(id)}`, { method: "DELETE" });
+  }
+
   async registerInitialUser(credentials: { username: string; password: string }): Promise<DriveUser> {
     const response = await this.request("/auth/register", {
       body: JSON.stringify(credentials),
@@ -215,17 +231,6 @@ export class ZoDriveClient {
       method: "POST"
     });
     return driveUserSchema.parse((await response.json()).user);
-  }
-
-  async loginForCli(credentials: { username: string; password: string }): Promise<{ user: DriveUser; sessionToken: string }> {
-    const response = await this.request("/auth/login", {
-      body: JSON.stringify(credentials),
-      headers: { "content-type": "application/json", "x-zo-drive-cli": "1" },
-      method: "POST"
-    });
-    const body = await response.json() as { user: unknown; sessionToken: unknown };
-    if (typeof body.sessionToken !== "string") throw new Error("The server did not return a CLI session token");
-    return { user: driveUserSchema.parse(body.user), sessionToken: body.sessionToken };
   }
 
   async logout(): Promise<void> {

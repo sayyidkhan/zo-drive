@@ -6,6 +6,7 @@ import { Readable } from "node:stream";
 import { readFile } from "node:fs/promises";
 
 import { LocalAuthStore } from "./auth/local-auth-store.js";
+import { LocalApiKeyStore, type ApiKeyScope } from "./auth/local-api-key-store.js";
 import { SessionService } from "./auth/session.js";
 import { LocalShareStore, type StoredShare } from "./sharing/local-share-store.js";
 import { LocalFormStore, type PublishedForm } from "./forms/local-form-store.js";
@@ -22,6 +23,7 @@ type CreateAppOptions = {
     sessions: SessionService;
     secureCookies: boolean;
   };
+  apiKeys?: LocalApiKeyStore;
   sharing?: LocalShareStore;
   forms?: LocalFormStore;
 };
@@ -88,8 +90,13 @@ const changeSharePasscodeSchema = z.object({
 const updateStorageQuotaSchema = z.object({
   quotaBytes: z.number().int().positive()
 });
+const createApiKeySchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  scopes: z.array(z.enum(["read", "write"])).min(1).max(2),
+  expiresAt: z.string().datetime().nullable()
+});
 
-export function createApp({ storage, resolveUserId, allowedOrigin, auth, sharing, forms }: CreateAppOptions) {
+export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys, sharing, forms }: CreateAppOptions) {
   const app = new Hono();
   const resolveActiveUser: UserResolver = async (request) => {
     const userId = await resolveUserId(request);
@@ -110,6 +117,8 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, sharing
     app.use("/trash", cors(corsOptions));
     app.use("/trash/*", cors(corsOptions));
     app.use("/auth/*", cors(corsOptions));
+    app.use("/api-keys", cors(corsOptions));
+    app.use("/api-keys/*", cors(corsOptions));
     app.use("/shares", cors(corsOptions));
     app.use("/shares/*", cors(corsOptions));
     app.use("/shared/*", cors(corsOptions));
@@ -149,9 +158,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, sharing
       if (!user) return context.json({ error: { code: "INVALID_CREDENTIALS", message: "Username or password is incorrect" } }, 401);
       const sessionToken = auth.sessions.create(user.id);
       context.header("set-cookie", auth.sessions.cookieHeader(sessionToken, auth.secureCookies));
-      // Node's built-in fetch has no persistent cookie jar. The CLI explicitly
-      // opts in to receive a short-lived bearer session; browsers never do.
-      return context.json(context.req.header("x-zo-drive-cli") === "1" ? { user, sessionToken } : { user });
+      return context.json({ user });
     });
 
     app.post("/auth/logout", (context) => {
@@ -168,6 +175,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, sharing
       await storage.renameUser({ fromUserId: userId, toUserId: nextUserId });
       await sharing?.renameOwner({ fromUserId: userId, toUserId: nextUserId });
       await forms?.renameOwner({ fromUserId: userId, toUserId: nextUserId });
+      await apiKeys?.renameOwner({ fromUserId: userId, toUserId: nextUserId });
       const user = await auth.store.renameUser(userId, nextUserId);
       if (!user) return context.json({ error: { code: "PROFILE_UPDATE_FAILED", message: "Could not update the username" } }, 409);
       context.header("set-cookie", auth.sessions.cookieHeader(auth.sessions.create(user.id), auth.secureCookies));
@@ -196,10 +204,35 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, sharing
       await storage.removeUser({ userId });
       await sharing?.removeByOwner(userId);
       await forms?.removeByOwner(userId);
+      await apiKeys?.removeByOwner(userId);
       await auth.store.removeUser(userId);
       context.header("set-cookie", auth.sessions.clearCookieHeader(auth.secureCookies));
       return context.body(null, 204);
     });
+
+    if (apiKeys) {
+      app.get("/api-keys", async (context) => {
+        const userId = await requireBrowserUser(context.req.raw, auth);
+        if (!userId) return unauthorized(context);
+        return context.json({ keys: await apiKeys.list(userId) });
+      });
+
+      app.post("/api-keys", async (context) => {
+        const userId = await requireBrowserUser(context.req.raw, auth);
+        if (!userId) return unauthorized(context);
+        const parsed = createApiKeySchema.safeParse(await context.req.json().catch(() => null));
+        if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Enter a key name, scope, and valid expiry" } }, 400);
+        if (parsed.data.expiresAt && new Date(parsed.data.expiresAt).getTime() <= Date.now()) return context.json({ error: { code: "INVALID_REQUEST", message: "Expiry must be in the future" } }, 400);
+        return context.json(await apiKeys.create({ ownerUserId: userId, ...parsed.data, scopes: parsed.data.scopes as ApiKeyScope[] }), 201);
+      });
+
+      app.delete("/api-keys/:id", async (context) => {
+        const userId = await requireBrowserUser(context.req.raw, auth);
+        if (!userId) return unauthorized(context);
+        if (!(await apiKeys.revoke({ id: context.req.param("id"), ownerUserId: userId }))) return context.json({ error: { code: "NOT_FOUND", message: "API key not found" } }, 404);
+        return context.body(null, 204);
+      });
+    }
 
     if (sharing) {
       app.get("/shares", async (context) => {
@@ -513,6 +546,11 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, sharing
 
 async function requireUser(request: Request, resolveUserId: UserResolver): Promise<string | null> {
   return resolveUserId(request);
+}
+
+async function requireBrowserUser(request: Request, auth: NonNullable<CreateAppOptions["auth"]>): Promise<string | null> {
+  const userId = auth.sessions.userIdFromCookie(request);
+  return userId && (await auth.store.findById(userId))?.id || null;
 }
 
 function unauthorized(context: Context) {

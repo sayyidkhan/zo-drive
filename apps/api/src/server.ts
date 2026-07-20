@@ -5,6 +5,7 @@ import { dirname, extname, resolve, sep } from "node:path";
 
 import { createApp } from "./app.js";
 import { LocalAuthStore } from "./auth/local-auth-store.js";
+import { LocalApiKeyStore } from "./auth/local-api-key-store.js";
 import { SessionService } from "./auth/session.js";
 import { LocalShareStore } from "./sharing/local-share-store.js";
 import { LocalFormStore } from "./forms/local-form-store.js";
@@ -15,6 +16,7 @@ const port = numberEnvironmentVariable("ZO_DRIVE_PORT", 43071);
 const allowedOrigin = process.env.ZO_DRIVE_ALLOWED_ORIGIN;
 const sessionSecret = process.env.ZO_DRIVE_SESSION_SECRET ?? developmentSessionSecret();
 const sessions = new SessionService(sessionSecret);
+const apiKeys = new LocalApiKeyStore({ root: dataRoot });
 const shareStore = new LocalShareStore({ root: dataRoot });
 const formStore = new LocalFormStore({ root: dataRoot });
 const storage = new LocalDriveStorage({ root: dataRoot });
@@ -22,13 +24,14 @@ const webRoot = process.env.ZO_DRIVE_WEB_ROOT ?? resolve(dirname(fileURLToPath(i
 
 const app = createApp({
   storage,
-  resolveUserId: (request) => sessions.userIdFromRequest(request),
+  resolveUserId: async (request) => sessions.userIdFromRequest(request) ?? await apiKeys.userIdFromRequest(request),
   allowedOrigin,
   auth: {
     store: new LocalAuthStore({ root: dataRoot }),
     sessions,
     secureCookies: process.env.NODE_ENV === "production"
   },
+  apiKeys,
   sharing: shareStore,
   forms: formStore
 });

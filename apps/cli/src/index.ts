@@ -7,9 +7,11 @@ import { readFile as readFileFromDisk, writeFile as writeFileToDisk } from "node
 import { ZoDriveClient } from "@zo-drive/sdk";
 import type { DriveObject, StorageUsage } from "@zo-drive/types";
 
-const CLI_VERSION = "0.1.3";
+import { readLocalConfig, writeLocalConfig } from "./config.js";
 
-type CliClient = Partial<Pick<ZoDriveClient, "createFolder" | "delete" | "download" | "getUsage" | "list" | "loginForCli" | "upload">>;
+const CLI_VERSION = "1.0.0";
+
+type CliClient = Partial<Pick<ZoDriveClient, "createFolder" | "delete" | "download" | "getUsage" | "list" | "upload">>;
 
 type CliDependencies = {
   client: CliClient;
@@ -86,15 +88,6 @@ export async function runCli(args: string[], dependencies: CliDependencies): Pro
         const { options } = parseArguments(commandArgs, ["json"]);
         const usage = await requireMethod(dependencies.client, "getUsage")();
         write(options.json ? `${JSON.stringify(usage)}\n` : formatUsage(usage));
-        return 0;
-      }
-      case "login": {
-        const { options } = parseArguments(commandArgs, ["username", "password"]);
-        if (!options.username || !options.password) {
-          throw new CliUsageError("Usage: zo-drive login --username <username> --password <password>");
-        }
-        const { user, sessionToken } = await requireMethod(dependencies.client, "loginForCli")({ username: options.username, password: options.password });
-        write(`Signed in as ${user.username}.\nExport this session for subsequent commands:\nexport ZO_DRIVE_SESSION_TOKEN='${sessionToken}'\n`);
         return 0;
       }
       case "help":
@@ -178,7 +171,7 @@ function helpText(): string {
     "Usage: zo-drive <command>",
     "",
     "Commands:",
-    "  login --username <username> --password <password>",
+    "  configure (saves ZO_DRIVE_API_URL and ZO_DRIVE_API_KEY for this machine)",
     "  upload <file> [--path <folder>]",
     "  mkdir <path>",
     "  ls [path] [--json]",
@@ -195,14 +188,32 @@ async function main() {
     process.exitCode = await runCli(args, { client: {} });
     return;
   }
-  const baseUrl = process.env.ZO_DRIVE_API_URL;
+  if (args[0] === "configure") {
+    const apiUrl = process.env.ZO_DRIVE_API_URL;
+    const apiKey = process.env.ZO_DRIVE_API_KEY;
+    if (!apiUrl || !apiKey) {
+      process.stderr.write("Set ZO_DRIVE_API_URL and ZO_DRIVE_API_KEY before running zo-drive configure.\n");
+      process.exitCode = 1;
+      return;
+    }
+    await writeLocalConfig({ apiKey, apiUrl });
+    process.stdout.write("Zo Drive is configured for this machine.\n");
+    return;
+  }
+  const storedConfig = await readLocalConfig();
+  const baseUrl = process.env.ZO_DRIVE_API_URL ?? storedConfig?.apiUrl;
   if (!baseUrl) {
-    process.stderr.write("ZO_DRIVE_API_URL is required.\n");
+    process.stderr.write("Zo Drive is not configured. Set ZO_DRIVE_API_URL and ZO_DRIVE_API_KEY, then run zo-drive configure.\n");
     process.exitCode = 1;
     return;
   }
-  const sessionToken = process.env.ZO_DRIVE_SESSION_TOKEN;
-  const client = new ZoDriveClient({ baseUrl, headers: sessionToken ? { authorization: `Bearer ${sessionToken}` } : undefined });
+  const apiKey = process.env.ZO_DRIVE_API_KEY ?? storedConfig?.apiKey;
+  if (!apiKey) {
+    process.stderr.write("Zo Drive is not configured. Create a scoped key in Zo Drive > API Keys, then run zo-drive configure.\n");
+    process.exitCode = 1;
+    return;
+  }
+  const client = new ZoDriveClient({ baseUrl, headers: { authorization: `Bearer ${apiKey}` } });
   process.exitCode = await runCli(args, { client });
 }
 

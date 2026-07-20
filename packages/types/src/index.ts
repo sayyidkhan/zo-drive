@@ -81,6 +81,19 @@ export const authCredentialsSchema = z.object({
   password: z.string().min(6).max(256)
 });
 
+export const apiKeyScopeSchema = z.enum(["read", "write"]);
+export const driveApiKeySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  prefix: z.string(),
+  scopes: z.array(apiKeyScopeSchema),
+  createdAt: z.string(),
+  expiresAt: z.string().nullable(),
+  lastUsedAt: z.string().nullable()
+});
+export const createdDriveApiKeySchema = driveApiKeySchema.extend({ apiKey: z.string() });
+export const listDriveApiKeysResponseSchema = z.object({ keys: z.array(driveApiKeySchema) });
+
 export const shareAccessSchema = z.enum(["public", "passcode"]);
 export const shareKindSchema = z.enum(["share", "transfer"]);
 
@@ -149,6 +162,9 @@ export type StorageUsage = z.infer<typeof storageUsageSchema>;
 export type ApiError = z.infer<typeof apiErrorSchema>;
 export type DriveUser = z.infer<typeof driveUserSchema>;
 export type AuthStatus = z.infer<typeof authStatusSchema>;
+export type ApiKeyScope = z.infer<typeof apiKeyScopeSchema>;
+export type DriveApiKey = z.infer<typeof driveApiKeySchema>;
+export type CreatedDriveApiKey = z.infer<typeof createdDriveApiKeySchema>;
 export type DriveShare = z.infer<typeof driveShareSchema>;
 export type ShareAccess = z.infer<typeof shareAccessSchema>;
 export type ShareKind = z.infer<typeof shareKindSchema>;

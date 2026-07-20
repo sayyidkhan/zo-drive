@@ -124,21 +124,18 @@ describe("ZoDriveClient", () => {
     expect(fetcher).toHaveBeenCalledWith("https://drive.example/shares/share-123/passcode", expect.objectContaining({ method: "PATCH" }));
   });
 
-  it("uses the CLI-only login endpoint without exposing a token to browser login", async () => {
-    const fetcher = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ user: { id: "owner", username: "sayyid" }, sessionToken: "signed-session" }), { status: 200 })
-    );
+  it("creates, lists, and revokes browser-managed API keys", async () => {
+    const key = { id: "key-123", name: "MacBook", prefix: "zdk_key", scopes: ["read", "write"], createdAt: "2026-01-01T00:00:00.000Z", expiresAt: null, lastUsedAt: null };
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ...key, apiKey: "zdk_key_secret" }), { status: 201 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ keys: [key] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
     const client = new ZoDriveClient({ baseUrl: "https://drive.example", fetcher });
 
-    await expect(client.loginForCli({ username: "sayyid", password: "correct-horse-battery-staple" })).resolves.toEqual({
-      user: { id: "owner", username: "sayyid" },
-      sessionToken: "signed-session"
-    });
-    expect(fetcher).toHaveBeenCalledWith("https://drive.example/auth/login", expect.objectContaining({
-      method: "POST",
-      headers: expect.any(Headers)
-    }));
-    const [, request] = fetcher.mock.calls[0] as [string, RequestInit];
-    expect(new Headers(request.headers).get("x-zo-drive-cli")).toBe("1");
+    await expect(client.createApiKey({ name: "MacBook", scopes: ["read", "write"], expiresAt: null })).resolves.toMatchObject({ apiKey: "zdk_key_secret" });
+    await expect(client.listApiKeys()).resolves.toEqual([key]);
+    await expect(client.revokeApiKey(key.id)).resolves.toBeUndefined();
+    expect(fetcher).toHaveBeenNthCalledWith(1, "https://drive.example/api-keys", expect.objectContaining({ method: "POST" }));
+    expect(fetcher).toHaveBeenNthCalledWith(3, "https://drive.example/api-keys/key-123", expect.objectContaining({ method: "DELETE" }));
   });
 });

@@ -86,7 +86,7 @@ Every object key must be scoped under the authenticated user's namespace. The AP
 
 The initial product is owner-only. On a new data root, `POST /auth/register` creates the first and only account; the endpoint refuses every later registration. Create this account before making a deployment public, otherwise a first visitor could claim the empty drive. The user record stores only a normalized username, creation time, and a salted scrypt password hash at `v1/auth/users.json`. It is application data outside Git.
 
-`POST /auth/login` creates a signed seven-day session. Browsers use a `Secure`, `HttpOnly`, `SameSite=Lax` cookie in production; the API derives the user namespace exclusively from this session. CLI login explicitly receives the same short-lived token and sends it as a bearer token. No route accepts a client-provided user ID.
+`POST /auth/login` creates a signed seven-day session. Browsers use a `Secure`, `HttpOnly`, `SameSite=Lax` cookie in production; the API derives the user namespace exclusively from this session. Local CLI access uses a revocable, scoped device API key sent as a bearer credential. No route accepts a client-provided user ID.
 
 The web app must always request `/auth/status` before requesting any drive data. If no account exists it shows owner registration; otherwise it shows sign-in. Deploy under HTTPS with a high-entropy `ZO_DRIVE_SESSION_SECRET` and a same-origin web/API proxy. This is not yet a general public multi-user identity product: add durable sessions, account recovery, rate limits, audit logging, and invitations before opening registration or sharing.
 
@@ -207,7 +207,7 @@ Implement the CLI using the shared SDK, not direct filesystem access to the Zo s
 Initial commands:
 
 ```text
-zo-drive login
+zo-drive configure
 zo-drive upload <file> [--path <prefix>]
 zo-drive ls [path]
 zo-drive download <key> [--output <file>]

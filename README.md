@@ -13,7 +13,7 @@ GUI/CLI versioning and release policy.
 - Account controls for username, password, sign-out, and permanent account/data deletion
 - Traversal-safe, user-scoped filesystem data root
 - Shared TypeScript SDK used by both the CLI and React app
-- `zo-drive` CLI: upload, list, download, delete, and usage
+- `zo-drive` CLI: upload, list, download, delete, usage, and secure per-device configuration
 - React GUI: folder browsing, search, drag-and-drop/multiple upload of any file type, list/grid views, previews, deletion, and usage display
 - Zo-native files: documents, spreadsheets, presentations, forms, and secure text pastes created privately inside the drive
 - Zo Paste: dark text editor with language and tag metadata; shared paste links honour the existing expiry and passcode controls
@@ -71,11 +71,11 @@ The CLI uses the same API:
 
 ```bash
 pnpm --filter @zo-drive/cli build
-ZO_DRIVE_API_URL="http://127.0.0.1:43071" node apps/cli/dist/index.js login --username sayyid --password 'your-password'
-# Copy the printed ZO_DRIVE_SESSION_TOKEN export, then:
-ZO_DRIVE_API_URL="http://127.0.0.1:43071" node apps/cli/dist/index.js upload ./example.pdf --path Documents
-ZO_DRIVE_API_URL="http://127.0.0.1:43071" node apps/cli/dist/index.js mkdir Documents/Receipts
-ZO_DRIVE_API_URL="http://127.0.0.1:43071" node apps/cli/dist/index.js ls Documents
+# Create a scoped device key in the browser at Zo Drive > API Keys first.
+ZO_DRIVE_API_URL="http://127.0.0.1:43071" ZO_DRIVE_API_KEY="zdk_..." node apps/cli/dist/index.js configure
+node apps/cli/dist/index.js upload ./example.pdf --path Documents
+node apps/cli/dist/index.js mkdir Documents/Receipts
+node apps/cli/dist/index.js ls Documents
 ```
 
 ## Upload from another machine
@@ -117,21 +117,22 @@ zo-drive --help
 #### Connect your local computer to Zo
 
 From any local computer with internet access, point the CLI at the public
-`/drive` address of this Zo Computer, then sign in with the Zo Drive owner
-account. This is a direct HTTPS connection to Zo Drive: you do not need SSH,
-Tailscale, or a Zo dashboard session on the local machine.
+`/drive` address of this Zo Computer, then create a named, scoped API key from
+the **API Keys** page in Zo Drive. This is a direct HTTPS connection to Zo
+Drive: you do not need SSH, Tailscale, or a Zo dashboard session on the local
+machine.
 
-The login command prints a session-token export; run that export in the same
-terminal before any upload, list, or download command. To keep the Zo Drive
-address across terminal sessions, add the `ZO_DRIVE_API_URL` export to your
-shell startup file, such as `~/.zshrc` or `~/.bashrc`.
+Paste the key without echoing it, then configure the device once. `zo-drive`
+stores the connection in `~/.config/zo-drive/config.json` with `0600`
+permissions; environment variables can still override it for automation.
 
 ```bash
 # Public /drive address of your Zo Computer
 export ZO_DRIVE_API_URL="https://your-drive.example/drive"
-zo-drive login --username sayyid --password 'your-password'
-
-# Run the ZO_DRIVE_SESSION_TOKEN export printed by login, then:
+read -rs "ZO_DRIVE_API_KEY?Paste your Zo Drive API key: "
+echo
+zo-drive configure
+unset ZO_DRIVE_API_KEY
 zo-drive usage
 ```
 
@@ -145,7 +146,7 @@ zo-drive upload ./launch-plan.pdf --path Product/Launch
 
 #### CLI updates and versioning
 
-The CLI has its own release track, currently `CLI v0.1.3`. Check an installed
+The CLI has its own release track, currently `CLI v1.0.0`. Check an installed
 copy with `zo-drive --version`. The global command remains linked to the
 repository checkout, so a rebuild updates the existing CLI without running
 `npm link` again. Use the `main` branch for the latest pushed changes:
@@ -181,7 +182,7 @@ import { ZoDriveClient } from "@zo-drive/sdk";
 
 const client = new ZoDriveClient({
   baseUrl: "https://your-drive.example/drive",
-  headers: { authorization: `Bearer ${process.env.ZO_DRIVE_SESSION_TOKEN}` }
+  headers: { authorization: `Bearer ${process.env.ZO_DRIVE_API_KEY}` }
 });
 
 const bytes = await readFile("./launch-plan.pdf");
@@ -192,8 +193,10 @@ await client.upload({
 });
 ```
 
-The CLI token is a bearer credential. Keep it in your environment or a secret
-manager and never commit it to source control.
+The device API key is a bearer credential. Keep it in a secret manager and
+never commit it to source control. Create separate scoped keys for each
+machine or automation, and revoke a key from Zo Drive immediately if it may
+have been exposed.
 
 ## Verify before trying it
 

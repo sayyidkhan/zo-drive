@@ -4,9 +4,17 @@ All notable changes to the `zo-drive` command-line tool are recorded here.
 
 ## Unreleased
 
+## v1.0.0 - 2026-07-20
+
 ### Changed
 
-- Split GUI and CLI release history into separate changelogs.
+- Replaced password-based terminal login with scoped, revocable device API
+  keys.
+
+### Security
+
+- `zo-drive configure` stores each machine's connection at
+  `~/.config/zo-drive/config.json` with owner-only permissions.
 
 ## v0.1.3 - 2026-07-20
 

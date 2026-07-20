@@ -4,9 +4,17 @@ All notable changes to the Zo Drive browser experience are recorded here.
 
 ## Unreleased
 
-### Changed
+## v0.3.0 - 2026-07-20
 
-- Split GUI and CLI release history into separate changelogs.
+### Added
+
+- An API Keys page in the Drive sidebar for provisioning and revoking
+  per-device access.
+
+### Security
+
+- Device keys are only shown once, stored as hashes, scoped, expiry-aware, and
+  revocable without changing the browser password.
 
 ## v0.2.3 - 2026-07-20
 

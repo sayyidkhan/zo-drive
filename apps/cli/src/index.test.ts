@@ -41,15 +41,11 @@ describe("zo-drive CLI", () => {
     expect(write).toHaveBeenCalledWith("Created folder Projects\n");
   });
 
-  it("logs in through the shared SDK and prints the session export", async () => {
+  it("does not offer password-based terminal login", async () => {
     const write = vi.fn();
-    const client = { loginForCli: vi.fn().mockResolvedValue({ user: { id: "owner", username: "sayyid" }, sessionToken: "signed-token" }) };
-
-    const code = await runCli(["login", "--username", "sayyid", "--password", "correct-horse-battery-staple"], { client, write });
-
-    expect(code).toBe(0);
-    expect(client.loginForCli).toHaveBeenCalledWith({ username: "sayyid", password: "correct-horse-battery-staple" });
-    expect(write).toHaveBeenCalledWith(expect.stringContaining("export ZO_DRIVE_SESSION_TOKEN='signed-token'"));
+    const code = await runCli(["login"], { client: {}, write });
+    expect(code).toBe(1);
+    expect(write).not.toHaveBeenCalled();
   });
 
   it("prints the independent CLI version without a Drive client", async () => {
@@ -58,7 +54,7 @@ describe("zo-drive CLI", () => {
     const code = await runCli(["--version"], { client: {}, write });
 
     expect(code).toBe(0);
-    expect(write).toHaveBeenCalledWith("zo-drive 0.1.3\n");
+    expect(write).toHaveBeenCalledWith("zo-drive 1.0.0\n");
   });
 
   it("returns a non-zero result and a useful error for invalid commands", async () => {

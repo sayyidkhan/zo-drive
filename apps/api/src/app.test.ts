@@ -1,10 +1,11 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createApp } from "./app.js";
 import { LocalAuthStore } from "./auth/local-auth-store.js";
+import { LocalApiKeyStore } from "./auth/local-api-key-store.js";
 import { SessionService } from "./auth/session.js";
 import { LocalShareStore } from "./sharing/local-share-store.js";
 import { LocalFormStore } from "./forms/local-form-store.js";
@@ -311,6 +312,63 @@ describe("Zo Drive API", () => {
     expect(deleted.headers.get("set-cookie")).toContain("Max-Age=0");
     expect((await app.request("http://localhost/objects", { headers: { cookie: renamedCookie! } })).status).toBe(401);
     await expect((await app.request("http://localhost/auth/status", { headers: { cookie: cookie! } })).json()).resolves.toEqual({ authenticated: false, registrationAllowed: true, user: null });
+  });
+
+  it("issues revocable scoped device keys without exposing their secrets after creation", async () => {
+    const root = await mkdtemp(join(tmpdir(), "zo-drive-api-keys-"));
+    roots.push(root);
+    const sessions = new SessionService("test-session-secret-that-is-more-than-thirty-two-characters");
+    const apiKeys = new LocalApiKeyStore({ root });
+    const auth = { store: new LocalAuthStore({ root }), sessions, secureCookies: false };
+    const app = createApp({
+      storage: new LocalDriveStorage({ root }),
+      resolveUserId: async (request) => sessions.userIdFromRequest(request) ?? await apiKeys.userIdFromRequest(request),
+      auth,
+      apiKeys
+    });
+    const registration = await app.request("http://localhost/auth/register", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: "owner", password: "secret1" }) });
+    const cookie = registration.headers.get("set-cookie")!;
+
+    const created = await app.request("http://localhost/api-keys", { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ name: "Read-only laptop", scopes: ["read"], expiresAt: null }) });
+    expect(created.status).toBe(201);
+    const createdBody = await created.json() as { apiKey: string; id: string; secretHash?: string };
+    expect(createdBody.apiKey).toMatch(/^zdk_/);
+    expect(createdBody.secretHash).toBeUndefined();
+    await expect(readFile(join(root, "v1", "auth", "api-keys.json"), "utf8")).resolves.not.toContain(createdBody.apiKey);
+
+    const listed = await app.request("http://localhost/api-keys", { headers: { cookie } });
+    await expect(listed.json()).resolves.toMatchObject({ keys: [{ id: createdBody.id, name: "Read-only laptop" }] });
+    expect((await app.request("http://localhost/api-keys", { headers: { authorization: `Bearer ${createdBody.apiKey}` } })).status).toBe(401);
+    expect((await app.request("http://localhost/objects", { headers: { authorization: `Bearer ${createdBody.apiKey}` } })).status).toBe(200);
+    expect((await app.request("http://localhost/objects", { method: "POST", headers: { authorization: `Bearer ${createdBody.apiKey}`, "content-type": "text/plain", "x-zo-drive-file-name": "blocked.txt" }, body: "blocked" })).status).toBe(401);
+
+    expect((await app.request(`http://localhost/api-keys/${createdBody.id}`, { method: "DELETE", headers: { cookie } })).status).toBe(204);
+    expect((await app.request("http://localhost/objects", { headers: { authorization: `Bearer ${createdBody.apiKey}` } })).status).toBe(401);
+  });
+
+  it("keeps device keys usable when the owner username changes and deletes them with the account", async () => {
+    const root = await mkdtemp(join(tmpdir(), "zo-drive-api-key-rename-"));
+    roots.push(root);
+    const sessions = new SessionService("test-session-secret-that-is-more-than-thirty-two-characters");
+    const apiKeys = new LocalApiKeyStore({ root });
+    const auth = { store: new LocalAuthStore({ root }), sessions, secureCookies: false };
+    const app = createApp({
+      storage: new LocalDriveStorage({ root }),
+      resolveUserId: async (request) => sessions.userIdFromRequest(request) ?? await apiKeys.userIdFromRequest(request),
+      auth,
+      apiKeys
+    });
+    const registration = await app.request("http://localhost/auth/register", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: "owner", password: "secret1" }) });
+    const cookie = registration.headers.get("set-cookie")!;
+    const created = await app.request("http://localhost/api-keys", { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ name: "Automation", scopes: ["read", "write"], expiresAt: null }) });
+    const { apiKey } = await created.json() as { apiKey: string };
+
+    const profile = await app.request("http://localhost/auth/profile", { method: "PATCH", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ username: "drive-owner" }) });
+    const renamedCookie = profile.headers.get("set-cookie")!;
+    expect((await app.request("http://localhost/objects", { headers: { authorization: `Bearer ${apiKey}` } })).status).toBe(200);
+
+    expect((await app.request("http://localhost/auth/account", { method: "DELETE", headers: { "content-type": "application/json", cookie: renamedCookie }, body: JSON.stringify({ password: "secret1", confirmation: "DELETE MY DRIVE" }) })).status).toBe(204);
+    expect((await app.request("http://localhost/objects", { headers: { authorization: `Bearer ${apiKey}` } })).status).toBe(401);
   });
 
   it("preserves existing share links when a username renames its storage namespace", async () => {

@@ -33,6 +33,10 @@ export class SessionService {
     return this.userIdFromToken(bearerToken ?? cookieValue(request.headers.get("cookie"), "zo_drive_session"));
   }
 
+  userIdFromCookie(request: Request): string | null {
+    return this.userIdFromToken(cookieValue(request.headers.get("cookie"), "zo_drive_session"));
+  }
+
   cookieHeader(token: string, secure: boolean): string {
     return `zo_drive_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800${secure ? "; Secure" : ""}`;
   }
