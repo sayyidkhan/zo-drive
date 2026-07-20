@@ -1,24 +1,42 @@
 import { createReadStream, createWriteStream } from "node:fs";
-import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, rm, stat, statfs, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import { Readable } from "node:stream";
+import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { randomUUID } from "node:crypto";
 
-export const nativeFileTypes = ["document", "spreadsheet", "presentation", "form"] as const;
+export const nativeFileTypes = ["document", "spreadsheet", "presentation", "form", "paste"] as const;
 export type NativeFileType = (typeof nativeFileTypes)[number];
+export const DEFAULT_STORAGE_QUOTA_BYTES = 100 * 1024 * 1024 * 1024;
+export const MIN_STORAGE_QUOTA_BYTES = 1 * 1024 * 1024 * 1024;
+const MAX_STORAGE_QUOTA_RATIO = 0.8;
 
 const nativeContentTypes: Record<NativeFileType, string> = {
   document: "application/vnd.zo.document+json",
   spreadsheet: "application/vnd.zo.spreadsheet+json",
   presentation: "application/vnd.zo.presentation+json",
-  form: "application/vnd.zo.form+json"
+  form: "application/vnd.zo.form+json",
+  paste: "application/vnd.zo.paste+json"
 };
 
 export class UnsafeDrivePathError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "UnsafeDrivePathError";
+  }
+}
+
+export class StorageQuotaExceededError extends Error {
+  constructor() {
+    super("Your Zo Drive has reached its 100 GB storage limit. Empty Trash or remove files to continue.");
+    this.name = "StorageQuotaExceededError";
+  }
+}
+
+export class StorageQuotaConfigurationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "StorageQuotaConfigurationError";
   }
 }
 
@@ -53,6 +71,20 @@ export type DriveTrashItem = {
   expiresAt: string;
 };
 
+type StorageCategory = "photos" | "videos" | "documents" | "audio" | "archives" | "other" | "trash";
+type StorageUsage = {
+  fileCount: number;
+  usedBytes: number;
+  quotaBytes: number;
+  quotaAvailableBytes: number;
+  minQuotaBytes: number;
+  maxQuotaBytes: number;
+  totalBytes: number;
+  availableBytes: number;
+  systemUsedBytes: number;
+  categories: Array<{ id: StorageCategory; bytes: number; fileCount: number }>;
+};
+
 export class TrashRestoreConflictError extends Error {
   constructor() {
     super("A file already exists at the original location");
@@ -72,6 +104,7 @@ type WriteDriveFile = StorageTarget & {
 
 type CreateNativeDriveFile = StorageTarget & { type: NativeFileType };
 type UpdateNativeDriveFile = StorageTarget & { content: Record<string, unknown> & { format: "zo-native"; type: NativeFileType; version: 1 } };
+type RenameDriveFile = StorageTarget & { name: string };
 
 type ListDriveFiles = {
   userId: string;
@@ -84,7 +117,7 @@ type ListDriveFiles = {
   modifiedBefore?: string;
 };
 
-export type DriveFileCategory = "document" | "spreadsheet" | "presentation" | "form" | "image" | "video" | "audio" | "pdf" | "other";
+export type DriveFileCategory = "document" | "spreadsheet" | "presentation" | "form" | "paste" | "image" | "video" | "audio" | "pdf" | "other";
 
 type ListDriveFolders = {
   userId: string;
@@ -113,31 +146,73 @@ const contentTypes: Record<string, string> = {
   ".webp": "image/webp"
 };
 
+function addUsageCategory(categories: Map<StorageCategory, { bytes: number; fileCount: number }>, category: StorageCategory, size: number): void {
+  const values = categories.get(category)!;
+  values.bytes += size;
+  values.fileCount += 1;
+}
+
+function categoryForFile(file: Pick<DriveFile, "contentType" | "name">): Exclude<StorageCategory, "trash"> {
+  const contentType = file.contentType.toLowerCase();
+  const name = file.name.toLowerCase();
+  if (contentType.startsWith("image/")) return "photos";
+  if (contentType.startsWith("video/")) return "videos";
+  if (contentType.startsWith("audio/")) return "audio";
+  if (contentType === "application/pdf" || contentType.startsWith("text/") || contentType.includes("document") || contentType.includes("spreadsheet") || contentType.includes("presentation") || contentType.includes("form") || contentType.includes("paste")) return "documents";
+  if (contentType.includes("zip") || contentType.includes("compressed") || /\.(zip|rar|7z|tar|gz|bz2|xz)$/i.test(name)) return "archives";
+  return "other";
+}
+
+function quotaLimitedStream(writableBytes: number): Transform {
+  let writtenBytes = 0;
+  return new Transform({
+    transform(chunk, encoding, callback) {
+      writtenBytes += Buffer.isBuffer(chunk) ? chunk.length : Buffer.byteLength(chunk, encoding);
+      if (writtenBytes > writableBytes) {
+        callback(new StorageQuotaExceededError());
+        return;
+      }
+      callback(null, chunk);
+    }
+  });
+}
+
 /**
  * A filesystem-backed storage adapter for a private Zo site/service.
  * Its root is application data, never the source-code repository.
  */
 export class LocalDriveStorage {
   readonly root: string;
+  readonly quotaBytes: number;
+  private readonly writeLocks = new Map<string, Promise<void>>();
 
-  constructor({ root }: { root: string }) {
+  constructor({ root, quotaBytes = DEFAULT_STORAGE_QUOTA_BYTES }: { root: string; quotaBytes?: number }) {
     if (!root || !isAbsolute(root)) {
       throw new Error("ZO_DRIVE_DATA_ROOT must be an absolute path");
     }
+    if (!Number.isSafeInteger(quotaBytes) || quotaBytes < 1) {
+      throw new Error("ZO_DRIVE_STORAGE_QUOTA_BYTES must be a positive integer");
+    }
     this.root = resolve(root);
+    this.quotaBytes = quotaBytes;
   }
 
   async write({ userId, key, content, contentType }: WriteDriveFile): Promise<DriveFile> {
+    return this.withWriteLock(userId, async () => {
     const target = this.resolveFilePath(userId, key);
     const normalizedKey = this.normalizeKey(key, { allowEmpty: false });
     await mkdir(dirname(target), { recursive: true });
+    const existingSize = await this.existingFileSize(target);
+    const usage = await this.getUsage({ userId });
+    const writableBytes = Math.max(0, usage.quotaBytes - usage.usedBytes + existingSize);
+    if (Buffer.isBuffer(content) && content.length > writableBytes) throw new StorageQuotaExceededError();
 
     const temporaryTarget = join(dirname(target), `.${basename(target)}.${randomUUID()}.uploading`);
     try {
       if (Buffer.isBuffer(content)) {
         await writeFile(temporaryTarget, content);
       } else {
-        await pipeline(content, createWriteStream(temporaryTarget));
+        await pipeline(content, quotaLimitedStream(writableBytes), createWriteStream(temporaryTarget));
       }
       await rename(temporaryTarget, target);
     } catch (error) {
@@ -154,6 +229,7 @@ export class LocalDriveStorage {
       await this.writeContentTypes(userId, storedContentTypes);
     }
     return this.describe(target, normalizedKey, starredKeys.has(normalizedKey), storedContentTypes.get(normalizedKey));
+    });
   }
 
   async createNativeFile({ userId, key, type }: CreateNativeDriveFile): Promise<DriveFile> {
@@ -184,6 +260,40 @@ export class LocalDriveStorage {
       content: Buffer.from(JSON.stringify(content)),
       contentType: nativeContentTypes[content.type]
     });
+  }
+
+  async renameFile({ userId, key, name }: RenameDriveFile): Promise<DriveFile> {
+    const normalizedKey = this.normalizeKey(key, { allowEmpty: false });
+    const normalizedName = name.trim();
+    if (!normalizedName || normalizedName.includes("/") || normalizedName.includes("\\") || normalizedName === "." || normalizedName === "..") {
+      throw new UnsafeDrivePathError("File names cannot contain path separators");
+    }
+    const parent = dirname(normalizedKey);
+    const nextKey = this.normalizeKey(parent === "." ? normalizedName : `${parent}/${normalizedName}`, { allowEmpty: false });
+    if (nextKey === normalizedKey) return this.read({ userId, key: normalizedKey });
+
+    const source = this.resolveFilePath(userId, normalizedKey);
+    const target = this.resolveFilePath(userId, nextKey);
+    try {
+      await stat(target);
+      throw Object.assign(new Error("A file with this name already exists"), { code: "EEXIST" });
+    } catch (error: unknown) {
+      if (!isNotFound(error)) throw error;
+    }
+
+    const [starredKeys, storedContentTypes] = await Promise.all([this.readStarredKeys(userId), this.readContentTypes(userId)]);
+    await rename(source, target);
+    if (starredKeys.delete(normalizedKey)) {
+      starredKeys.add(nextKey);
+      await this.writeStarredKeys(userId, starredKeys);
+    }
+    const contentType = storedContentTypes.get(normalizedKey);
+    if (contentType) {
+      storedContentTypes.delete(normalizedKey);
+      storedContentTypes.set(nextKey, contentType);
+      await this.writeContentTypes(userId, storedContentTypes);
+    }
+    return this.describe(target, nextKey, starredKeys.has(nextKey), storedContentTypes.get(nextKey));
   }
 
   async read({ userId, key }: StorageTarget): Promise<ReadDriveFile> {
@@ -385,13 +495,56 @@ export class LocalDriveStorage {
     return this.describe(target, normalizedKey, starred, storedContentTypes.get(normalizedKey));
   }
 
-  async getUsage({ userId }: Pick<StorageTarget, "userId">): Promise<{ fileCount: number; usedBytes: number }> {
+  async getUsage({ userId }: Pick<StorageTarget, "userId">): Promise<StorageUsage> {
     const [files, trash] = await Promise.all([this.list({ userId }), this.listTrash({ userId })]);
-    const items = [...files, ...trash];
+    const categories = new Map<StorageCategory, { bytes: number; fileCount: number }>([
+      ["photos", { bytes: 0, fileCount: 0 }],
+      ["videos", { bytes: 0, fileCount: 0 }],
+      ["documents", { bytes: 0, fileCount: 0 }],
+      ["audio", { bytes: 0, fileCount: 0 }],
+      ["archives", { bytes: 0, fileCount: 0 }],
+      ["other", { bytes: 0, fileCount: 0 }],
+      ["trash", { bytes: 0, fileCount: 0 }]
+    ]);
+    for (const file of files) addUsageCategory(categories, categoryForFile(file), file.size);
+    for (const file of trash) addUsageCategory(categories, "trash", file.size);
+    await mkdir(this.root, { recursive: true });
+    const { availableBytes, maxQuotaBytes, totalBytes } = await this.getFilesystemQuotaBounds();
+    const quotaBytes = await this.readQuota(userId);
+    const usedBytes = [...files, ...trash].reduce((total, file) => total + file.size, 0);
     return {
-      fileCount: items.length,
-      usedBytes: items.reduce((total, file) => total + file.size, 0)
+      fileCount: files.length + trash.length,
+      usedBytes,
+      quotaBytes,
+      quotaAvailableBytes: Math.max(0, quotaBytes - usedBytes),
+      minQuotaBytes: MIN_STORAGE_QUOTA_BYTES,
+      maxQuotaBytes,
+      totalBytes,
+      availableBytes,
+      systemUsedBytes: Math.max(0, totalBytes - availableBytes),
+      categories: [...categories.entries()].map(([id, values]) => ({ id, ...values }))
     };
+  }
+
+  async setQuota({ userId, quotaBytes }: Pick<StorageTarget, "userId"> & { quotaBytes: number }): Promise<StorageUsage> {
+    return this.withWriteLock(userId, async () => {
+      const { maxQuotaBytes } = await this.getFilesystemQuotaBounds();
+      if (!Number.isSafeInteger(quotaBytes)) {
+        throw new StorageQuotaConfigurationError("Storage limit must be a whole number of bytes");
+      }
+      if (quotaBytes < MIN_STORAGE_QUOTA_BYTES) {
+        throw new StorageQuotaConfigurationError("Storage limit must be at least 1 GB");
+      }
+      if (quotaBytes > maxQuotaBytes) {
+        throw new StorageQuotaConfigurationError("Storage limit cannot exceed 80% of this machine's disk capacity");
+      }
+      const usage = await this.getUsage({ userId });
+      if (quotaBytes < usage.usedBytes) {
+        throw new StorageQuotaConfigurationError("Storage limit cannot be lower than the files currently stored in Zo Drive");
+      }
+      await this.writeQuota(userId, quotaBytes);
+      return this.getUsage({ userId });
+    });
   }
 
   private userFilesRoot(userId: string): string {
@@ -399,9 +552,68 @@ export class LocalDriveStorage {
     return join(this.root, "v1", "users", safeUserId, "files");
   }
 
+  private async existingFileSize(filePath: string): Promise<number> {
+    try {
+      const file = await stat(filePath);
+      return file.isFile() ? file.size : 0;
+    } catch (error: unknown) {
+      if (isNotFound(error)) return 0;
+      throw error;
+    }
+  }
+
+  private async withWriteLock<T>(userId: string, action: () => Promise<T>): Promise<T> {
+    const previous = this.writeLocks.get(userId) ?? Promise.resolve();
+    let release!: () => void;
+    const current = new Promise<void>((resolve) => { release = resolve; });
+    this.writeLocks.set(userId, current);
+    await previous;
+    try {
+      return await action();
+    } finally {
+      release();
+      if (this.writeLocks.get(userId) === current) this.writeLocks.delete(userId);
+    }
+  }
+
   private userMetadataRoot(userId: string): string {
     const safeUserId = this.normalizeUserId(userId);
     return join(this.root, "v1", "users", safeUserId);
+  }
+
+  private async getFilesystemQuotaBounds(): Promise<{ totalBytes: number; availableBytes: number; maxQuotaBytes: number }> {
+    await mkdir(this.root, { recursive: true });
+    const filesystem = await statfs(this.root);
+    const totalBytes = filesystem.blocks * filesystem.bsize;
+    return {
+      totalBytes,
+      availableBytes: filesystem.bavail * filesystem.bsize,
+      maxQuotaBytes: Math.floor(totalBytes * MAX_STORAGE_QUOTA_RATIO)
+    };
+  }
+
+  private async readQuota(userId: string): Promise<number> {
+    try {
+      const parsed = JSON.parse(await readFile(join(this.userMetadataRoot(userId), "storage.json"), "utf8")) as { quotaBytes?: unknown };
+      return typeof parsed.quotaBytes === "number" && Number.isSafeInteger(parsed.quotaBytes) && parsed.quotaBytes >= MIN_STORAGE_QUOTA_BYTES ? parsed.quotaBytes : this.quotaBytes;
+    } catch (error: unknown) {
+      if (isNotFound(error)) return this.quotaBytes;
+      throw error;
+    }
+  }
+
+  private async writeQuota(userId: string, quotaBytes: number): Promise<void> {
+    const metadataRoot = this.userMetadataRoot(userId);
+    await mkdir(metadataRoot, { recursive: true });
+    const target = join(metadataRoot, "storage.json");
+    const temporaryTarget = join(metadataRoot, `.storage.${randomUUID()}.tmp`);
+    try {
+      await writeFile(temporaryTarget, JSON.stringify({ quotaBytes }));
+      await rename(temporaryTarget, target);
+    } catch (error) {
+      await rm(temporaryTarget, { force: true });
+      throw error;
+    }
   }
 
   private userTrashRoot(userId: string): string {
@@ -639,6 +851,7 @@ function matchesFileCategory(file: DriveFile, category: DriveFileCategory): bool
   if (category === "spreadsheet") return file.nativeType === "spreadsheet";
   if (category === "presentation") return file.nativeType === "presentation";
   if (category === "form") return file.nativeType === "form";
+  if (category === "paste") return file.nativeType === "paste";
   if (category === "image") return file.contentType.startsWith("image/");
   if (category === "video") return file.contentType.startsWith("video/");
   if (category === "audio") return file.contentType.startsWith("audio/");
@@ -656,7 +869,8 @@ function nativeFileTemplate(type: NativeFileType): Record<string, unknown> {
     case "document": return { format: "zo-native", type, version: 1, createdAt, blocks: [] };
     case "spreadsheet": return { format: "zo-native", type, version: 1, createdAt, sheets: [{ name: "Sheet 1", cells: {} }] };
     case "presentation": return { format: "zo-native", type, version: 1, createdAt, slides: [{ title: "Untitled presentation", body: "" }] };
-    case "form": return { format: "zo-native", type, version: 1, createdAt, questions: [] };
+    case "form": return { format: "zo-native", type, version: 1, createdAt, title: "Untitled form", description: "", questions: [{ id: "question-1", title: "", description: "", type: "multiple-choice", options: ["Option 1"], required: false }] };
+    case "paste": return { format: "zo-native", type, version: 1, createdAt, language: "plaintext", tags: [], text: "" };
   }
 }
 

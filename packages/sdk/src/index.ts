@@ -3,7 +3,10 @@ import {
   authStatusSchema,
   driveUserSchema,
   driveShareSchema,
+  formResponseSchema,
+  listFormResponsesSchema,
   listSharesResponseSchema,
+  publishedFormSchema,
   publicShareSchema,
   driveFolderSchema,
   driveObjectSchema,
@@ -13,7 +16,7 @@ import {
   listTrashResponseSchema,
   storageUsageSchema
 } from "@zo-drive/types";
-import type { AuthStatus, DriveFolder, DriveObject, DriveShare, DriveTrashItem, DriveUser, NativeFileType, PublicShare, ShareAccess, StorageUsage } from "@zo-drive/types";
+import type { AuthStatus, DriveFolder, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, NativeFileType, PublicShare, PublishedForm, ShareAccess, ShareKind, StorageUsage } from "@zo-drive/types";
 
 type Fetcher = typeof fetch;
 
@@ -27,7 +30,7 @@ export type ListOptions = {
   prefix?: string;
   query?: string;
   contentQuery?: string;
-  type?: "document" | "spreadsheet" | "presentation" | "form" | "image" | "video" | "audio" | "pdf" | "other";
+  type?: "document" | "spreadsheet" | "presentation" | "form" | "paste" | "image" | "video" | "audio" | "pdf" | "other";
   starred?: boolean;
   modifiedAfter?: string;
   modifiedBefore?: string;
@@ -128,6 +131,15 @@ export class ZoDriveClient {
     return driveObjectSchema.parse(await response.json());
   }
 
+  async rename(key: string, name: string): Promise<DriveObject> {
+    const response = await this.request(`/objects/${encodeDriveKey(key)}`, {
+      body: JSON.stringify({ name }),
+      headers: { "content-type": "application/json" },
+      method: "PATCH"
+    });
+    return driveObjectSchema.parse(await response.json());
+  }
+
   async download(key: string): Promise<Response> {
     return this.request(`/objects/${encodeDriveKey(key)}`, { method: "GET" });
   }
@@ -170,6 +182,15 @@ export class ZoDriveClient {
 
   async getUsage(): Promise<StorageUsage> {
     const response = await this.request("/usage", { method: "GET" });
+    return storageUsageSchema.parse(await response.json());
+  }
+
+  async setQuota(quotaBytes: number): Promise<StorageUsage> {
+    const response = await this.request("/usage/quota", {
+      body: JSON.stringify({ quotaBytes }),
+      headers: { "content-type": "application/json" },
+      method: "PUT"
+    });
     return storageUsageSchema.parse(await response.json());
   }
 
@@ -241,9 +262,9 @@ export class ZoDriveClient {
     return listSharesResponseSchema.parse(await response.json()).shares;
   }
 
-  async createShare({ key, access, passcode, expiresAt }: { key: string; access: ShareAccess; passcode?: string; expiresAt?: string | null }): Promise<DriveShare> {
+  async createShare({ key, access, kind, passcode, expiresAt }: { key: string; access: ShareAccess; kind?: ShareKind; passcode?: string; expiresAt?: string | null }): Promise<DriveShare> {
     const response = await this.request("/shares", {
-      body: JSON.stringify({ key, access, passcode, expiresAt }),
+      body: JSON.stringify({ key, access, kind, passcode, expiresAt }),
       headers: { "content-type": "application/json" },
       method: "POST"
     });
@@ -261,6 +282,34 @@ export class ZoDriveClient {
       method: "PATCH"
     });
     return driveShareSchema.parse(await response.json());
+  }
+
+  async publishForm(key: string): Promise<PublishedForm> {
+    const response = await this.request("/forms", {
+      body: JSON.stringify({ key }),
+      headers: { "content-type": "application/json" },
+      method: "POST"
+    });
+    return publishedFormSchema.parse(await response.json());
+  }
+
+  async getPublicForm(id: string): Promise<PublishedForm> {
+    const response = await this.request(`/public/forms/${encodeURIComponent(id)}`, { method: "GET" });
+    return publishedFormSchema.parse(await response.json());
+  }
+
+  async submitFormResponse(id: string, answers: Record<string, string | string[]>): Promise<FormResponse> {
+    const response = await this.request(`/public/forms/${encodeURIComponent(id)}/responses`, {
+      body: JSON.stringify({ answers }),
+      headers: { "content-type": "application/json" },
+      method: "POST"
+    });
+    return formResponseSchema.parse(await response.json());
+  }
+
+  async listFormResponses(id: string): Promise<FormResponse[]> {
+    const response = await this.request(`/forms/${encodeURIComponent(id)}/responses`, { method: "GET" });
+    return listFormResponsesSchema.parse(await response.json()).responses;
   }
 
   async getPublicShare(id: string): Promise<PublicShare> {

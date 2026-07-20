@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const nativeFileTypeSchema = z.enum(["document", "spreadsheet", "presentation", "form"]);
+export const nativeFileTypeSchema = z.enum(["document", "spreadsheet", "presentation", "form", "paste"]);
 
 export const driveObjectSchema = z.object({
   key: z.string(),
@@ -43,7 +43,19 @@ export const listFoldersResponseSchema = z.object({
 
 export const storageUsageSchema = z.object({
   fileCount: z.number().int().nonnegative(),
-  usedBytes: z.number().int().nonnegative()
+  usedBytes: z.number().int().nonnegative(),
+  quotaBytes: z.number().int().positive(),
+  quotaAvailableBytes: z.number().int().nonnegative(),
+  minQuotaBytes: z.number().int().positive(),
+  maxQuotaBytes: z.number().int().positive(),
+  totalBytes: z.number().int().nonnegative(),
+  availableBytes: z.number().int().nonnegative(),
+  systemUsedBytes: z.number().int().nonnegative(),
+  categories: z.array(z.object({
+    id: z.enum(["photos", "videos", "documents", "audio", "archives", "other", "trash"]),
+    bytes: z.number().int().nonnegative(),
+    fileCount: z.number().int().nonnegative()
+  }))
 });
 
 export const apiErrorSchema = z.object({
@@ -70,6 +82,7 @@ export const authCredentialsSchema = z.object({
 });
 
 export const shareAccessSchema = z.enum(["public", "passcode"]);
+export const shareKindSchema = z.enum(["share", "transfer"]);
 
 export const driveShareSchema = z.object({
   id: z.string(),
@@ -78,12 +91,52 @@ export const driveShareSchema = z.object({
   size: z.number().int().nonnegative(),
   contentType: z.string(),
   access: shareAccessSchema,
+  kind: shareKindSchema.default("share"),
   expiresAt: z.string().nullable(),
   createdAt: z.string()
 });
 
 export const listSharesResponseSchema = z.object({ shares: z.array(driveShareSchema) });
 export const publicShareSchema = driveShareSchema.pick({ "access": true, "contentType": true, "expiresAt": true, "id": true, "name": true, "size": true }).extend({ requiresPasscode: z.boolean() });
+
+export const formQuestionSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  description: z.string(),
+  type: z.enum([
+    "short-answer", "paragraph", "multiple-choice", "checkboxes", "dropdown",
+    "linear-scale", "rating", "multiple-choice-grid", "checkbox-grid", "date", "time"
+  ]),
+  options: z.array(z.string()),
+  required: z.boolean(),
+  rows: z.array(z.string()).default([]),
+  columns: z.array(z.string()).default([]),
+  scaleMin: z.number().int().min(0).max(10).default(1),
+  scaleMax: z.number().int().min(1).max(10).default(5),
+  scaleMinLabel: z.string().default(""),
+  scaleMaxLabel: z.string().default(""),
+  ratingIcon: z.enum(["star", "heart", "thumb"]).default("star")
+});
+export const publishedFormSchema = z.object({
+  id: z.string(),
+  shortCode: z.string().min(6).max(32),
+  title: z.string(),
+  description: z.string(),
+  theme: z.string(),
+  banner: z.enum(["none", "botanical", "fireworks"]).default("none"),
+  questions: z.array(formQuestionSchema),
+  settings: z.object({
+    acceptingResponses: z.boolean().default(true),
+    confirmationMessage: z.string().default("Your response has been recorded."),
+    showProgressBar: z.boolean().default(false)
+  }).default({ acceptingResponses: true, confirmationMessage: "Your response has been recorded.", showProgressBar: false })
+});
+export const formResponseSchema = z.object({
+  id: z.string(),
+  submittedAt: z.string(),
+  answers: z.record(z.string(), z.union([z.string(), z.array(z.string())]))
+});
+export const listFormResponsesSchema = z.object({ responses: z.array(formResponseSchema) });
 
 export type DriveObject = z.infer<typeof driveObjectSchema>;
 export type NativeFileType = z.infer<typeof nativeFileTypeSchema>;
@@ -98,4 +151,8 @@ export type DriveUser = z.infer<typeof driveUserSchema>;
 export type AuthStatus = z.infer<typeof authStatusSchema>;
 export type DriveShare = z.infer<typeof driveShareSchema>;
 export type ShareAccess = z.infer<typeof shareAccessSchema>;
+export type ShareKind = z.infer<typeof shareKindSchema>;
 export type PublicShare = z.infer<typeof publicShareSchema>;
+export type FormQuestion = z.infer<typeof formQuestionSchema>;
+export type PublishedForm = z.infer<typeof publishedFormSchema>;
+export type FormResponse = z.infer<typeof formResponseSchema>;

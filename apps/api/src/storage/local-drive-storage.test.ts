@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { LocalDriveStorage, UnsafeDrivePathError } from "./local-drive-storage.js";
+import { LocalDriveStorage, MIN_STORAGE_QUOTA_BYTES, StorageQuotaConfigurationError, StorageQuotaExceededError, UnsafeDrivePathError } from "./local-drive-storage.js";
 
 describe("LocalDriveStorage", () => {
   const roots: string[] = [];
@@ -77,7 +77,27 @@ describe("LocalDriveStorage", () => {
     await expect(storage.list({ userId: "user_123", query: "cat" })).resolves.toMatchObject([
       { key: "Photos/cat.jpg", size: 5, contentType: "image/jpeg" }
     ]);
-    await expect(storage.getUsage({ userId: "user_123" })).resolves.toEqual({ fileCount: 2, usedBytes: 8 });
+    await expect(storage.getUsage({ userId: "user_123" })).resolves.toMatchObject({ fileCount: 2, usedBytes: 8, quotaBytes: 100 * 1024 * 1024 * 1024, quotaAvailableBytes: 100 * 1024 * 1024 * 1024 - 8, totalBytes: expect.any(Number), availableBytes: expect.any(Number), systemUsedBytes: expect.any(Number), categories: expect.arrayContaining([{ id: "photos", bytes: 5, fileCount: 1 }, { id: "documents", bytes: 3, fileCount: 1 }]) });
+  });
+
+  it("enforces the configured quota while allowing a replacement file to reuse its allocation", async () => {
+    const root = await mkdtemp(join(tmpdir(), "zo-drive-quota-"));
+    roots.push(root);
+    const storage = new LocalDriveStorage({ root, quotaBytes: 5 });
+    await storage.write({ userId: "user_123", key: "draft.txt", content: Buffer.from("12345"), contentType: "text/plain" });
+    await expect(storage.write({ userId: "user_123", key: "another.txt", content: Buffer.from("6"), contentType: "text/plain" })).rejects.toBeInstanceOf(StorageQuotaExceededError);
+    await expect(storage.write({ userId: "user_123", key: "draft.txt", content: Buffer.from("1234"), contentType: "text/plain" })).resolves.toMatchObject({ size: 4 });
+  });
+
+  it("persists a per-user storage limit and enforces the 1 GB to 80% machine range", async () => {
+    const storage = await createStorage();
+    const initialUsage = await storage.getUsage({ userId: "user_123" });
+    const selectedQuota = Math.min(200 * 1024 * 1024 * 1024, initialUsage.maxQuotaBytes);
+
+    await expect(storage.setQuota({ userId: "user_123", quotaBytes: selectedQuota })).resolves.toMatchObject({ quotaBytes: selectedQuota });
+    await expect(new LocalDriveStorage({ root: storage.root }).getUsage({ userId: "user_123" })).resolves.toMatchObject({ quotaBytes: selectedQuota });
+    await expect(storage.setQuota({ userId: "user_123", quotaBytes: MIN_STORAGE_QUOTA_BYTES - 1 })).rejects.toBeInstanceOf(StorageQuotaConfigurationError);
+    await expect(storage.setQuota({ userId: "user_123", quotaBytes: initialUsage.maxQuotaBytes + 1 })).rejects.toBeInstanceOf(StorageQuotaConfigurationError);
   });
 
   it("filters files by type, text content, star state, and modified date", async () => {
@@ -103,6 +123,16 @@ describe("LocalDriveStorage", () => {
     await expect(storage.listStarred({ userId: "alice" })).resolves.toEqual([]);
   });
 
+  it("renames files in place while preserving their metadata", async () => {
+    const storage = await createStorage();
+    await storage.write({ userId: "alice", key: "Notes/plan.txt", content: Buffer.from("ship it"), contentType: "text/plain" });
+    await storage.setStarred({ userId: "alice", key: "Notes/plan.txt", starred: true });
+
+    await expect(storage.renameFile({ userId: "alice", key: "Notes/plan.txt", name: "strategy.txt" })).resolves.toMatchObject({ key: "Notes/strategy.txt", name: "strategy.txt", contentType: "text/plain", starred: true });
+    await expect(storage.read({ userId: "alice", key: "Notes/plan.txt" })).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(storage.read({ userId: "alice", key: "Notes/strategy.txt" })).resolves.toMatchObject({ starred: true });
+  });
+
   it("moves files into Trash, restores them with their metadata, and purges expired entries", async () => {
     const storage = await createStorage();
     await storage.write({ userId: "alice", key: "Notes/plan.txt", content: Buffer.from("ship it"), contentType: "text/plain" });
@@ -111,7 +141,7 @@ describe("LocalDriveStorage", () => {
     const item = await storage.trash({ userId: "alice", key: "Notes/plan.txt" });
     await expect(storage.list({ userId: "alice" })).resolves.toEqual([]);
     await expect(storage.listTrash({ userId: "alice" })).resolves.toMatchObject([{ id: item.id, originalKey: "Notes/plan.txt", starred: true }]);
-    await expect(storage.getUsage({ userId: "alice" })).resolves.toEqual({ fileCount: 1, usedBytes: 7 });
+    await expect(storage.getUsage({ userId: "alice" })).resolves.toMatchObject({ fileCount: 1, usedBytes: 7, categories: expect.arrayContaining([{ id: "trash", bytes: 7, fileCount: 1 }]) });
 
     await expect(storage.restoreTrash({ userId: "alice", id: item.id })).resolves.toMatchObject({ key: "Notes/plan.txt", starred: true, contentType: "text/plain" });
     await expect(storage.read({ userId: "alice", key: "Notes/plan.txt" })).resolves.toMatchObject({ starred: true });
@@ -142,12 +172,23 @@ describe("LocalDriveStorage", () => {
     await expect(storage.createNativeFile({ userId: "user_123", key: "Projects/Untitled document", type: "document" })).rejects.toMatchObject({ code: "EEXIST" });
   });
 
+  it("creates and filters Zo Paste files as a distinct native type", async () => {
+    const storage = await createStorage();
+
+    const paste = await storage.createNativeFile({ userId: "user_123", key: "Notes/deploy-script", type: "paste" });
+
+    expect(paste).toMatchObject({ contentType: "application/vnd.zo.paste+json", nativeType: "paste" });
+    await expect(storage.list({ userId: "user_123", type: "paste" })).resolves.toMatchObject([{ key: "Notes/deploy-script", nativeType: "paste" }]);
+    const stored = JSON.parse(await readFile(join(storage.root, "v1", "users", "user_123", "files", "Notes", "deploy-script"), "utf8"));
+    expect(stored).toMatchObject({ format: "zo-native", type: "paste", version: 1, language: "plaintext", tags: [], text: "" });
+  });
+
   it("creates and lists empty folders without creating fake user files", async () => {
     const storage = await createStorage();
 
     await expect(storage.createFolder({ userId: "user_123", key: "Projects/2026" })).resolves.toMatchObject({ key: "Projects/2026", name: "2026" });
     await expect(storage.listFolders({ userId: "user_123" })).resolves.toMatchObject([{ key: "Projects", name: "Projects" }]);
     await expect(storage.listFolders({ userId: "user_123", prefix: "Projects" })).resolves.toMatchObject([{ key: "Projects/2026", name: "2026" }]);
-    await expect(storage.getUsage({ userId: "user_123" })).resolves.toEqual({ fileCount: 0, usedBytes: 0 });
+    await expect(storage.getUsage({ userId: "user_123" })).resolves.toMatchObject({ fileCount: 0, usedBytes: 0, categories: expect.arrayContaining([{ id: "photos", bytes: 0, fileCount: 0 }]) });
   });
 });

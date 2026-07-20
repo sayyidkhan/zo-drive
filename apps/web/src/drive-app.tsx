@@ -1,9 +1,13 @@
-import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import {
   ArrowLeft,
+  ArrowUpRight,
   Bold,
+  Check,
   Cloud,
   Clock3,
+  Code2,
+  Database,
   Copy,
   Eye,
   EyeOff,
@@ -11,11 +15,13 @@ import {
   FileAudio,
   FileImage,
   FileText,
+  Maximize2,
   Folder,
   FolderPlus,
   FolderUp,
   Grid2X2,
   HardDrive,
+  Info,
   KeyRound,
   Italic,
   List,
@@ -23,17 +29,22 @@ import {
   LoaderCircle,
   LockKeyhole,
   LogOut,
+  MonitorUp,
   MoreHorizontal,
   Plus,
   Palette,
   Search,
+  Send,
+  ShieldCheck,
   Sigma,
+  CreditCard,
   SlidersHorizontal,
   RotateCcw,
   Share2,
   ShieldAlert,
   Star,
   Trash2,
+  Terminal,
   Upload,
   Underline,
   UserRound,
@@ -45,13 +56,14 @@ import { toast, Toaster } from "sonner";
 import { create } from "zustand";
 
 import { ZoDriveClient } from "@zo-drive/sdk";
-import type { AuthStatus, DriveFolder, DriveObject, DriveShare, DriveTrashItem, DriveUser, NativeFileType, PublicShare, ShareAccess, StorageUsage } from "@zo-drive/types";
+import type { AuthStatus, DriveFolder, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, NativeFileType, PublicShare, PublishedForm, ShareAccess, StorageUsage } from "@zo-drive/types";
 
-type DriveClient = Pick<ZoDriveClient, "createFolder" | "createNativeFile" | "createShare" | "delete" | "download" | "emptyTrash" | "getUsage" | "list" | "listFolders" | "listShares" | "listStarred" | "listTrash" | "permanentlyDeleteTrash" | "restoreTrash" | "revokeShare" | "saveNativeFile" | "star" | "unstar" | "updateSharePasscode" | "upload">;
+type DriveClient = Pick<ZoDriveClient, "createFolder" | "createNativeFile" | "createShare" | "delete" | "download" | "emptyTrash" | "getUsage" | "list" | "listFolders" | "listFormResponses" | "listShares" | "listStarred" | "listTrash" | "permanentlyDeleteTrash" | "publishForm" | "rename" | "restoreTrash" | "revokeShare" | "saveNativeFile" | "setQuota" | "star" | "unstar" | "updateSharePasscode" | "upload">;
 type AuthClient = Pick<ZoDriveClient, "changePassword" | "deleteAccount" | "getAuthStatus" | "login" | "logout" | "registerInitialUser" | "updateProfile">;
 type SharedClient = Pick<ZoDriveClient, "downloadShared" | "getPublicShare">;
+type PublicFormClient = Pick<ZoDriveClient, "getPublicForm" | "submitFormResponse">;
 type ViewMode = "grid" | "list";
-type AdvancedFileType = "document" | "spreadsheet" | "presentation" | "form" | "image" | "video" | "audio" | "pdf" | "other";
+type AdvancedFileType = "document" | "spreadsheet" | "presentation" | "form" | "paste" | "image" | "video" | "audio" | "pdf" | "other";
 type AdvancedFilters = {
   contentQuery: string;
   inTrash: boolean;
@@ -65,6 +77,12 @@ type RecentFilters = {
   modified: AdvancedFilters["modified"];
   source: "any" | "uploaded" | "zo-native";
   type: AdvancedFileType | "any";
+};
+
+type PasteShareSettings = {
+  access: ShareAccess;
+  passcode: string;
+  ttl: string;
 };
 
 type NativeFileContent = Record<string, unknown> & {
@@ -94,6 +112,11 @@ type UploadTask = {
   name: string;
   size: number;
   startedAt: number;
+};
+
+type DroppedFile = {
+  file: File;
+  relativeFolder: string;
 };
 
 type DriveUiState = {
@@ -128,14 +151,118 @@ export function DriveApp({ client, authClient }: { client?: DriveClient; authCli
   const defaultClient = useMemo(() => new ZoDriveClient({ baseUrl: apiBaseUrl }), []);
   const driveClient = client ?? defaultClient;
   const sessionClient = authClient ?? defaultClient;
-  const shareId = new URLSearchParams(window.location.search).get("share");
+  const query = new URLSearchParams(window.location.search);
+  const shareId = query.get("share");
+  const formId = query.get("form");
+  const isDocs = query.get("docs") === "1";
+  // Supplying a client is only used by the embedded test harness. The hosted
+  // app defaults to the public landing page until the user chooses Zo Drive.
+  const isDrive = query.get("app") === "1" || Boolean(client || authClient);
 
   return (
     <QueryClientProvider client={queryClient}>
-      {shareId ? <SharedFilePage client={defaultClient} shareId={shareId} /> : <DriveGate client={driveClient} authClient={sessionClient} />}
+      {formId ? <PublicFormPage client={defaultClient} formId={formId} /> : shareId ? <SharedFilePage client={defaultClient} shareId={shareId} /> : isDocs ? <DocsPage mode={query.get("mode") === "cli" ? "cli" : "gui"} /> : isDrive ? <DriveGate client={driveClient} authClient={sessionClient} /> : <LandingPage />}
       <Toaster position="bottom-right" richColors />
     </QueryClientProvider>
   );
+}
+
+function DriveMark({ compact = false }: { compact?: boolean }) {
+  return <a className="flex items-center gap-2.5 text-lg font-semibold tracking-tight text-slate-950" href={landingUrl()}>
+    <span className={`relative block shrink-0 ${compact ? "h-9 w-9" : "h-10 w-10"}`} role="img" aria-label="Zo Drive Pegasus on a cloud">
+      <img className="absolute inset-0 h-full w-full" src={driveCloudLogoUrl} alt="" />
+      <img className="absolute left-[5.94%] top-0 h-[88.44%] w-[88.44%]" src={drivePegasusLogoUrl} alt="" />
+    </span>
+    Zo Drive
+  </a>;
+}
+
+function DriveModeSwitch({ guiHref = docsUrl("gui"), mode }: { guiHref?: string; mode: "gui" | "cli" }) {
+  return <nav aria-label="Choose Zo Drive mode" className="inline-flex items-center rounded-lg border border-slate-200 bg-white p-0.5 shadow-sm">
+    <a aria-current={mode === "gui" ? "page" : undefined} className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm font-semibold transition ${mode === "gui" ? "bg-slate-950 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"}`} href={guiHref}><MonitorUp size={16} /> GUI</a>
+    <a aria-current={mode === "cli" ? "page" : undefined} className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm font-semibold transition ${mode === "cli" ? "bg-slate-950 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"}`} href={docsUrl("cli")}><Terminal size={16} /> CLI</a>
+  </nav>;
+}
+
+function LandingPage() {
+  const features = [
+    { icon: <HardDrive size={21} />, title: "Storage you control", copy: "Your Drive data lives on your Zo machine, not inside a conventional centralised file silo." },
+    { icon: <MonitorUp size={21} />, title: "Your machine, every workflow", copy: "Use the browser, command line or TypeScript SDK to work with the same private storage." },
+    { icon: <LockKeyhole size={21} />, title: "Private by default", copy: "Your workspace stays private until you deliberately create a share link." },
+    { icon: <Send size={21} />, title: "Share on your terms", copy: "Use Zo Transfer for public or passcode-protected links with expiry controls." }
+  ];
+
+  return <main className="min-h-screen overflow-hidden bg-[#f7fafc] text-slate-900">
+    <div className="relative isolate">
+      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[43rem] overflow-hidden bg-[#ecf7ff]"><div className="absolute -left-36 -top-32 size-[34rem] rounded-full bg-sky-300/30 blur-3xl" /><div className="absolute right-[-8rem] top-24 size-[30rem] rounded-full bg-blue-300/35 blur-3xl" /></div>
+      <header className="mx-auto flex max-w-7xl items-center justify-between px-5 py-5 sm:px-8">
+        <DriveMark />
+        <DriveModeSwitch guiHref={driveAppUrl()} mode="gui" />
+      </header>
+
+      <section className="mx-auto grid max-w-7xl items-center gap-12 px-5 pb-20 pt-16 sm:px-8 lg:grid-cols-[1.05fr_.95fr] lg:pb-32 lg:pt-24">
+        <div>
+          <span className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white/75 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.14em] text-sky-800"><Cloud size={14} /> Decentralised cloud, on your Zo</span>
+          <h1 className="mt-6 max-w-3xl text-5xl font-semibold leading-[1.02] tracking-[-0.05em] text-slate-950 sm:text-6xl lg:text-7xl">Your cloud should live with you.</h1>
+          <p className="mt-6 max-w-xl text-lg leading-8 text-slate-600">Zo Drive is decentralised cloud storage for the files you own: a private workspace running on your Zo machine, with folders, native tools and sharing under your control.</p>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <a className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:bg-blue-700" href={driveAppUrl()}><HardDrive size={18} /> Open Zo Drive</a>
+            <a className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50" href={docsUrl()}>Read the docs <ArrowUpRight size={17} /></a>
+          </div>
+          <div className="mt-10 flex flex-wrap gap-x-6 gap-y-3 text-sm font-medium text-slate-600"><span className="inline-flex items-center gap-2"><Check size={16} className="text-blue-600" /> Data stays on your Zo</span><span className="inline-flex items-center gap-2"><Check size={16} className="text-blue-600" /> Folder-preserving uploads</span><span className="inline-flex items-center gap-2"><Check size={16} className="text-blue-600" /> GUI, CLI and SDK access</span></div>
+        </div>
+
+        <div className="relative mx-auto w-full max-w-xl">
+          <div className="absolute -inset-5 -z-10 rounded-[2.5rem] bg-white/70 blur-xl" />
+          <div className="overflow-hidden rounded-[1.65rem] border border-white/90 bg-white shadow-2xl shadow-blue-950/15">
+            <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-4"><span className="size-2.5 rounded-full bg-red-300" /><span className="size-2.5 rounded-full bg-amber-300" /><span className="size-2.5 rounded-full bg-emerald-300" /><span className="ml-2 text-xs font-semibold text-slate-400">My Drive</span></div>
+            <div className="p-5 sm:p-7">
+              <div className="flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-blue-600">Your decentralised cloud</p><h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">Everything stays yours.</h2></div><span className="grid size-11 place-items-center rounded-2xl bg-blue-600 text-white"><Cloud size={22} /></span></div>
+              <div className="mt-7 space-y-3">
+                {[['Product/Launch', '4 files', 'bg-amber-100 text-amber-700'], ['Design/Assets', '18 files', 'bg-violet-100 text-violet-700'], ['Reports/2026', '7 files', 'bg-emerald-100 text-emerald-700']].map(([name, count, tone]) => <div className="flex items-center gap-3 rounded-xl border border-slate-100 p-3.5" key={name}><span className={`grid size-10 place-items-center rounded-xl ${tone}`}><Folder size={19} /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-800">{name}</span><span className="text-xs text-slate-400">{count}</span></span><MoreHorizontal size={18} className="text-slate-300" /></div>)}
+              </div>
+              <div className="mt-5 grid grid-cols-2 gap-3"><div className="rounded-xl bg-slate-950 p-4 text-white"><Code2 size={18} className="text-cyan-300" /><p className="mt-4 text-sm font-semibold">Zo Paste</p><p className="mt-1 text-xs leading-5 text-slate-400">Share code securely.</p></div><div className="rounded-xl bg-blue-50 p-4 text-blue-950"><Send size={18} className="text-blue-600" /><p className="mt-4 text-sm font-semibold">Zo Transfer</p><p className="mt-1 text-xs leading-5 text-blue-700/70">Deliver files your way.</p></div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <section className="border-y border-slate-200 bg-white py-20 sm:py-24"><div className="mx-auto max-w-7xl px-5 sm:px-8"><div className="max-w-2xl"><p className="text-sm font-bold uppercase tracking-[0.15em] text-blue-600">The Zo Drive edge</p><h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">A decentralised cloud, not another rented file bucket.</h2><p className="mt-4 text-base leading-7 text-slate-600">Keep the convenience of cloud storage while keeping the storage itself on the machine you control.</p></div><div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{features.map((feature) => <article className="rounded-2xl border border-slate-200 bg-[#f9fbfc] p-6" key={feature.title}><span className="grid size-10 place-items-center rounded-xl bg-blue-100 text-blue-700">{feature.icon}</span><h3 className="mt-5 font-semibold text-slate-950">{feature.title}</h3><p className="mt-2 text-sm leading-6 text-slate-600">{feature.copy}</p></article>)}</div></div></section>
+
+    <section className="mx-auto grid max-w-7xl gap-8 px-5 py-20 sm:px-8 lg:grid-cols-[1fr_.9fr] lg:items-center"><div><p className="text-sm font-bold uppercase tracking-[0.15em] text-blue-600">Bring your own workflow</p><h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">Your storage, accessible your way.</h2><p className="mt-4 max-w-xl text-base leading-7 text-slate-600">The browser experience is built for everyday file work. The bundled command-line tool and TypeScript SDK let your own machines send files directly into the same private Drive.</p><a className="mt-6 inline-flex items-center gap-2 text-sm font-bold text-blue-700 hover:text-blue-900" href={docsUrl()}>See upload guides <ArrowUpRight size={16} /></a></div><div className="rounded-2xl bg-slate-950 p-5 shadow-xl shadow-slate-900/15 sm:p-7"><div className="flex items-center gap-2 text-xs font-semibold text-slate-400"><Terminal size={16} /> Terminal</div><pre className="mt-5 overflow-x-auto text-sm leading-7 text-slate-200"><code><span className="text-cyan-300">zo-drive</span> upload ./launch-plan.pdf <span className="text-amber-300">--path</span> Product/Launch{`\n\n`}<span className="text-slate-500"># Uploaded Product/Launch/launch-plan.pdf</span></code></pre></div></section>
+
+    <footer className="border-t border-slate-200 bg-white"><div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-7 text-sm text-slate-500 sm:px-8"><DriveMark compact /><span>Your decentralised cloud on Zo.</span><a className="font-semibold text-slate-600 hover:text-blue-700" href={docsUrl()}>Documentation</a></div></footer>
+  </main>;
+}
+
+function DocsPage({ mode }: { mode: "gui" | "cli" }) {
+  const serverUrl = `${window.location.origin}${appBasePath}`;
+  const cliLogin = `ZO_DRIVE_API_URL="${serverUrl}" node apps/cli/dist/index.js login --username <username> --password '<password>'`;
+  const cliUpload = `ZO_DRIVE_API_URL="${serverUrl}" node apps/cli/dist/index.js upload ./launch-plan.pdf --path Product/Launch`;
+  const sdkUpload = `import { readFile } from "node:fs/promises";\nimport { ZoDriveClient } from "@zo-drive/sdk";\n\nconst client = new ZoDriveClient({\n  baseUrl: "${serverUrl}",\n  headers: { authorization: \`Bearer \${process.env.ZO_DRIVE_SESSION_TOKEN}\` }\n});\n\nconst bytes = await readFile("./launch-plan.pdf");\nawait client.upload({\n  file: new Blob([bytes], { type: "application/pdf" }),\n  fileName: "launch-plan.pdf",\n  path: "Product/Launch"\n});`;
+  const isGui = mode === "gui";
+  const hero = isGui
+    ? { title: "Manage files in your private Drive.", body: "Use the browser GUI for everyday uploads, folders and controlled file sharing." }
+    : { title: "Upload from your machine.", body: "Use the CLI for terminal uploads or the TypeScript SDK to automate the same private Drive." };
+  const sections = isGui
+    ? [
+        { id: "gui", eyebrow: "Browser GUI", icon: <MonitorUp size={20} />, title: "Upload from the Drive", body: "Use the browser interface for everyday uploads, folders and sharing.", steps: ["Select Zo Drive in the top-right navigation and sign in with the owner account.", "Use the blue Upload button at the bottom-right of the Drive.", "Drop a file or folder into the panel, or choose File or Folder. Folder uploads preserve the directory structure."] },
+        { id: "sharing", eyebrow: "Sharing", icon: <Share2 size={20} />, title: "Share files on your terms", body: "Create a controlled link when someone needs access to a file outside your private Drive.", steps: ["Select a file in Zo Drive and choose Share.", "Choose a public link or require a passcode, then set an expiry if needed.", "Copy the generated link and revoke it whenever access should end."] }
+      ]
+    : [
+        { id: "cli", eyebrow: "Command line", icon: <Terminal size={20} />, title: "Upload from your machine", body: "The repository includes a CLI that talks to the same private API.", steps: ["Clone the Zo Drive repository on the machine you want to upload from, then run pnpm install and pnpm --filter @zo-drive/cli build.", "Sign in once to print a temporary session-token export. Keep that token private.", "Run the upload command with a local file path and optional destination folder."] },
+        { id: "sdk", eyebrow: "TypeScript SDK", icon: <Database size={20} />, title: "Automate uploads in code", body: "Use the shared @zo-drive/sdk package from this repository for scripts, jobs and app integrations.", steps: ["Build the workspace SDK with pnpm --filter @zo-drive/sdk build.", "Reuse the session token printed by the CLI login as a Bearer token.", "Create ZoDriveClient with your Drive URL, then call upload with a Blob, filename and optional folder path."] }
+      ];
+  const securityBody = isGui
+    ? "Your Drive is private by default. Treat every share link as a deliberate access grant: use passcodes and expiry where appropriate, and revoke links that are no longer needed."
+    : "CLI logins generate a bearer token for non-browser uploads. Store it in your machine’s environment or secret manager, never commit it to a repository, and sign out or change the owner password if you believe it has been exposed.";
+
+  return <main className="min-h-screen bg-[#fbfcfe] text-slate-900"><header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/90 backdrop-blur"><div className="mx-auto flex max-w-7xl items-center px-5 py-4 sm:px-8"><DriveMark compact /></div></header><div className="mx-auto grid max-w-7xl gap-12 px-5 py-14 sm:px-8 lg:grid-cols-[14rem_minmax(0,1fr)] lg:py-20"><aside className="hidden lg:block"><div className="sticky top-24"><p className="mb-3 px-3 text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Mode</p><DriveModeSwitch mode={mode} /><nav className="mt-7 space-y-1 text-sm"><p className="mb-3 px-3 text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Documentation</p>{sections.map((section) => <a className="block rounded-lg px-3 py-2 font-semibold text-slate-600 hover:bg-blue-50 hover:text-blue-700" href={`#${section.id}`} key={section.id}>{section.title}</a>)}<a className="mt-4 block rounded-lg px-3 py-2 font-semibold text-slate-600 hover:bg-blue-50 hover:text-blue-700" href="#security">Security notes</a></nav></div></aside><div className="min-w-0"><div className="mb-7 lg:hidden"><p className="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Mode</p><DriveModeSwitch mode={mode} /></div><p className="text-sm font-bold uppercase tracking-[0.15em] text-blue-600">Zo Drive {mode} documentation</p><h1 className="mt-3 max-w-3xl text-4xl font-semibold tracking-[-0.04em] text-slate-950 sm:text-5xl">{hero.title}</h1><p className="mt-5 max-w-2xl text-lg leading-8 text-slate-600">{hero.body}</p><div className="mt-10 grid gap-4 sm:grid-cols-2">{sections.map((section) => <a className="rounded-2xl border border-slate-200 bg-white p-5 transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-lg hover:shadow-blue-950/5" href={`#${section.id}`} key={section.id}><span className="grid size-9 place-items-center rounded-xl bg-blue-50 text-blue-700">{section.icon}</span><p className="mt-4 text-sm font-semibold text-slate-950">{section.eyebrow}</p><p className="mt-1 text-xs leading-5 text-slate-500">{section.title}</p></a>)}</div>{sections.map((section) => <section className="scroll-mt-24 border-b border-slate-200 py-14" id={section.id} key={section.id}><div className="flex items-center gap-3 text-blue-700"><span className="grid size-10 place-items-center rounded-xl bg-blue-100">{section.icon}</span><p className="text-sm font-bold uppercase tracking-[0.14em]">{section.eyebrow}</p></div><h2 className="mt-5 text-3xl font-semibold tracking-tight text-slate-950">{section.title}</h2><p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">{section.body}</p><ol className="mt-7 space-y-3">{section.steps.map((step, stepIndex) => <li className="flex gap-3 text-sm leading-6 text-slate-700" key={step}><span className="grid size-6 shrink-0 place-items-center rounded-full bg-slate-100 text-xs font-bold text-slate-600">{stepIndex + 1}</span><span>{step}</span></li>)}</ol>{section.id === "cli" && <div className="mt-8 space-y-4"><CodeBlock label="Sign in and create a session" code={cliLogin} /><CodeBlock label="Upload a file" code={cliUpload} /></div>}{section.id === "sdk" && <div className="mt-8"><CodeBlock label="upload.ts" code={sdkUpload} /></div>}</section>)}<section className="scroll-mt-24 py-14" id="security"><p className="text-sm font-bold uppercase tracking-[0.15em] text-blue-600">Security notes</p><h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">{isGui ? "Keep access deliberate." : "Treat the Drive token like a password."}</h2><p className="mt-4 max-w-2xl text-base leading-7 text-slate-600">{securityBody}</p></section></div></div></main>;
+}
+
+function CodeBlock({ code, label }: { code: string; label: string }) {
+  return <section className="overflow-hidden rounded-xl border border-slate-800 bg-slate-950"><header className="flex items-center justify-between border-b border-white/10 px-4 py-3"><span className="text-xs font-semibold text-slate-300">{label}</span><Code2 size={16} className="text-cyan-300" /></header><pre className="overflow-x-auto p-4 text-xs leading-6 text-slate-200 sm:text-sm"><code>{code}</code></pre></section>;
 }
 
 function DriveGate({ client, authClient }: { client: DriveClient; authClient: AuthClient }) {
@@ -278,9 +405,10 @@ function SettingsCard({ children, description, danger = false, icon, title }: { 
 
 function DriveScreen({ client, user, onAccount, onSignOut }: { client: DriveClient; user: DriveUser; onAccount: () => void; onSignOut: () => void }) {
   const { currentPath, setCurrentPath, viewMode, setViewMode } = useDriveUi();
-  const [section, setSection] = useState<"home" | "my-drive" | "shared" | "starred" | "trash">("my-drive");
+  const [section, setSection] = useState<"home" | "my-drive" | "pastes" | "shared" | "starred" | "transfer" | "trash">("my-drive");
   const [search, setSearch] = useState("");
   const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);
+  const [storageBreakdownOpen, setStorageBreakdownOpen] = useState(false);
   const [advancedFilters, setAdvancedFilters] = useState<AdvancedFilters>(defaultAdvancedFilters);
   const [appliedAdvancedFilters, setAppliedAdvancedFilters] = useState<AdvancedFilters>(defaultAdvancedFilters);
   const [recentFilters, setRecentFilters] = useState<RecentFilters>(defaultRecentFilters);
@@ -290,7 +418,9 @@ function DriveScreen({ client, user, onAccount, onSignOut }: { client: DriveClie
   const [folderName, setFolderName] = useState("");
   const [nativeFileType, setNativeFileType] = useState<NativeFileType | null>(null);
   const [nativeFileName, setNativeFileName] = useState("");
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [shareFile, setShareFile] = useState<DriveObject | null>(null);
+  const [shareSettings, setShareSettings] = useState<PasteShareSettings | null>(null);
   const [passcodeShare, setPasscodeShare] = useState<DriveShare | null>(null);
   const [preview, setPreview] = useState<{ object: DriveObject; url: string } | null>(null);
   const [nativeEditor, setNativeEditor] = useState<{ content: NativeFileContent; object: DriveObject } | null>(null);
@@ -310,12 +440,12 @@ function DriveScreen({ client, user, onAccount, onSignOut }: { client: DriveClie
       prefix: searchPrefix,
       query: search || undefined,
       contentQuery: isRecent ? undefined : appliedAdvancedFilters.contentQuery || undefined,
-      type: isRecent ? recentFilters.type === "any" ? undefined : recentFilters.type : appliedAdvancedFilters.type === "any" ? undefined : appliedAdvancedFilters.type,
+      type: section === "pastes" ? "paste" : isRecent ? recentFilters.type === "any" ? undefined : recentFilters.type : appliedAdvancedFilters.type === "any" ? undefined : appliedAdvancedFilters.type,
       starred: isRecent ? undefined : appliedAdvancedFilters.starred || undefined,
       modifiedAfter: isRecent ? recentDateRange?.after : advancedDateRange?.after,
       modifiedBefore: isRecent ? recentDateRange?.before : advancedDateRange?.before
     }),
-    enabled: section !== "shared" && section !== "starred" && section !== "trash"
+    enabled: section !== "shared" && section !== "starred" && section !== "transfer" && section !== "trash"
   });
   const foldersQuery = useQuery({
     queryKey: ["folders", currentPath],
@@ -447,14 +577,31 @@ function DriveScreen({ client, user, onAccount, onSignOut }: { client: DriveClie
   async function saveNativeFile(content: NativeFileContent) {
     if (!nativeEditor) return;
     try {
-      await client.saveNativeFile(nativeEditor.object.key, content);
+      const object = await client.saveNativeFile(nativeEditor.object.key, content);
+      setNativeEditor((current) => current ? { ...current, content, object } : current);
       await refresh();
-      setNativeEditor(null);
-      toast.success("Saved to Zo Drive");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save the Zo-native file");
       throw error;
     }
+  }
+
+  async function renameNativeFile(name: string) {
+    if (!nativeEditor) return;
+    try {
+      const object = await client.rename(nativeEditor.object.key, name);
+      setNativeEditor((current) => current ? { ...current, object } : current);
+      await refresh();
+      toast.success("File renamed");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not rename the file");
+      throw error;
+    }
+  }
+
+  async function publishNativeForm(): Promise<PublishedForm> {
+    if (!nativeEditor) throw new Error("No Zo Form is open");
+    return client.publishForm(nativeEditor.object.key);
   }
 
   async function restoreTrashItem(id: string) {
@@ -510,6 +657,13 @@ function DriveScreen({ client, user, onAccount, onSignOut }: { client: DriveClie
     event.target.value = "";
   }
 
+  async function uploadDroppedItems(dataTransfer: DataTransfer) {
+    const droppedFiles = await collectDroppedFiles(dataTransfer);
+    if (droppedFiles.length === 0) return;
+    const folders = new Map(droppedFiles.map(({ file, relativeFolder }) => [file, relativeFolder]));
+    await uploadFiles(droppedFiles.map(({ file }) => file), (file) => [currentPath, folders.get(file)].filter(Boolean).join("/") || undefined);
+  }
+
   function startNativeFile(type: NativeFileType) {
     setNewMenuOpen(false);
     setNativeFileType(type);
@@ -532,7 +686,7 @@ function DriveScreen({ client, user, onAccount, onSignOut }: { client: DriveClie
 
   function handleDrop(event: DragEvent<HTMLElement>) {
     event.preventDefault();
-    void uploadFiles(event.dataTransfer.files);
+    void uploadDroppedItems(event.dataTransfer);
   }
 
   return (
@@ -580,6 +734,7 @@ function DriveScreen({ client, user, onAccount, onSignOut }: { client: DriveClie
               <button className="new-menu-item" onClick={() => { setNewMenuOpen(false); setFolderDialogOpen(true); }}><FolderPlus size={17} /> New folder</button>
               <div className="my-1 border-t border-slate-100" />
               {(["document", "spreadsheet", "presentation", "form"] as NativeFileType[]).map((type) => <button aria-label={`New Zo ${nativeFileLabel(type)}`} className="new-menu-item new-menu-native-item" key={type} onClick={() => startNativeFile(type)}><img className="size-9 shrink-0 rounded-md" src={nativeIllustrationUrl(type)} alt={`${nativeFileLabel(type)} illustration`} /><span>New Zo {nativeFileLabel(type)}</span></button>)}
+              <button aria-label="New Zo Paste" className="new-menu-item new-menu-native-item" onClick={() => startNativeFile("paste")}><span className="grid size-9 shrink-0 place-items-center rounded-md bg-slate-900 text-cyan-300"><Code2 size={20} /></span><span>New Zo Paste</span></button>
             </div>}
           </div>
           <input ref={fileInput} aria-label="Upload files" className="hidden" type="file" multiple onChange={handleFileInput} />
@@ -591,21 +746,26 @@ function DriveScreen({ client, user, onAccount, onSignOut }: { client: DriveClie
             <button className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold ${section === "starred" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => { setSection("starred"); setCurrentPath(""); }}><Star size={18} /> Starred</button>
             <button className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold ${section === "shared" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => setSection("shared")}><UsersRound size={18} /> Shared with others</button>
             <button className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold ${section === "trash" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => { setSection("trash"); setCurrentPath(""); }}><Trash2 size={18} /> Trash</button>
+            <div className="my-3 border-t border-slate-200" role="separator" />
+            <button className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold ${section === "pastes" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => { setSection("pastes"); setCurrentPath(""); }}><Code2 size={18} /> Zo Paste</button>
+            <button className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold ${section === "transfer" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => { setSection("transfer"); setCurrentPath(""); }}><Send size={18} /> Zo Transfer</button>
           </nav>
 
-          <UsageCard usage={usageQuery.data} />
+          <UsageCard usage={usageQuery.data} onOpenBreakdown={() => setStorageBreakdownOpen(true)} />
         </aside>
 
         <section className="min-w-0 flex-1 p-6 md:p-9">
           <div className="mb-7 flex flex-wrap items-center justify-between gap-4">
             <div>
               {section === "my-drive" && currentPath && <FolderNavigation currentPath={currentPath} onNavigate={setCurrentPath} />}
-              <h1 className={`${section === "my-drive" && currentPath ? "mt-3" : ""} text-2xl font-semibold tracking-tight text-slate-900`}>{search || advancedSearchActive ? "Search results" : section === "home" ? "Recent" : section === "shared" ? "Shared with others" : section === "starred" ? "Starred" : section === "trash" ? "Trash" : currentPath ? currentPath.split("/").at(-1) : "Files"}</h1>
+              <h1 className={`${section === "my-drive" && currentPath ? "mt-3" : ""} text-2xl font-semibold tracking-tight text-slate-900`}>{search || advancedSearchActive ? "Search results" : section === "home" ? "Recent" : section === "pastes" ? "Zo Paste" : section === "transfer" ? "Zo Transfer" : section === "shared" ? "Shared with others" : section === "starred" ? "Starred" : section === "trash" ? "Trash" : currentPath ? currentPath.split("/").at(-1) : "Files"}</h1>
               {section === "home" && <p className="mt-1 text-sm text-slate-500">Files you recently created, uploaded, or updated.</p>}
+              {section === "pastes" && <p className="mt-1 text-sm text-slate-500">Create, keep, and securely share code or text snippets.</p>}
+              {section === "transfer" && <p className="mt-1 text-sm text-slate-500">Create and manage public file links from Zo Drive.</p>}
               {section === "shared" && <p className="mt-1 text-sm text-slate-500">Manage links you have shared outside your drive.</p>}
               {section === "trash" && <p className="mt-1 text-sm text-slate-500">Items are permanently deleted 30 days after being moved here.</p>}
             </div>
-            {section === "trash" && trashItems.length > 0 ? <button className="rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50" onClick={() => void emptyTrash()}>Empty trash</button> : section !== "home" && <div className="flex rounded-lg border border-slate-200 bg-white p-1">
+            {section === "trash" && trashItems.length > 0 ? <button className="rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50" onClick={() => void emptyTrash()}>Empty trash</button> : section === "pastes" ? <button className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800" onClick={() => startNativeFile("paste")}><Plus size={17} /> New paste</button> : section !== "home" && section !== "transfer" && <div className="flex rounded-lg border border-slate-200 bg-white p-1">
               <button aria-label="List view" className={`rounded-md p-2 ${viewMode === "list" ? "bg-slate-100 text-slate-900" : "text-slate-400"}`} onClick={() => setViewMode("list")}><List size={18} /></button>
               <button aria-label="Grid view" className={`rounded-md p-2 ${viewMode === "grid" ? "bg-slate-100 text-slate-900" : "text-slate-400"}`} onClick={() => setViewMode("grid")}><Grid2X2 size={18} /></button>
             </div>}
@@ -613,7 +773,7 @@ function DriveScreen({ client, user, onAccount, onSignOut }: { client: DriveClie
 
           {section === "home" && <RecentFiltersBar filters={recentFilters} onChange={setRecentFilters} />}
 
-          {isLoading ? (
+          {section === "transfer" ? <ZoTransfer client={client} onCreated={async () => { await refresh(); await queryClient.invalidateQueries({ queryKey: ["shares"] }); }} /> : section === "pastes" ? <ZoPaste files={displayedFiles} isError={filesQuery.isError} isLoading={isLoading} onCreate={() => startNativeFile("paste")} onDelete={(key) => deleteMutation.mutate(key)} onPreview={openPreview} onRetry={() => void filesQuery.refetch()} onShare={(file) => { setShareSettings(null); setShareFile(file); }} onToggleStar={(file) => starMutation.mutate({ key: file.key, starred: file.starred })} /> : isLoading ? (
             <div className="grid h-64 place-items-center text-sm text-slate-500"><LoaderCircle className="mr-2 animate-spin" size={20} /> Loading your drive…</div>
           ) : (section === "shared" ? sharesQuery.isError : section === "starred" ? starredQuery.isError : section === "trash" ? trashQuery.isError : filesQuery.isError) ? (
             <EmptyState
@@ -631,7 +791,7 @@ function DriveScreen({ client, user, onAccount, onSignOut }: { client: DriveClie
           ) : (section === "my-drive" ? folders.length === 0 && files.length === 0 : displayedFiles.length === 0) ? (
             <EmptyState title={search ? "No matching files" : section === "home" ? "No recent files" : section === "starred" ? "No starred files" : "Your drive is ready for its first file"} description={section === "home" ? "Recent uploads, changes, and Zo-native files will appear here." : section === "starred" && !search ? "Use the star next to any file to keep it here." : undefined} action={section === "starred" ? "Go to My Drive" : "Upload files"} onAction={() => section === "starred" ? setSection("my-drive") : fileInput.current?.click()} />
           ) : section === "home" ? (
-            <RecentEntries files={recentFiles} onPreview={openPreview} onDelete={(key) => deleteMutation.mutate(key)} onToggleStar={(file) => starMutation.mutate({ key: file.key, starred: file.starred })} onShare={setShareFile} />
+            <RecentEntries files={recentFiles} onPreview={openPreview} onDelete={(key) => deleteMutation.mutate(key)} onToggleStar={(file) => starMutation.mutate({ key: file.key, starred: file.starred })} onShare={(file) => { setShareSettings(null); setShareFile(file); }} />
           ) : (
             <DriveEntries
               files={displayedFiles}
@@ -641,22 +801,57 @@ function DriveScreen({ client, user, onAccount, onSignOut }: { client: DriveClie
               onPreview={openPreview}
               onDelete={(key) => deleteMutation.mutate(key)}
               onToggleStar={(file) => starMutation.mutate({ key: file.key, starred: file.starred })}
-              onShare={setShareFile}
+              onShare={(file) => { setShareSettings(null); setShareFile(file); }}
             />
           )}
         </section>
       </div>
 
       {preview && <PreviewDialog preview={preview} onClose={closePreview} />}
-      {nativeEditor && <NativeEditor key={nativeEditor.object.key} content={nativeEditor.content} fileName={nativeEditor.object.name} onClose={() => setNativeEditor(null)} onSave={saveNativeFile} />}
+      {nativeEditor && <NativeEditor key={nativeEditor.object.key} content={nativeEditor.content} fileName={nativeEditor.object.name} onClose={() => setNativeEditor(null)} onListResponses={(id) => client.listFormResponses(id)} onPublish={publishNativeForm} onRename={renameNativeFile} onSave={saveNativeFile} onShare={(settings) => { setShareSettings(settings ?? null); setShareFile(nativeEditor.object); }} />}
       {advancedSearchOpen && <AdvancedSearchDialog filters={advancedFilters} itemName={search} onCancel={() => setAdvancedSearchOpen(false)} onFiltersChange={setAdvancedFilters} onItemNameChange={setSearch} onReset={resetAdvancedSearch} onSearch={applyAdvancedSearch} />}
       {folderDialogOpen && <FolderDialog folderName={folderName} onCancel={() => { setFolderDialogOpen(false); setFolderName(""); }} onCreate={() => void createFolder()} onNameChange={setFolderName} />}
       {nativeFileType && <NativeFileDialog type={nativeFileType} name={nativeFileName} onCancel={() => { setNativeFileType(null); setNativeFileName(""); }} onCreate={() => void createNativeFile()} onNameChange={setNativeFileName} />}
-      {shareFile && <ShareDialog client={client} file={shareFile} onClose={() => setShareFile(null)} />}
+      {shareFile && <ShareDialog client={client} file={shareFile} initialSettings={shareSettings ?? undefined} onClose={() => { setShareFile(null); setShareSettings(null); }} />}
       {passcodeShare && <ChangePasscodeDialog client={client} share={passcodeShare} onClose={() => setPasscodeShare(null)} onUpdated={() => void sharesQuery.refetch()} />}
+      {storageBreakdownOpen && <StorageBreakdownDialog usage={usageQuery.data} onClose={() => setStorageBreakdownOpen(false)} onSetQuota={async (quotaBytes) => {
+        const updatedUsage = await client.setQuota(quotaBytes);
+        queryClient.setQueryData(["usage"], updatedUsage);
+        toast.success(`Storage limit set to ${formatBytes(updatedUsage.quotaBytes)}`);
+        return updatedUsage;
+      }} />}
+      {uploadDialogOpen && <UploadDialog onClose={() => setUploadDialogOpen(false)} onChooseFiles={() => { setUploadDialogOpen(false); fileInput.current?.click(); }} onChooseFolder={() => { setUploadDialogOpen(false); folderInput.current?.click(); }} onDrop={(dataTransfer) => { setUploadDialogOpen(false); return uploadDroppedItems(dataTransfer); }} />}
+      {uploads.length === 0 && <button aria-label="Open upload menu" className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-900/25 transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200" onClick={() => setUploadDialogOpen(true)}><Upload size={18} /> Upload</button>}
       {uploads.length > 0 && <UploadProgress uploads={uploads} />}
     </main>
   );
+}
+
+function UploadDialog({ onChooseFiles, onChooseFolder, onClose, onDrop }: { onChooseFiles: () => void; onChooseFolder: () => void; onClose: () => void; onDrop: (dataTransfer: DataTransfer) => Promise<void> }) {
+  const [dragging, setDragging] = useState(false);
+  return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4" role="dialog" aria-modal="true" aria-label="Upload files or folders" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-2xl"><header className="flex items-start justify-between border-b border-slate-100 px-6 py-5"><div><p className="text-sm font-medium text-blue-600">Zo Drive upload</p><h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">Add files or a folder</h2><p className="mt-1 text-sm text-slate-500">Drop a single file or folder here, or choose one from your computer.</p></div><button aria-label="Close upload dialog" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" onClick={onClose}><X size={20} /></button></header><div className="p-6"><div className={`grid min-h-52 place-items-center rounded-2xl border-2 border-dashed p-6 text-center transition ${dragging ? "border-blue-500 bg-blue-50" : "border-slate-200 bg-slate-50"}`} onDragEnter={(event) => { event.preventDefault(); setDragging(true); }} onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDragLeave={(event) => { if (event.currentTarget === event.target) setDragging(false); }} onDrop={(event) => { event.preventDefault(); event.stopPropagation(); setDragging(false); void onDrop(event.dataTransfer); }}><div><span className={`mx-auto grid size-12 place-items-center rounded-2xl ${dragging ? "bg-blue-600 text-white" : "bg-blue-100 text-blue-600"}`}><Upload size={24} /></span><p className="mt-4 font-semibold text-slate-800">Drag and drop a file or folder</p><p className="mt-2 max-w-sm text-sm leading-6 text-slate-500">Folders keep their internal structure when uploaded to your current Drive folder.</p></div></div><div className="mt-5 grid gap-3 sm:grid-cols-2"><button className="flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700" onClick={onChooseFiles}><Upload size={17} /> Choose file</button><button className="flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700" onClick={onChooseFolder}><FolderUp size={17} /> Choose folder</button></div></div></section></div>;
+}
+
+async function collectDroppedFiles(dataTransfer: DataTransfer): Promise<DroppedFile[]> {
+  const entries = Array.from(dataTransfer.items ?? []).map((item) => item.webkitGetAsEntry?.()).filter((entry): entry is FileSystemEntry => Boolean(entry));
+  if (entries.length === 0) return Array.from(dataTransfer.files).map((file) => ({ file, relativeFolder: "" }));
+  return (await Promise.all(entries.map((entry) => collectDroppedEntry(entry)))).flat();
+}
+
+async function collectDroppedEntry(entry: FileSystemEntry, parentPath = ""): Promise<DroppedFile[]> {
+  if (entry.isFile) {
+    const file = await new Promise<File>((resolve, reject) => (entry as FileSystemFileEntry).file(resolve, reject));
+    return [{ file, relativeFolder: parentPath }];
+  }
+  const directoryPath = [parentPath, entry.name].filter(Boolean).join("/");
+  const reader = (entry as FileSystemDirectoryEntry).createReader();
+  const entries: FileSystemEntry[] = [];
+  for (;;) {
+    const batch = await new Promise<FileSystemEntry[]>((resolve, reject) => reader.readEntries(resolve, reject));
+    if (batch.length === 0) break;
+    entries.push(...batch);
+  }
+  return (await Promise.all(entries.map((child) => collectDroppedEntry(child, directoryPath)))).flat();
 }
 
 function UploadProgress({ uploads }: { uploads: UploadTask[] }) {
@@ -673,16 +868,220 @@ function UploadProgress({ uploads }: { uploads: UploadTask[] }) {
   return <div className="fixed bottom-5 right-5 z-50 w-[min(calc(100vw-2.5rem),30rem)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/15" role="status" aria-live="polite"><div className="border-b border-slate-100 bg-gradient-to-r from-blue-600 to-sky-500 px-5 py-4 text-white"><div className="flex items-center justify-between gap-4"><span className="flex items-center gap-2 text-sm font-semibold"><LoaderCircle className="animate-spin" size={18} /> Uploading {uploads.length} file{uploads.length === 1 ? "" : "s"}</span><span className="text-sm font-bold tabular-nums">{percentage}%</span></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-white/25"><div className="h-full rounded-full bg-white transition-[width] duration-300" style={{ width: `${percentage}%` }} /></div><p className="mt-2 text-xs text-blue-50">{formatBytes(totalLoaded)} of {formatBytes(totalSize)}{secondsRemaining === null ? " · Preparing estimate…" : ` · About ${formatDuration(secondsRemaining)} left`}</p></div><div className="max-h-72 divide-y divide-slate-100 overflow-y-auto">{uploads.map((upload) => { const filePercentage = upload.size > 0 ? Math.min(100, Math.round((upload.loaded / upload.size) * 100)) : 100; const rate = uploadRate(upload, now); const remaining = rate > 0 ? Math.ceil(Math.max(0, upload.size - upload.loaded) / rate) : null; return <div className="px-5 py-4" key={upload.id}><div className="flex items-start gap-3"><span className="mt-0.5 rounded-lg bg-blue-50 p-2 text-blue-600"><File size={17} /></span><div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-3"><p className="truncate text-sm font-semibold text-slate-800">{upload.name}</p><span className="shrink-0 text-xs font-semibold tabular-nums text-slate-500">{filePercentage}%</span></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-blue-600 transition-[width] duration-300" style={{ width: `${filePercentage}%` }} /></div><p className="mt-2 text-xs tabular-nums text-slate-500">{formatBytes(upload.loaded)} of {formatBytes(upload.size)}{rate > 0 ? ` · ${formatBytes(rate)}/s` : " · Starting…"}{remaining === null ? "" : ` · ${formatDuration(remaining)} left`}</p></div></div></div>; })}</div></div>;
 }
 
-function UsageCard({ usage }: { usage?: StorageUsage }) {
+function UsageCard({ usage, onOpenBreakdown }: { usage?: StorageUsage; onOpenBreakdown: () => void }) {
   const used = usage?.usedBytes ?? 0;
-  const percentage = Math.min(100, (used / 107_374_182_400) * 100);
+  const quota = usage?.quotaBytes ?? 0;
+  const percentage = quota > 0 ? Math.min(100, (used / quota) * 100) : 0;
   return (
     <div className="mt-8 rounded-xl bg-slate-50 p-4">
       <div className="flex items-center justify-between text-sm font-medium text-slate-700"><span>Storage</span><span>{usage?.fileCount ?? 0} files</span></div>
       <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-blue-600" style={{ width: `${Math.max(percentage, used > 0 ? 1 : 0)}%` }} /></div>
-      <p className="mt-2 text-xs text-slate-500">{formatBytes(used)} used of 100 GB</p>
+      <p className="mt-2 text-xs text-slate-500">{formatBytes(used)} used of {formatBytes(quota)}</p>
+      <button className="mt-3 flex items-center gap-1 text-xs font-semibold text-blue-700 hover:text-blue-800" onClick={onOpenBreakdown}><Info size={14} /> View storage breakdown</button>
     </div>
   );
+}
+
+const storageCategoryMeta = {
+  photos: { color: "bg-fuchsia-500", label: "Photos" },
+  videos: { color: "bg-orange-500", label: "Movies & video" },
+  documents: { color: "bg-blue-600", label: "Documents" },
+  audio: { color: "bg-emerald-500", label: "Audio" },
+  archives: { color: "bg-amber-400", label: "Archives" },
+  other: { color: "bg-slate-400", label: "Other files" },
+  trash: { color: "bg-rose-500", label: "Trash" }
+} as const;
+
+const quotaPresetsGb = [100, 200, 250] as const;
+const gigabyte = 1024 * 1024 * 1024;
+
+function StorageBreakdownDialog({ usage, onClose, onSetQuota }: { usage?: StorageUsage; onClose: () => void; onSetQuota: (quotaBytes: number) => Promise<StorageUsage> }) {
+  const driveUsed = usage?.usedBytes ?? 0;
+  const total = usage?.totalBytes ?? 0;
+  const systemUsed = usage?.systemUsedBytes ?? 0;
+  const available = usage?.availableBytes ?? 0;
+  const quota = usage?.quotaBytes ?? 0;
+  const quotaAvailable = usage?.quotaAvailableBytes ?? 0;
+  const minQuota = usage?.minQuotaBytes ?? gigabyte;
+  const maxQuota = usage?.maxQuotaBytes ?? Math.floor(total * 0.8);
+  const otherMachineData = Math.max(0, systemUsed - driveUsed);
+  const categories = (usage?.categories ?? []).filter((category) => category.bytes > 0);
+  const [customQuotaGb, setCustomQuotaGb] = useState("");
+  const [quotaError, setQuotaError] = useState<string | null>(null);
+  const [savingQuota, setSavingQuota] = useState(false);
+
+  async function setQuota(quotaBytes: number) {
+    if (quotaBytes < minQuota) {
+      setQuotaError(`Storage limit must be at least ${formatBytes(minQuota)}.`);
+      return;
+    }
+    if (quotaBytes > maxQuota) {
+      setQuotaError(`Storage limit cannot exceed ${formatBytes(maxQuota)}, which is 80% of this machine's disk.`);
+      return;
+    }
+    if (quotaBytes < driveUsed) {
+      setQuotaError("Storage limit cannot be lower than the files currently stored in Zo Drive.");
+      return;
+    }
+    setQuotaError(null);
+    setSavingQuota(true);
+    try {
+      await onSetQuota(quotaBytes);
+    } catch (error) {
+      setQuotaError(error instanceof Error ? error.message : "Could not update the storage limit.");
+    } finally {
+      setSavingQuota(false);
+    }
+  }
+
+  function setCustomQuota() {
+    const value = Number(customQuotaGb);
+    if (!Number.isFinite(value) || value <= 0) {
+      setQuotaError("Enter a storage limit in GB.");
+      return;
+    }
+    void setQuota(Math.floor(value * gigabyte));
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-slate-950/35 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Storage breakdown"
+      onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}
+    >
+      <section className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <header className="flex items-start justify-between border-b border-slate-100 px-6 py-5">
+          <div>
+            <p className="text-sm font-medium text-blue-600">Zo Drive storage</p>
+            <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">Storage breakdown</h2>
+            <p className="mt-1 text-sm text-slate-500">Choose how much of this machine can be used by Zo Drive.</p>
+          </div>
+          <button aria-label="Close storage breakdown" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" onClick={onClose}><X size={20} /></button>
+        </header>
+        <div className="space-y-7 p-6">
+          <section>
+            <div className="flex items-baseline justify-between gap-4">
+              <div><span className="text-3xl font-semibold tracking-tight text-slate-900">{formatBytes(driveUsed)}</span><span className="ml-2 text-sm text-slate-500">used of {formatBytes(quota)}</span></div>
+              <span className="text-sm font-medium text-slate-600">{formatBytes(quotaAvailable)} remaining</span>
+            </div>
+            <div className="mt-4 flex h-4 overflow-hidden rounded-full bg-slate-100" aria-label={`${formatBytes(driveUsed)} used of ${formatBytes(quota)}`}>
+              {categories.map((category) => <div className={storageCategoryMeta[category.id].color} key={category.id} style={{ width: `${quota > 0 ? (category.bytes / quota) * 100 : 0}%` }} />)}
+              <div className="flex-1 bg-slate-200" />
+            </div>
+            <p className="mt-2 text-xs text-slate-500">Zo Drive quota, including files in Trash.</p>
+          </section>
+          <section className="rounded-xl border border-blue-100 bg-blue-50/60 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="font-semibold text-slate-800">Drive storage limit</h3>
+                <p className="mt-1 text-sm text-slate-500">Choose a preset or enter a custom amount.</p>
+              </div>
+              <span className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-blue-700 shadow-sm">Current: {formatBytes(quota)}</span>
+            </div>
+            <div className="mt-4 grid gap-2 sm:grid-cols-3">
+              {quotaPresetsGb.map((preset) => {
+                const presetBytes = preset * gigabyte;
+                const selected = quota === presetBytes;
+                const unavailable = presetBytes > maxQuota;
+                return <button aria-label={`Set storage limit to ${preset} GB`} className={`rounded-lg border px-3 py-2.5 text-sm font-semibold transition ${selected ? "border-blue-600 bg-blue-600 text-white" : "border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:text-blue-700"} disabled:cursor-not-allowed disabled:opacity-45`} disabled={savingQuota || unavailable} key={preset} onClick={() => void setQuota(presetBytes)}>{preset} GB</button>;
+              })}
+            </div>
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+              <label className="sr-only" htmlFor="custom-storage-limit">Custom storage limit in GB</label>
+              <input aria-label="Custom storage limit in GB" id="custom-storage-limit" className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" min={minQuota / gigabyte} max={maxQuota / gigabyte} onChange={(event) => setCustomQuotaGb(event.target.value)} placeholder="Custom GB" step="0.1" type="number" value={customQuotaGb} />
+              <button className="rounded-lg border border-blue-600 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50" disabled={savingQuota} onClick={setCustomQuota}>{savingQuota ? "Saving…" : "Apply custom limit"}</button>
+            </div>
+            <p className="mt-3 text-xs leading-5 text-slate-500">Custom limits must be at least {formatBytes(minQuota)} and no more than {formatBytes(maxQuota)} (80% of this machine's disk).</p>
+            {quotaError && <p className="mt-2 text-sm font-medium text-red-600" role="alert">{quotaError}</p>}
+          </section>
+          <section className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <div className="flex items-center justify-between gap-4">
+              <div><h3 className="font-semibold text-slate-800">Full machine disk</h3><p className="mt-1 text-sm text-slate-500">{formatBytes(available)} available of {formatBytes(total)}</p></div>
+              <span className="text-sm font-medium text-slate-600">{formatBytes(systemUsed)} used</span>
+            </div>
+            <div className="mt-3 flex h-2 overflow-hidden rounded-full bg-slate-200"><div className="bg-slate-500" style={{ width: `${total > 0 ? (systemUsed / total) * 100 : 0}%` }} /></div>
+            <p className="mt-3 text-xs leading-5 text-slate-500"><span className="font-medium text-slate-700">Zo system files & other machine data:</span> {formatBytes(otherMachineData)} outside Zo Drive, including the Zo runtime, Drive application code, and other platform files.</p>
+          </section>
+          <section className="overflow-hidden rounded-xl border border-slate-200">
+            <div className="border-b border-slate-100 px-4 py-3"><h3 className="font-semibold text-slate-800">Your Zo Drive files</h3><p className="mt-0.5 text-sm text-slate-500">{usage?.fileCount ?? 0} files, grouped by storage type</p></div>
+            <div className="divide-y divide-slate-100">{categories.length > 0 ? categories.map((category) => { const meta = storageCategoryMeta[category.id]; return <div className="flex items-center gap-3 px-4 py-3" key={category.id}><span className={`size-3 rounded-full ${meta.color}`} /><span className="flex-1 text-sm font-medium text-slate-700">{meta.label}</span><span className="text-right text-sm tabular-nums text-slate-600">{formatBytes(category.bytes)}<span className="ml-2 text-xs text-slate-400">{category.fileCount} {category.fileCount === 1 ? "file" : "files"}</span></span></div>; }) : <p className="px-4 py-6 text-sm text-slate-500">Your Drive is empty.</p>}</div>
+          </section>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ZoTransfer({ client, onCreated }: { client: DriveClient; onCreated: () => Promise<void> }) {
+  const [mode, setMode] = useState<"drive" | "upload">("drive");
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [expiry, setExpiry] = useState("7d");
+  const [access, setAccess] = useState<ShareAccess>("public");
+  const [passcode, setPasscode] = useState("");
+  const [showPasscode, setShowPasscode] = useState(false);
+  const [search, setSearch] = useState("");
+  const [link, setLink] = useState<string | null>(null);
+  const input = useRef<HTMLInputElement>(null);
+  const filesQuery = useQuery({ queryKey: ["transfer-files"], queryFn: () => client.list({}) });
+  const sharesQuery = useQuery({ queryKey: ["transfer-shares"], queryFn: () => client.listShares() });
+  const files = (filesQuery.data ?? []).filter((file) => file.name.toLowerCase().includes(search.toLowerCase()));
+  const transfers = (sharesQuery.data ?? []).filter((share) => share.kind === "transfer");
+  const canCreate = access === "public" || passcode.length > 0;
+  const transferOptions = () => ({ access, kind: "transfer" as const, passcode: access === "passcode" ? passcode : undefined, expiresAt: ttlToDate(expiry) });
+  const finish = async (share: DriveShare) => {
+    setLink(shareLink(share.id));
+    await onCreated();
+    await Promise.all([filesQuery.refetch(), sharesQuery.refetch()]);
+    toast.success(access === "passcode" ? "Passcode-protected transfer link created" : "Public transfer link created");
+  };
+  const createMutation = useMutation({
+    mutationFn: (key: string) => client.createShare({ key, ...transferOptions() }),
+    onSuccess: (share) => void finish(share),
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not create the transfer")
+  });
+  const uploadMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const uploaded = await client.upload({ file, fileName: file.name });
+      return client.createShare({ key: uploaded.key, ...transferOptions() });
+    },
+    onSuccess: (share) => void finish(share),
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not upload and transfer the file")
+  });
+  const revokeMutation = useMutation({
+    mutationFn: (id: string) => client.revokeShare(id),
+    onSuccess: () => { void sharesQuery.refetch(); toast.success("Transfer revoked"); },
+    onError: () => toast.error("Could not revoke the transfer")
+  });
+  const working = createMutation.isPending || uploadMutation.isPending;
+  const actionLabel = access === "passcode" ? "Create protected link" : "Create public link";
+
+  return <div className="space-y-6">
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="relative overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 px-7 py-9 text-white md:px-10"><div className="absolute -right-28 -top-32 size-80 rounded-full bg-cyan-400/15 blur-3xl" /><div className="relative"><span className="inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-cyan-200/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100"><Send size={14} /> Ready to send</span><h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">Send a file with Zo Transfer</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300 md:text-base">Upload a file or select one already in Zo Drive. Create a public or passcode-protected link, then revoke it whenever needed.</p><p className="mt-4 text-xs font-medium text-cyan-100/80">Inspired by WeTransfer.</p></div></div>
+      <div className="grid gap-6 p-5 md:grid-cols-[minmax(0,1fr)_18rem] md:p-7">
+        <div><div className="flex rounded-lg bg-slate-100 p-1"><button className={`flex-1 rounded-md px-3 py-2 text-sm font-semibold ${mode === "drive" ? "bg-white text-blue-700 shadow-sm" : "text-slate-500"}`} onClick={() => setMode("drive")}>Choose from Drive</button><button className={`flex-1 rounded-md px-3 py-2 text-sm font-semibold ${mode === "upload" ? "bg-white text-blue-700 shadow-sm" : "text-slate-500"}`} onClick={() => setMode("upload")}>Upload from computer</button></div>{mode === "drive" ? <div className="mt-4"><label className="sr-only" htmlFor="transfer-search">Search Drive files</label><input id="transfer-search" className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" placeholder="Search files in Zo Drive" value={search} onChange={(event) => setSearch(event.target.value)} />{filesQuery.isPending ? <p className="py-8 text-center text-sm text-slate-500">Loading files…</p> : <div className="mt-3 max-h-60 overflow-auto rounded-xl border border-slate-200">{files.length === 0 ? <p className="p-5 text-sm text-slate-500">No files found.</p> : files.map((file) => <button className={`flex w-full items-center gap-3 border-b border-slate-100 px-4 py-3 text-left last:border-b-0 hover:bg-slate-50 ${selectedKey === file.key ? "bg-blue-50" : ""}`} key={file.key} onClick={() => setSelectedKey(file.key)}><span className={`rounded-lg p-2 ${selectedKey === file.key ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-500"}`}>{fileIcon(file.contentType)}</span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-800">{file.name}</span><span className="block text-xs text-slate-500">{formatBytes(file.size)} · {file.key.includes("/") ? file.key.slice(0, file.key.lastIndexOf("/")) : "My Drive"}</span></span>{selectedKey === file.key && <span className="text-xs font-bold text-blue-700">Selected</span>}</button>)}</div>}</div> : <div className="mt-4 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 p-8 text-center"><Upload className="mx-auto text-blue-600" size={30} /><h3 className="mt-3 font-semibold text-slate-800">Choose a file from your computer</h3><p className="mt-1 text-sm text-slate-500">The file is added to Zo Drive, then shared through your selected link access.</p><button className="mt-5 rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50 disabled:text-slate-400" onClick={() => input.current?.click()} disabled={working || !canCreate}>Browse files</button><input ref={input} className="hidden" type="file" onChange={(event) => { const file = event.target.files?.[0]; if (file) uploadMutation.mutate(file); event.target.value = ""; }} /></div>}</div>
+        <aside className="rounded-xl border border-slate-200 bg-slate-50 p-5"><fieldset><legend className="text-sm font-semibold text-slate-700">Link access</legend><div className="mt-2 grid grid-cols-2 gap-2"><label className={`rounded-lg border p-3 text-sm font-medium ${access === "public" ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-200 text-slate-600"}`}><input className="sr-only" type="radio" checked={access === "public"} onChange={() => setAccess("public")} />Public</label><label className={`rounded-lg border p-3 text-sm font-medium ${access === "passcode" ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-200 text-slate-600"}`}><input className="sr-only" type="radio" checked={access === "passcode"} onChange={() => setAccess("passcode")} />Passcode</label></div></fieldset>{access === "passcode" && <div className="relative mt-3"><input aria-label="Transfer passcode" className="w-full rounded-lg border border-slate-300 py-2.5 pl-3 pr-11 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" type={showPasscode ? "text" : "password"} placeholder="Choose a passcode" value={passcode} onChange={(event) => setPasscode(event.target.value)} /><button aria-label={showPasscode ? "Hide transfer passcode" : "Show transfer passcode"} className="absolute right-1 top-1/2 -translate-y-1/2 rounded-md p-2 text-slate-400 hover:bg-white hover:text-slate-700" type="button" onClick={() => setShowPasscode((show) => !show)}>{showPasscode ? <EyeOff size={18} /> : <Eye size={18} />}</button></div>}<label className="mt-5 block text-sm font-semibold text-slate-700">Link expiry<select aria-label="Transfer expiry" className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm" value={expiry} onChange={(event) => setExpiry(event.target.value)}><option value="1d">1 day</option><option value="7d">7 days</option><option value="30d">30 days</option><option value="never">Never expires</option></select></label><div className="mt-5 rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm leading-6 text-blue-800"><ShieldCheck className="mb-1" size={18} />{access === "public" ? "Anyone with the link can download this file." : "Recipients must enter the passcode before they can download this file."} You can revoke it from Zo Transfer or Shared with others.</div><button className="mt-5 w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-300" disabled={!selectedKey || working || mode !== "drive" || !canCreate} onClick={() => selectedKey && createMutation.mutate(selectedKey)}>{working ? mode === "upload" ? "Uploading…" : "Creating link…" : actionLabel}</button><div className="mt-5 border-t border-slate-200 pt-4"><p className="flex items-center gap-2 text-sm font-semibold text-slate-700"><CreditCard size={17} className="text-slate-400" /> Payments <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-600">Coming soon</span></p><p className="mt-1 text-xs leading-5 text-slate-500">Payment-gated downloads are not enabled yet.</p></div></aside>
+      </div>
+      {link && <div className="border-t border-slate-100 bg-emerald-50 px-5 py-4 md:px-7"><p className="text-sm font-semibold text-emerald-900">Your {access === "passcode" ? "protected" : "public"} transfer is ready</p><div className="mt-2 flex gap-2"><input aria-label="Transfer link" className="min-w-0 flex-1 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm text-slate-700" value={link} readOnly /><button aria-label="Copy transfer link" className="rounded-lg border border-emerald-200 bg-white px-3 text-emerald-700 hover:bg-emerald-100" onClick={() => void copyText(link, "Transfer link copied")}><Copy size={18} /></button></div></div>}
+    </section>
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:p-6"><div className="flex items-center justify-between gap-3"><div><h2 className="font-semibold text-slate-900">Active transfers</h2><p className="mt-1 text-sm text-slate-500">Links created through Zo Transfer.</p></div><button className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Refresh transfers" onClick={() => void sharesQuery.refetch()}><RotateCcw size={18} /></button></div>{sharesQuery.isPending ? <p className="py-6 text-sm text-slate-500">Loading transfers…</p> : transfers.length === 0 ? <p className="py-6 text-sm text-slate-500">No active transfers yet.</p> : <div className="mt-4 divide-y divide-slate-100">{transfers.map((share) => <article className="flex flex-wrap items-center gap-3 py-3" key={share.id}><span className="rounded-lg bg-blue-50 p-2 text-blue-600"><Send size={18} /></span><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-800">{share.name}</p><p className="text-xs text-slate-500">{share.access === "passcode" ? "Passcode protected" : "Public"} · {formatBytes(share.size)} · {share.expiresAt ? `Expires ${new Date(share.expiresAt).toLocaleString()}` : "No expiry"}</p></div><button aria-label={`Copy transfer link for ${share.name}`} className="rounded-lg p-2 text-slate-500 hover:bg-blue-50 hover:text-blue-700" onClick={() => void copyText(shareLink(share.id), "Transfer link copied")}><Copy size={17} /></button><button className="rounded-lg px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50" disabled={revokeMutation.isPending} onClick={() => revokeMutation.mutate(share.id)}>Revoke</button></article>)}</div>}</section>
+  </div>;
+}
+
+function ZoPaste({ files, isError, isLoading, onCreate, onDelete, onPreview, onRetry, onShare, onToggleStar }: { files: DriveObject[]; isError: boolean; isLoading: boolean; onCreate: () => void; onDelete: (key: string) => void; onPreview: (file: DriveObject) => void; onRetry: () => void; onShare: (file: DriveObject) => void; onToggleStar: (file: DriveObject) => void }) {
+  return <div className="space-y-6">
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="relative overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-cyan-950 px-7 py-9 text-white md:px-10">
+        <div className="absolute -right-28 -top-32 size-80 rounded-full bg-cyan-300/15 blur-3xl" />
+        <div className="absolute -bottom-24 left-1/3 size-64 rounded-full bg-blue-500/15 blur-3xl" />
+        <div className="relative max-w-3xl"><span className="inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-cyan-200/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100"><Code2 size={14} /> Snippets, simplified</span><h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">Write it once. Share it when ready.</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300 md:text-base">Zo Paste keeps code, logs, notes, and configuration snippets private by default. Add syntax and tags, then create a protected or expiring link only when you need to send it.</p><p className="mt-4 text-xs font-medium text-cyan-100/80">Inspired by Pastebin.</p><button className="mt-6 inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-cyan-50" onClick={onCreate}><Plus size={17} /> Create a new paste</button></div>
+      </div>
+      <div className="grid divide-y divide-slate-100 md:grid-cols-3 md:divide-x md:divide-y-0"><div className="flex gap-3 p-5"><span className="grid size-9 shrink-0 place-items-center rounded-lg bg-slate-900 text-cyan-300"><LockKeyhole size={18} /></span><div><p className="text-sm font-semibold text-slate-800">Private by default</p><p className="mt-1 text-xs leading-5 text-slate-500">Your paste stays in Zo Drive until you deliberately share it.</p></div></div><div className="flex gap-3 p-5"><span className="grid size-9 shrink-0 place-items-center rounded-lg bg-cyan-50 text-cyan-700"><Code2 size={18} /></span><div><p className="text-sm font-semibold text-slate-800">Built for text and code</p><p className="mt-1 text-xs leading-5 text-slate-500">Label the syntax and add tags so each snippet remains useful later.</p></div></div><div className="flex gap-3 p-5"><span className="grid size-9 shrink-0 place-items-center rounded-lg bg-blue-50 text-blue-700"><Share2 size={18} /></span><div><p className="text-sm font-semibold text-slate-800">Share on your terms</p><p className="mt-1 text-xs leading-5 text-slate-500">Use an expiry or passcode when a paste needs to leave your Drive.</p></div></div></div>
+    </section>
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:p-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold text-slate-900">Your pastes</h2><p className="mt-1 text-sm text-slate-500">Create, open, and share your saved snippets.</p></div><button className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-800" onClick={onCreate}><Plus size={17} /> New paste</button></div>{isLoading ? <div className="grid min-h-52 place-items-center text-sm text-slate-500"><span className="flex items-center gap-2"><LoaderCircle className="animate-spin" size={18} /> Loading your pastes…</span></div> : isError ? <div className="mt-5"><EmptyState title="We couldn't load your pastes" description="Check that the Drive API is running, then try again." action="Try again" onAction={onRetry} /></div> : files.length === 0 ? <div className="mt-5 grid min-h-60 place-items-center rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center"><div><span className="mx-auto grid size-12 place-items-center rounded-2xl bg-slate-900 text-cyan-300"><Code2 size={24} /></span><h3 className="mt-4 font-semibold text-slate-800">No pastes yet</h3><p className="mt-2 max-w-sm text-sm text-slate-500">Start a private Zo Paste for code, notes, logs, or any shareable text.</p><button className="mt-5 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800" onClick={onCreate}>Create a paste</button></div></div> : <div className="mt-5 overflow-hidden rounded-xl border border-slate-200"><DriveEntries files={files} folders={[]} viewMode="list" onOpenFolder={() => undefined} onPreview={onPreview} onDelete={onDelete} onToggleStar={onToggleStar} onShare={onShare} /></div>}</section>
+  </div>;
 }
 
 function FolderNavigation({ currentPath, onNavigate }: { currentPath: string; onNavigate: (path: string) => void }) {
@@ -816,19 +1215,20 @@ function FolderDialog({ folderName, onCancel, onCreate, onNameChange }: { folder
 
 function NativeFileDialog({ type, name, onCancel, onCreate, onNameChange }: { type: NativeFileType; name: string; onCancel: () => void; onCreate: () => void; onNameChange: (name: string) => void }) {
   const label = nativeFileLabel(type);
-  return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/30 p-4" role="dialog" aria-modal="true" aria-label={`Create Zo ${label}`}><form className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl" onSubmit={(event) => { event.preventDefault(); onCreate(); }}><h2 className="text-lg font-semibold text-slate-900">Create Zo {label}</h2><p className="mt-1 text-sm text-slate-500">This is a private, structured Zo-native file in the current folder.</p><input aria-label={`${label} name`} autoFocus className="mt-5 w-full rounded-lg border border-slate-300 px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" maxLength={128} value={name} onChange={(event) => onNameChange(event.target.value)} required /><div className="mt-5 flex justify-end gap-2"><button className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100" type="button" onClick={onCancel}>Cancel</button><button className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-300" disabled={!name.trim()} type="submit">Create</button></div></form></div>;
+  const description = type === "paste" ? "Pastes stay private in Zo Drive until you create a share link." : "This is a private, structured Zo-native file in the current folder.";
+  return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/30 p-4" role="dialog" aria-modal="true" aria-label={`Create Zo ${label}`}><form className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl" onSubmit={(event) => { event.preventDefault(); onCreate(); }}><h2 className="text-lg font-semibold text-slate-900">Create Zo {label}</h2><p className="mt-1 text-sm text-slate-500">{description}</p><input aria-label={`${label} name`} autoFocus className="mt-5 w-full rounded-lg border border-slate-300 px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" maxLength={128} value={name} onChange={(event) => onNameChange(event.target.value)} required /><div className="mt-5 flex justify-end gap-2"><button className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100" type="button" onClick={onCancel}>Cancel</button><button className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-300" disabled={!name.trim()} type="submit">Create</button></div></form></div>;
 }
 
 function AdvancedSearchDialog({ filters, itemName, onCancel, onFiltersChange, onItemNameChange, onReset, onSearch }: { filters: AdvancedFilters; itemName: string; onCancel: () => void; onFiltersChange: (filters: AdvancedFilters) => void; onItemNameChange: (value: string) => void; onReset: () => void; onSearch: () => void }) {
   const update = (change: Partial<AdvancedFilters>) => onFiltersChange({ ...filters, ...change });
-  return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4" role="dialog" aria-modal="true" aria-label="Advanced search"><form className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl" onSubmit={(event) => { event.preventDefault(); onSearch(); }}><header className="flex items-center justify-between border-b border-slate-100 px-6 py-5"><div><h2 className="text-xl font-semibold text-slate-900">Advanced search</h2><p className="mt-1 text-sm text-slate-500">Search your private Drive with precise file filters.</p></div><button aria-label="Close advanced search" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" onClick={onCancel} type="button"><X size={20} /></button></header><div className="grid gap-5 p-6 sm:grid-cols-[10rem_minmax(0,1fr)]"><label className="text-sm font-semibold text-slate-700 sm:pt-2">Type</label><select aria-label="File type" className="rounded-lg border border-slate-300 bg-white px-3 py-2.5" value={filters.type} onChange={(event) => update({ type: event.target.value as AdvancedFilters["type"] })}><option value="any">Any</option><option value="document">Documents</option><option value="spreadsheet">Spreadsheets</option><option value="presentation">Presentations</option><option value="form">Forms</option><option value="image">Images</option><option value="video">Videos</option><option value="audio">Audio</option><option value="pdf">PDFs</option><option value="other">Other files</option></select><label className="text-sm font-semibold text-slate-700 sm:pt-2" htmlFor="advanced-content">Has the words</label><input id="advanced-content" className="rounded-lg border border-slate-300 px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" placeholder="Words within a text or Zo-native file" value={filters.contentQuery} onChange={(event) => update({ contentQuery: event.target.value })} /><label className="text-sm font-semibold text-slate-700 sm:pt-2" htmlFor="advanced-name">Item name</label><input id="advanced-name" className="rounded-lg border border-slate-300 px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" placeholder="Part of the file name" value={itemName} onChange={(event) => onItemNameChange(event.target.value)} /><label className="text-sm font-semibold text-slate-700 sm:pt-2">Location</label><div className="space-y-3"><select aria-label="Search location" className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5" value={filters.location} onChange={(event) => update({ location: event.target.value as AdvancedFilters["location"] })}><option value="anywhere">Anywhere in My Drive</option><option value="current">Current folder only</option></select><label className="flex items-center gap-2 text-sm font-medium text-slate-700"><input aria-label="Search in Trash" className="size-4 accent-blue-600" type="checkbox" checked={filters.inTrash} onChange={(event) => update({ inTrash: event.target.checked })} /> Search in Trash</label><label className="flex items-center gap-2 text-sm font-medium text-slate-700"><input aria-label="Only starred files" className="size-4 accent-blue-600" type="checkbox" checked={filters.starred} onChange={(event) => update({ starred: event.target.checked })} /> Only Starred</label></div><label className="text-sm font-semibold text-slate-700 sm:pt-2">Date modified</label><select aria-label="Date modified" className="rounded-lg border border-slate-300 bg-white px-3 py-2.5" value={filters.modified} onChange={(event) => update({ modified: event.target.value as AdvancedFilters["modified"] })}><option value="any">Any time</option><option value="today">Today</option><option value="week">Past week</option><option value="month">Past month</option><option value="year">Past year</option></select></div><footer className="flex items-center justify-between border-t border-slate-100 px-6 py-4"><button className="text-sm font-semibold text-blue-700 hover:text-blue-900" type="button" onClick={onReset}>Reset</button><div className="flex gap-2"><button className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100" type="button" onClick={onCancel}>Cancel</button><button className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700" type="submit">Search</button></div></footer></form></div>;
+  return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4" role="dialog" aria-modal="true" aria-label="Advanced search"><form className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl" onSubmit={(event) => { event.preventDefault(); onSearch(); }}><header className="flex items-center justify-between border-b border-slate-100 px-6 py-5"><div><h2 className="text-xl font-semibold text-slate-900">Advanced search</h2><p className="mt-1 text-sm text-slate-500">Search your private Drive with precise file filters.</p></div><button aria-label="Close advanced search" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" onClick={onCancel} type="button"><X size={20} /></button></header><div className="grid gap-5 p-6 sm:grid-cols-[10rem_minmax(0,1fr)]"><label className="text-sm font-semibold text-slate-700 sm:pt-2">Type</label><select aria-label="File type" className="rounded-lg border border-slate-300 bg-white px-3 py-2.5" value={filters.type} onChange={(event) => update({ type: event.target.value as AdvancedFilters["type"] })}><option value="any">Any</option><option value="document">Documents</option><option value="spreadsheet">Spreadsheets</option><option value="presentation">Presentations</option><option value="form">Forms</option><option value="paste">Pastes</option><option value="image">Images</option><option value="video">Videos</option><option value="audio">Audio</option><option value="pdf">PDFs</option><option value="other">Other files</option></select><label className="text-sm font-semibold text-slate-700 sm:pt-2" htmlFor="advanced-content">Has the words</label><input id="advanced-content" className="rounded-lg border border-slate-300 px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" placeholder="Words within a text or Zo-native file" value={filters.contentQuery} onChange={(event) => update({ contentQuery: event.target.value })} /><label className="text-sm font-semibold text-slate-700 sm:pt-2" htmlFor="advanced-name">Item name</label><input id="advanced-name" className="rounded-lg border border-slate-300 px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" placeholder="Part of the file name" value={itemName} onChange={(event) => onItemNameChange(event.target.value)} /><label className="text-sm font-semibold text-slate-700 sm:pt-2">Location</label><div className="space-y-3"><select aria-label="Search location" className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5" value={filters.location} onChange={(event) => update({ location: event.target.value as AdvancedFilters["location"] })}><option value="anywhere">Anywhere in My Drive</option><option value="current">Current folder only</option></select><label className="flex items-center gap-2 text-sm font-medium text-slate-700"><input aria-label="Search in Trash" className="size-4 accent-blue-600" type="checkbox" checked={filters.inTrash} onChange={(event) => update({ inTrash: event.target.checked })} /> Search in Trash</label><label className="flex items-center gap-2 text-sm font-medium text-slate-700"><input aria-label="Only starred files" className="size-4 accent-blue-600" type="checkbox" checked={filters.starred} onChange={(event) => update({ starred: event.target.checked })} /> Only Starred</label></div><label className="text-sm font-semibold text-slate-700 sm:pt-2">Date modified</label><select aria-label="Date modified" className="rounded-lg border border-slate-300 bg-white px-3 py-2.5" value={filters.modified} onChange={(event) => update({ modified: event.target.value as AdvancedFilters["modified"] })}><option value="any">Any time</option><option value="today">Today</option><option value="week">Past week</option><option value="month">Past month</option><option value="year">Past year</option></select></div><footer className="flex items-center justify-between border-t border-slate-100 px-6 py-4"><button className="text-sm font-semibold text-blue-700 hover:text-blue-900" type="button" onClick={onReset}>Reset</button><div className="flex gap-2"><button className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100" type="button" onClick={onCancel}>Cancel</button><button className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700" type="submit">Search</button></div></footer></form></div>;
 }
 
-function ShareDialog({ client, file, onClose }: { client: DriveClient; file: DriveObject; onClose: () => void }) {
-  const [access, setAccess] = useState<ShareAccess>("public");
-  const [passcode, setPasscode] = useState("");
+function ShareDialog({ client, file, initialSettings, onClose }: { client: DriveClient; file: DriveObject; initialSettings?: PasteShareSettings; onClose: () => void }) {
+  const [access, setAccess] = useState<ShareAccess>(initialSettings?.access ?? "public");
+  const [passcode, setPasscode] = useState(initialSettings?.passcode ?? "");
   const [showPasscode, setShowPasscode] = useState(false);
-  const [ttl, setTtl] = useState("never");
+  const [ttl, setTtl] = useState(initialSettings?.ttl ?? "never");
   const [link, setLink] = useState<string | null>(null);
   const mutation = useMutation({
     mutationFn: async () => client.createShare({ key: file.key, access, passcode: access === "passcode" ? passcode : undefined, expiresAt: ttlToDate(ttl) }),
@@ -880,17 +1280,107 @@ function SharedFilePage({ client, shareId }: { client: SharedClient; shareId: st
   if (shareQuery.isPending) return <AuthLoading />;
   if (shareQuery.isError || !shareQuery.data) return <main className="grid min-h-screen place-items-center bg-[#f8faff] p-5 text-center"><div><h1 className="text-2xl font-semibold text-slate-900">This link is unavailable</h1><p className="mt-2 text-sm text-slate-500">It may have expired or been revoked.</p></div></main>;
   const share: PublicShare = shareQuery.data;
-  return <main className="grid min-h-screen place-items-center bg-[#f8faff] p-5"><section className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-7 shadow-sm"><p className="text-sm font-medium text-blue-600">Zo Drive shared file</p><h1 className="mt-2 break-words text-2xl font-semibold text-slate-900">{share.name}</h1><p className="mt-2 text-sm text-slate-500">{formatBytes(share.size)} · {share.expiresAt ? `Available until ${new Date(share.expiresAt).toLocaleString()}` : "No expiry"}</p>{share.requiresPasscode && <label className="mt-6 block text-sm font-medium text-slate-700">Passcode<div className="relative mt-1.5"><input aria-label="Shared file passcode" className="w-full rounded-lg border border-slate-300 py-2.5 pl-3 pr-11 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" type={showPasscode ? "text" : "password"} value={passcode} onChange={(event) => setPasscode(event.target.value)} /><button aria-label={showPasscode ? "Hide shared file passcode" : "Show shared file passcode"} className="absolute right-1 top-1/2 -translate-y-1/2 rounded-md p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700" onClick={() => setShowPasscode((show) => !show)} type="button">{showPasscode ? <EyeOff size={18} /> : <Eye size={18} />}</button></div></label>}<button className="mt-6 w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-300" disabled={downloadMutation.isPending || (share.requiresPasscode && !passcode)} onClick={() => downloadMutation.mutate()}>{downloadMutation.isPending ? "Opening…" : "Open shared file"}</button><button className="mt-3 w-full rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100" onClick={() => { window.location.href = driveHomeUrl(); }}>Open Zo Drive</button></section>{preview && <PreviewDialog preview={preview} onClose={() => { URL.revokeObjectURL(preview.url); setPreview(null); }} />}</main>;
+  if (share.contentType === "application/vnd.zo.paste+json") return <SharedPastePage client={client} share={share} shareId={shareId} />;
+  return <main className="grid min-h-screen place-items-center bg-[#f8faff] p-5"><section className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-7 shadow-sm"><p className="text-sm font-medium text-blue-600">Zo Drive shared file</p><h1 className="mt-2 break-words text-2xl font-semibold text-slate-900">{share.name}</h1><p className="mt-2 text-sm text-slate-500">{formatBytes(share.size)} · {share.expiresAt ? `Available until ${new Date(share.expiresAt).toLocaleString()}` : "No expiry"}</p>{share.requiresPasscode && <label className="mt-6 block text-sm font-medium text-slate-700">Passcode<div className="relative mt-1.5"><input aria-label="Shared file passcode" className="w-full rounded-lg border border-slate-300 py-2.5 pl-3 pr-11 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" type={showPasscode ? "text" : "password"} value={passcode} onChange={(event) => setPasscode(event.target.value)} /><button aria-label={showPasscode ? "Hide shared file passcode" : "Show shared file passcode"} className="absolute right-1 top-1/2 -translate-y-1/2 rounded-md p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700" onClick={() => setShowPasscode((show) => !show)} type="button">{showPasscode ? <EyeOff size={18} /> : <Eye size={18} />}</button></div></label>}<button className="mt-6 w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-300" disabled={downloadMutation.isPending || (share.requiresPasscode && !passcode)} onClick={() => downloadMutation.mutate()}>{downloadMutation.isPending ? "Opening…" : "Open shared file"}</button><button className="mt-3 w-full rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100" onClick={() => { window.location.href = driveAppUrl(); }}>Open Zo Drive</button></section>{preview && <PreviewDialog preview={preview} onClose={() => { URL.revokeObjectURL(preview.url); setPreview(null); }} />}</main>;
+}
+
+function LegacyPublicFormPage({ client, formId }: { client: PublicFormClient; formId: string }) {
+  const formQuery = useQuery({ queryKey: ["public-form", formId], queryFn: () => client.getPublicForm(formId), retry: false });
+  const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
+  const [submitted, setSubmitted] = useState(false);
+  const submitMutation = useMutation({
+    mutationFn: () => client.submitFormResponse(formId, answers),
+    onSuccess: () => setSubmitted(true),
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Complete every required question")
+  });
+  if (formQuery.isPending) return <AuthLoading />;
+  if (formQuery.isError || !formQuery.data) return <main className="grid min-h-screen place-items-center bg-slate-50 p-5 text-center"><div><h1 className="text-2xl font-semibold text-slate-900">This form is unavailable</h1><p className="mt-2 text-sm text-slate-500">It may have been unpublished or deleted.</p></div></main>;
+  const form = formQuery.data;
+  const theme = formThemes[formTheme(form.theme)];
+  if (submitted) return <main className="grid min-h-screen place-items-center p-5" style={{ background: theme.background }}><section className="w-full max-w-xl overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"><div className="h-2" style={{ background: theme.accent }} /><div className="p-8 text-center"><h1 className="text-2xl font-semibold text-slate-900">Response recorded</h1><p className="mt-3 text-sm leading-6 text-slate-600">Thank you for completing {form.title}.</p></div></section></main>;
+  const updateAnswer = (questionId: string, value: string | string[]) => setAnswers((current) => ({ ...current, [questionId]: value }));
+  return <main className="min-h-screen px-4 py-8 md:py-12" style={{ background: theme.background }}><form className="mx-auto max-w-2xl space-y-4" onSubmit={(event) => { event.preventDefault(); submitMutation.mutate(); }}><section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"><div className="h-2" style={{ background: theme.accent }} /><div className="p-6 md:p-8"><h1 className="text-3xl font-semibold tracking-tight text-slate-900">{form.title}</h1>{form.description && <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-slate-600">{form.description}</p>}<p className="mt-5 text-xs text-slate-500"><span className="text-red-600">*</span> Required</p></div></section>{form.questions.map((question) => <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm" key={question.id}><label className="block text-base font-medium text-slate-900">{question.title}{question.required && <span className="ml-1 text-red-600">*</span>}</label>{question.description && <p className="mt-2 text-sm text-slate-500">{question.description}</p>}{question.type === "short-answer" && <input className="mt-5 w-full border-0 border-b border-slate-300 px-0 py-2 text-sm outline-none" required={question.required} value={typeof answers[question.id] === "string" ? answers[question.id] : ""} onChange={(event) => updateAnswer(question.id, event.target.value)} />}{question.type === "paragraph" && <textarea className="mt-5 min-h-28 w-full resize-y rounded-lg border border-slate-300 p-3 text-sm outline-none" required={question.required} value={typeof answers[question.id] === "string" ? answers[question.id] : ""} onChange={(event) => updateAnswer(question.id, event.target.value)} />}{question.type === "multiple-choice" && <div className="mt-5 space-y-3">{question.options.map((option) => <label className="flex cursor-pointer items-center gap-3 text-sm text-slate-700" key={option}><input required={question.required && !answers[question.id]} type="radio" name={question.id} value={option} checked={answers[question.id] === option} onChange={() => updateAnswer(question.id, option)} style={{ accentColor: theme.accent }} />{option}</label>)}</div>}{question.type === "checkboxes" && <div className="mt-5 space-y-3">{question.options.map((option) => { const existingAnswer = answers[question.id]; const selected: string[] = Array.isArray(existingAnswer) ? existingAnswer : []; return <label className="flex cursor-pointer items-center gap-3 text-sm text-slate-700" key={option}><input type="checkbox" checked={selected.includes(option)} onChange={(event) => updateAnswer(question.id, event.target.checked ? [...selected, option] : selected.filter((item) => item !== option))} style={{ accentColor: theme.accent }} />{option}</label>; })}</div>}{question.type === "dropdown" && <select className="mt-5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none" required={question.required} value={typeof answers[question.id] === "string" ? answers[question.id] : ""} onChange={(event) => updateAnswer(question.id, event.target.value)}><option value="">Choose an answer</option>{question.options.map((option) => <option key={option} value={option}>{option}</option>)}</select>}</section>)}<button className="rounded-lg px-6 py-3 text-sm font-semibold text-white disabled:opacity-60" disabled={submitMutation.isPending} style={{ background: theme.accent }} type="submit">{submitMutation.isPending ? "Submitting…" : "Submit"}</button><p className="pb-4 text-center text-xs text-slate-400">Powered by Zo Forms</p></form></main>;
+}
+
+function LegacyPublicFormPage2({ client, formId }: { client: PublicFormClient; formId: string }) {
+  const formQuery = useQuery({ queryKey: ["public-form", formId], queryFn: () => client.getPublicForm(formId), retry: false });
+  const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
+  const [submitted, setSubmitted] = useState(false);
+  const submitMutation = useMutation({ mutationFn: () => client.submitFormResponse(formId, answers), onSuccess: () => setSubmitted(true), onError: (error) => toast.error(error instanceof Error ? error.message : "Complete every required question") });
+  if (formQuery.isPending) return <AuthLoading />;
+  if (formQuery.isError || !formQuery.data) return <main className="grid min-h-screen place-items-center bg-slate-50 p-5 text-center"><div><h1 className="text-2xl font-semibold text-slate-900">This form is unavailable</h1><p className="mt-2 text-sm text-slate-500">It may have been unpublished or deleted.</p></div></main>;
+  const form = formQuery.data;
+  const theme = formThemes[formTheme(form.theme)];
+  const updateAnswer = (id: string, value: string | string[]) => setAnswers((current) => ({ ...current, [id]: value }));
+  if (submitted) return <main className="grid min-h-screen place-items-center p-5" style={{ background: theme.background }}><section className="w-full max-w-xl overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"><div className="h-2" style={{ background: theme.accent }} /><div className="p-8 text-center"><h1 className="text-2xl font-semibold text-slate-900">Response recorded</h1><p className="mt-3 text-sm leading-6 text-slate-600">{form.settings.confirmationMessage || `Thank you for completing ${form.title}.`}</p></div></section></main>;
+  return <main className="min-h-screen px-4 py-8 md:py-12" style={{ background: theme.background }}><form className="mx-auto max-w-2xl space-y-4" onSubmit={(event) => { event.preventDefault(); submitMutation.mutate(); }}><section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"><div className="h-2" style={{ background: theme.accent }} /><div className="p-6 md:p-8"><h1 className="text-3xl font-semibold tracking-tight text-slate-900">{form.title}</h1>{form.description && <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-slate-600">{form.description}</p>}<p className="mt-5 text-xs text-slate-500"><span className="text-red-600">*</span> Required</p></div></section>{form.settings.showProgressBar && <div className="h-1 overflow-hidden rounded-full bg-white/70"><div className="h-full" style={{ width: `${form.questions.length ? Math.round((Object.keys(answers).length / form.questions.length) * 100) : 0}%`, background: theme.accent }} /></div>}{!form.settings.acceptingResponses && <section className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">This form is not accepting responses.</section>}{form.questions.map((question) => <PublicFormQuestion accent={theme.accent} answer={answers[question.id]} key={question.id} question={question} onChange={(value) => updateAnswer(question.id, value)} />)}<button className="rounded-lg px-6 py-3 text-sm font-semibold text-white disabled:opacity-60" disabled={submitMutation.isPending || !form.settings.acceptingResponses} style={{ background: theme.accent }} type="submit">{submitMutation.isPending ? "Submitting…" : "Submit"}</button><p className="pb-4 text-center text-xs text-slate-400">Powered by Zo Forms</p></form></main>;
+}
+
+function FormBanner({ banner, className = "" }: { banner: "none" | "botanical" | "fireworks"; className?: string }) {
+  if (banner === "none") return null;
+  return <img alt="" className={`w-full object-cover ${className}`} src={`${appBasePath || ""}/form-banners/${banner}.png`} />;
+}
+
+function PublicFormPage({ client, formId }: { client: PublicFormClient; formId: string }) {
+  const formQuery = useQuery({ queryKey: ["public-form", formId], queryFn: () => client.getPublicForm(formId), retry: false });
+  const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
+  const [submitted, setSubmitted] = useState(false);
+  const submitMutation = useMutation({ mutationFn: () => client.submitFormResponse(formId, answers), onSuccess: () => setSubmitted(true), onError: (error) => toast.error(error instanceof Error ? error.message : "Complete every required question") });
+  if (formQuery.isPending) return <AuthLoading />;
+  if (formQuery.isError || !formQuery.data) return <main className="grid min-h-screen place-items-center bg-slate-50 p-5 text-center"><div><h1 className="text-2xl font-semibold text-slate-900">This form is unavailable</h1><p className="mt-2 text-sm text-slate-500">It may have been unpublished or deleted.</p></div></main>;
+  const form = formQuery.data;
+  const theme = formThemes[formTheme(form.theme)];
+  if (submitted) return <main className="grid min-h-screen place-items-center p-5" style={{ background: theme.background }}><section className="w-full max-w-xl overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"><FormBanner banner={form.banner} className="h-36" /><div className="h-2" style={{ background: theme.accent }} /><div className="p-8 text-center"><h1 className="text-2xl font-semibold text-slate-900">Response recorded</h1><p className="mt-3 text-sm leading-6 text-slate-600">{form.settings.confirmationMessage}</p></div></section></main>;
+  return <main className="min-h-screen px-4 py-8 md:py-12" style={{ background: theme.background }}><form className="mx-auto max-w-2xl space-y-4" onSubmit={(event) => { event.preventDefault(); submitMutation.mutate(); }}><section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"><FormBanner banner={form.banner} className="h-48 md:h-60" /><div className="h-2" style={{ background: theme.accent }} /><div className="p-6 md:p-8"><h1 className="text-3xl font-semibold tracking-tight text-slate-900">{form.title}</h1>{form.description && <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-slate-600">{form.description}</p>}<p className="mt-5 text-xs text-slate-500"><span className="text-red-600">*</span> Required</p></div></section>{form.settings.showProgressBar && <div className="h-1 overflow-hidden rounded-full bg-white/70"><div className="h-full" style={{ width: `${form.questions.length ? Math.round((Object.keys(answers).length / form.questions.length) * 100) : 0}%`, background: theme.accent }} /></div>}{!form.settings.acceptingResponses && <section className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">This form is not accepting responses.</section>}{form.questions.map((question) => <PublicFormQuestion accent={theme.accent} answer={answers[question.id]} key={question.id} question={question} onChange={(value) => setAnswers((current) => ({ ...current, [question.id]: value }))} />)}<button className="rounded-lg px-6 py-3 text-sm font-semibold text-white disabled:opacity-60" disabled={submitMutation.isPending || !form.settings.acceptingResponses} style={{ background: theme.accent }} type="submit">{submitMutation.isPending ? "Submitting…" : "Submit"}</button><p className="pb-4 text-center text-xs text-slate-400">Powered by Zo Forms</p></form></main>;
+}
+
+function PublicFormQuestion({ accent, answer, question, onChange }: { accent: string; answer: string | string[] | undefined; question: import("@zo-drive/types").FormQuestion; onChange: (value: string | string[]) => void }) {
+  const selected = Array.isArray(answer) ? answer : [];
+  const stringAnswer = typeof answer === "string" ? answer : "";
+  const icon = question.ratingIcon === "heart" ? "♥" : question.ratingIcon === "thumb" ? "👍" : "★";
+  const grid = question.type === "multiple-choice-grid" || question.type === "checkbox-grid";
+  return <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm"><label className="block text-base font-medium text-slate-900">{question.title}{question.required && <span className="ml-1 text-red-600">*</span>}</label>{question.description && <p className="mt-2 text-sm text-slate-500">{question.description}</p>}{question.type === "short-answer" && <input className="mt-5 w-full border-0 border-b border-slate-300 px-0 py-2 text-sm outline-none" required={question.required} value={stringAnswer} onChange={(event) => onChange(event.target.value)} />}{question.type === "paragraph" && <textarea className="mt-5 min-h-28 w-full resize-y rounded-lg border border-slate-300 p-3 text-sm outline-none" required={question.required} value={stringAnswer} onChange={(event) => onChange(event.target.value)} />}{question.type === "date" && <input className="mt-5 rounded-lg border border-slate-300 px-3 py-2.5 text-sm" required={question.required} type="date" value={stringAnswer} onChange={(event) => onChange(event.target.value)} />}{question.type === "time" && <input className="mt-5 rounded-lg border border-slate-300 px-3 py-2.5 text-sm" required={question.required} type="time" value={stringAnswer} onChange={(event) => onChange(event.target.value)} />}{question.type === "multiple-choice" && <div className="mt-5 space-y-3">{question.options.map((option) => <label className="flex cursor-pointer items-center gap-3 text-sm text-slate-700" key={option}><input required={question.required && !answer} type="radio" name={question.id} checked={answer === option} onChange={() => onChange(option)} style={{ accentColor: accent }} />{option}</label>)}</div>}{question.type === "checkboxes" && <div className="mt-5 space-y-3">{question.options.map((option) => <label className="flex cursor-pointer items-center gap-3 text-sm text-slate-700" key={option}><input type="checkbox" checked={selected.includes(option)} onChange={(event) => onChange(event.target.checked ? [...selected, option] : selected.filter((item) => item !== option))} style={{ accentColor: accent }} />{option}</label>)}</div>}{question.type === "dropdown" && <select className="mt-5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none" required={question.required} value={stringAnswer} onChange={(event) => onChange(event.target.value)}><option value="">Choose an answer</option>{question.options.map((option) => <option key={option} value={option}>{option}</option>)}</select>}{question.type === "linear-scale" && <div className="mt-5"><div className="flex flex-wrap gap-3">{Array.from({ length: question.scaleMax - question.scaleMin + 1 }, (_, index) => question.scaleMin + index).map((value) => <label className="grid cursor-pointer justify-items-center gap-1 text-sm text-slate-600" key={value}><input required={question.required && !answer} type="radio" name={question.id} checked={answer === String(value)} onChange={() => onChange(String(value))} style={{ accentColor: accent }} />{value}</label>)}</div><div className="mt-2 flex justify-between text-xs text-slate-500"><span>{question.scaleMinLabel}</span><span>{question.scaleMaxLabel}</span></div></div>}{question.type === "rating" && <div className="mt-5 flex gap-1">{Array.from({ length: question.scaleMax }, (_, index) => index + 1).map((value) => <button aria-label={`Rate ${value}`} className="text-3xl transition hover:scale-110" key={value} style={{ color: Number(answer) >= value ? accent : "#cbd5e1" }} type="button" onClick={() => onChange(String(value))}>{icon}</button>)}</div>}{grid && <div className="mt-5 overflow-x-auto"><table className="min-w-full text-left text-sm"><thead><tr><th /><>{question.columns.map((column) => <th className="px-2 pb-2 text-center font-medium text-slate-500" key={column}>{column}</th>)}</></tr></thead><tbody>{question.rows.map((row) => <tr className="border-t border-slate-100" key={row}><th className="py-3 pr-3 font-medium text-slate-700">{row}</th>{question.columns.map((column) => { const token = `${row}::${column}`; const rowSelected = selected.filter((item) => item.startsWith(`${row}::`)); return <td className="px-2 py-3 text-center" key={column}><input type={question.type === "checkbox-grid" ? "checkbox" : "radio"} name={`${question.id}-${row}`} checked={selected.includes(token)} onChange={(event) => onChange(question.type === "checkbox-grid" ? (event.target.checked ? [...selected, token] : selected.filter((item) => item !== token)) : [...selected.filter((item) => !item.startsWith(`${row}::`)), token])} style={{ accentColor: accent }} /></td>; })}</tr>)}</tbody></table></div>}</section>;
+}
+
+function SharedPastePage({ client, share, shareId }: { client: SharedClient; share: PublicShare; shareId: string }) {
+  const [passcode, setPasscode] = useState("");
+  const [showPasscode, setShowPasscode] = useState(false);
+  const [paste, setPaste] = useState<{ language: string; tags: string[]; text: string } | null>(null);
+  const openMutation = useMutation({
+    mutationFn: () => client.downloadShared(shareId, passcode || undefined),
+    onSuccess: async (response) => {
+      try {
+        setPaste(parsePasteContent(await response.text()));
+      } catch {
+        toast.error("This shared paste has an unsupported format");
+      }
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not open this paste")
+  });
+  if (!paste) return <main className="grid min-h-screen place-items-center bg-[#f8faff] p-5"><section className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-7 shadow-sm"><p className="text-sm font-medium text-blue-600">Zo Paste</p><h1 className="mt-2 break-words text-2xl font-semibold text-slate-900">{share.name}</h1><p className="mt-2 text-sm text-slate-500">{share.expiresAt ? `Available until ${new Date(share.expiresAt).toLocaleString()}` : "No expiry"}</p>{share.requiresPasscode && <label className="mt-6 block text-sm font-medium text-slate-700">Passcode<div className="relative mt-1.5"><input aria-label="Shared paste passcode" className="w-full rounded-lg border border-slate-300 py-2.5 pl-3 pr-11 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" type={showPasscode ? "text" : "password"} value={passcode} onChange={(event) => setPasscode(event.target.value)} /><button aria-label={showPasscode ? "Hide shared paste passcode" : "Show shared paste passcode"} className="absolute right-1 top-1/2 -translate-y-1/2 rounded-md p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700" onClick={() => setShowPasscode((show) => !show)} type="button">{showPasscode ? <EyeOff size={18} /> : <Eye size={18} />}</button></div></label>}<button className="mt-6 w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-300" disabled={openMutation.isPending || (share.requiresPasscode && !passcode)} onClick={() => openMutation.mutate()}>{openMutation.isPending ? "Opening…" : "View paste"}</button></section></main>;
+  return <main className="min-h-screen bg-[#10151d] p-4 text-slate-100 md:p-8"><section className="mx-auto max-w-5xl overflow-hidden rounded-2xl border border-white/10 bg-[#161d27] shadow-2xl"><header className="flex flex-wrap items-start justify-between gap-4 border-b border-white/10 bg-[#1d2632] px-5 py-5 md:px-7"><div><p className="flex items-center gap-2 text-sm font-semibold text-cyan-300"><Code2 size={17} /> Zo Paste</p><h1 className="mt-2 break-words text-2xl font-semibold tracking-tight text-white">{share.name}</h1>{paste.tags.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{paste.tags.map((tag) => <span className="rounded-full bg-white/10 px-2.5 py-1 text-xs font-medium text-slate-300" key={tag}>{tag}</span>)}</div>}</div><span className="rounded-md bg-white/10 px-2.5 py-1 font-mono text-xs font-semibold text-slate-300">{paste.language}</span></header><pre className="max-h-[70vh] overflow-auto p-5 font-mono text-sm leading-6 text-slate-100 md:p-7"><code>{paste.text}</code></pre></section></main>;
 }
 
 function PreviewDialog({ preview, onClose }: { preview: { object: DriveObject; url: string }; onClose: () => void }) {
   const { object, url } = preview;
+  const [fullScreenPdf, setFullScreenPdf] = useState(false);
+
+  useEffect(() => {
+    if (!fullScreenPdf) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setFullScreenPdf(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [fullScreenPdf]);
+
   const media = object.contentType.startsWith("image/") ? <img className="max-h-[72vh] max-w-full rounded-lg object-contain" src={url} alt={object.name} />
     : object.contentType === "application/pdf" ? <iframe className="h-[72vh] w-full rounded-lg bg-white" src={url} title={object.name} />
       : object.contentType.startsWith("audio/") ? <audio className="w-full" src={url} controls />
         : object.contentType.startsWith("video/") ? <video className="max-h-[72vh] max-w-full rounded-lg" src={url} controls />
           : <a className="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white" href={url} download={object.name}>Download {object.name}</a>;
-  return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/60 p-4" role="dialog" aria-modal="true" aria-label={`Preview ${object.name}`}><div className="w-full max-w-5xl rounded-2xl bg-slate-900 p-4 shadow-2xl"><div className="mb-4 flex items-center justify-between gap-4 text-white"><span className="truncate text-sm font-medium">{object.name}</span><button className="rounded-lg p-2 hover:bg-white/10" onClick={onClose} aria-label="Close preview"><X size={20} /></button></div><div className="grid min-h-48 place-items-center">{media}</div></div></div>;
+  if (fullScreenPdf) return <div className="fixed inset-0 z-[60] flex flex-col bg-slate-950" role="dialog" aria-modal="true" aria-label={`Full screen PDF ${object.name}`}><header className="flex min-h-14 items-center gap-3 border-b border-white/10 bg-slate-900 px-4 text-white"><FileText className="shrink-0 text-blue-300" size={19} /><span className="min-w-0 flex-1 truncate text-sm font-medium">{object.name}</span><span className="hidden text-xs text-slate-400 sm:inline">Press Esc to exit</span><button className="rounded-lg px-3 py-2 text-sm font-medium hover:bg-white/10" onClick={() => setFullScreenPdf(false)}>Exit full screen</button></header><iframe className="min-h-0 flex-1 w-full bg-white" src={url} title={`${object.name} full screen`} /></div>;
+  return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/60 p-4" role="dialog" aria-modal="true" aria-label={`Preview ${object.name}`}><div className="w-full max-w-5xl rounded-2xl bg-slate-900 p-4 shadow-2xl"><div className="mb-4 flex items-center justify-between gap-4 text-white"><span className="truncate text-sm font-medium">{object.name}</span><div className="flex items-center gap-1">{object.contentType === "application/pdf" && <button className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium hover:bg-white/10" onClick={() => setFullScreenPdf(true)} aria-label="View PDF full screen"><Maximize2 size={18} /> <span className="hidden sm:inline">Full screen</span></button>}<button className="rounded-lg p-2 hover:bg-white/10" onClick={onClose} aria-label="Close preview"><X size={20} /></button></div></div><div className="grid min-h-48 place-items-center">{media}</div></div></div>;
 }
 
 function DocumentComposer({ blocks, html, onChange }: { blocks: string[]; html: string; onChange: (value: { blocks: string[]; html: string }) => void }) {
@@ -929,18 +1419,303 @@ function PresentationComposer({ activeSlide, onAdd, onSelect, onUpdate, slide, s
   return <div className="grid min-h-[calc(100vh-4rem)] md:grid-cols-[14rem_minmax(0,1fr)]"><aside className="border-b border-slate-200 bg-white p-4 md:border-b-0 md:border-r"><button className="mb-4 flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-blue-700" onClick={onAdd}><Plus size={17} /> New slide</button><div className="space-y-3">{slides.map((item, index) => { const itemTheme = presentationThemes[typeof item.theme === "string" && item.theme in presentationThemes ? item.theme as keyof typeof presentationThemes : "ocean"]; return <button className={`w-full overflow-hidden rounded-lg border text-left transition ${index === activeSlide ? "border-blue-500 ring-2 ring-blue-100" : "border-slate-200 hover:border-blue-300"}`} key={index} onClick={() => onSelect(index)}><span className="flex aspect-video flex-col justify-center p-3" style={{ background: itemTheme.background, color: itemTheme.foreground }}><span className="text-[0.55rem] font-bold uppercase opacity-60">{index + 1}</span><span className="mt-1 line-clamp-2 text-xs font-semibold">{typeof item.title === "string" ? item.title : "Untitled slide"}</span></span></button>; })}</div></aside><section className="min-w-0 bg-slate-100 p-4 md:p-8"><div className="mx-auto mb-4 flex max-w-6xl flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2"><Palette size={18} className="text-slate-500" /><label className="text-sm font-medium text-slate-600">Theme <select aria-label="Slide theme" className="ml-1 rounded-md border border-slate-300 bg-white px-2 py-1.5" value={themeName} onChange={(event) => onUpdate({ theme: event.target.value })}>{Object.keys(presentationThemes).map((name) => <option key={name} value={name}>{name[0]?.toUpperCase()}{name.slice(1)}</option>)}</select></label></div><label className="text-sm font-medium text-slate-600">Layout <select aria-label="Slide layout" className="ml-1 rounded-md border border-slate-300 bg-white px-2 py-1.5" value={layout} onChange={(event) => onUpdate({ layout: event.target.value })}><option value="title-body">Title and body</option><option value="statement">Big statement</option><option value="two-column">Two columns</option></select></label></div><article className={`mx-auto flex aspect-video w-full max-w-6xl flex-col overflow-hidden rounded-xl p-7 shadow-xl md:p-14 ${layout === "statement" ? "justify-center text-center" : ""}`} style={{ background: theme.background, color: theme.foreground }}><input aria-label="Slide title" className={`w-full border-0 bg-transparent font-semibold tracking-tight outline-none placeholder:opacity-40 ${layout === "statement" ? "text-4xl md:text-6xl" : "text-3xl md:text-5xl"}`} placeholder="Slide title" style={{ color: theme.foreground }} value={typeof slide.title === "string" ? slide.title : ""} onChange={(event) => onUpdate({ title: event.target.value })} /><textarea aria-label="Slide body" className={`mt-8 min-h-0 flex-1 resize-none border-0 bg-transparent text-lg leading-8 outline-none placeholder:opacity-40 md:text-2xl ${layout === "two-column" ? "columns-2 gap-12" : ""}`} placeholder="Write your key message…" style={{ color: theme.foreground }} value={typeof slide.body === "string" ? slide.body : ""} onChange={(event) => onUpdate({ body: event.target.value })} /></article></section></div>;
 }
 
-function NativeEditor({ content: initialContent, fileName, onClose, onSave }: { content: NativeFileContent; fileName: string; onClose: () => void; onSave: (content: NativeFileContent) => Promise<void> }) {
+const pasteLanguages = ["plaintext", "bash", "css", "html", "javascript", "json", "markdown", "python", "sql", "typescript", "yaml"];
+
+function PasteComposer({ language, settings, tags, text, onChange, onSettingsChange }: { language: string; settings: PasteShareSettings; tags: string[]; text: string; onChange: (content: { language: string; tags: string[]; text: string }) => void; onSettingsChange: (settings: PasteShareSettings) => void }) {
+  const tagValue = tags.join(", ");
+  const lineCount = Math.max(1, text.split("\n").length);
+  return <div className="min-h-full bg-[#10151d] p-4 text-slate-100 md:p-8"><section className="mx-auto max-w-6xl overflow-hidden rounded-2xl border border-white/10 bg-[#161d27] shadow-2xl"><header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-[#1d2632] px-4 py-3 md:px-5"><div className="flex items-center gap-2 text-sm font-semibold"><Code2 size={18} className="text-cyan-300" /> Zo Paste <span className="rounded bg-white/10 px-2 py-0.5 font-mono text-xs font-medium text-slate-300">{language}</span></div><label className="text-xs font-medium text-slate-400">Syntax <select aria-label="Paste syntax" className="ml-2 rounded-md border border-white/10 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-cyan-400" value={language} onChange={(event) => onChange({ language: event.target.value, tags, text })}>{pasteLanguages.map((item) => <option key={item} value={item}>{item}</option>)}</select></label></header><div className="grid min-h-[60vh] grid-cols-[3.5rem_minmax(0,1fr)] font-mono text-sm leading-6"><div aria-hidden="true" className="select-none border-r border-white/10 bg-[#121923] px-3 py-5 text-right text-slate-600">{Array.from({ length: lineCount }, (_, index) => <div key={index}>{index + 1}</div>)}</div><textarea aria-label="Paste content" className="min-h-[60vh] resize-none bg-transparent px-5 py-5 text-slate-100 outline-none placeholder:text-slate-600" spellCheck={false} placeholder="Paste or write text here…" value={text} onChange={(event) => onChange({ language, tags, text: event.target.value })} /></div><footer className="grid gap-5 border-t border-white/10 bg-[#1d2632] p-4 md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]"><label className="text-sm font-medium text-slate-300">Tags <input aria-label="Paste tags" className="mt-1.5 w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none placeholder:text-slate-600 focus:border-cyan-400" placeholder="e.g. api, debugging, release-notes" value={tagValue} onChange={(event) => onChange({ language, tags: event.target.value.split(",").map((tag) => tag.trim()).filter(Boolean).slice(0, 12), text })} /></label><section className="rounded-xl border border-white/10 bg-[#121923] p-4"><div><p className="text-sm font-semibold text-white">Paste settings</p><p className="mt-1 text-xs leading-5 text-slate-400">These options apply when you create the share link. Your paste remains private until then.</p></div><fieldset className="mt-4"><legend className="text-xs font-semibold uppercase tracking-wide text-slate-400">Link exposure</legend><div className="mt-2 grid grid-cols-2 gap-2"><label className={`rounded-lg border px-3 py-2 text-sm font-medium ${settings.access === "public" ? "border-cyan-400 bg-cyan-400/10 text-cyan-100" : "border-white/10 text-slate-300"}`}><input className="sr-only" type="radio" checked={settings.access === "public"} onChange={() => onSettingsChange({ ...settings, access: "public", passcode: "" })} />Anyone with link</label><label className={`rounded-lg border px-3 py-2 text-sm font-medium ${settings.access === "passcode" ? "border-cyan-400 bg-cyan-400/10 text-cyan-100" : "border-white/10 text-slate-300"}`}><input className="sr-only" type="radio" checked={settings.access === "passcode"} onChange={() => onSettingsChange({ ...settings, access: "passcode" })} />Passcode required</label></div></fieldset><div className="mt-4 grid gap-3 sm:grid-cols-2"><label className="text-sm font-medium text-slate-300">Paste expiration<select aria-label="Paste expiration" className="mt-1.5 w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400" value={settings.ttl} onChange={(event) => onSettingsChange({ ...settings, ttl: event.target.value })}><option value="never">Never expires</option><option value="1d">1 day</option><option value="7d">7 days</option><option value="30d">30 days</option></select></label>{settings.access === "passcode" && <label className="text-sm font-medium text-slate-300">Passcode<input aria-label="Paste share passcode" className="mt-1.5 w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none placeholder:text-slate-600 focus:border-cyan-400" type="password" placeholder="Choose a passcode" value={settings.passcode} onChange={(event) => onSettingsChange({ ...settings, passcode: event.target.value })} /></label>}</div></section></footer></section></div>;
+}
+
+type FormQuestionType = "short-answer" | "paragraph" | "multiple-choice" | "checkboxes" | "dropdown" | "linear-scale" | "rating" | "multiple-choice-grid" | "checkbox-grid" | "date" | "time";
+type FormQuestion = {
+  columns: string[];
+  description: string;
+  id: string;
+  options: string[];
+  ratingIcon: "star" | "heart" | "thumb";
+  required: boolean;
+  rows: string[];
+  scaleMax: number;
+  scaleMaxLabel: string;
+  scaleMin: number;
+  scaleMinLabel: string;
+  title: string;
+  type: FormQuestionType;
+};
+
+const formQuestionTypes: Array<{ label: string; value: FormQuestionType }> = [
+  { value: "short-answer", label: "Short answer" },
+  { value: "paragraph", label: "Paragraph" },
+  { value: "multiple-choice", label: "Multiple choice" },
+  { value: "checkboxes", label: "Checkboxes" },
+  { value: "dropdown", label: "Dropdown" },
+  { value: "linear-scale", label: "Linear scale" },
+  { value: "rating", label: "Rating" },
+  { value: "multiple-choice-grid", label: "Multiple choice grid" },
+  { value: "checkbox-grid", label: "Checkbox grid" },
+  { value: "date", label: "Date" },
+  { value: "time", label: "Time" }
+];
+
+function createFormQuestion(index: number, type: FormQuestionType = "multiple-choice"): FormQuestion {
+  const choice = type === "multiple-choice" || type === "checkboxes" || type === "dropdown";
+  const grid = type === "multiple-choice-grid" || type === "checkbox-grid";
+  return { id: `question-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 7)}`, title: "", description: "", type, options: choice ? ["Option 1"] : [], rows: grid ? ["Row 1"] : [], columns: grid ? ["Column 1"] : [], required: false, scaleMin: 1, scaleMax: 5, scaleMinLabel: "", scaleMaxLabel: "", ratingIcon: "star" };
+}
+
+function parseFormQuestions(value: unknown): FormQuestion[] {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 100).flatMap((question, index): FormQuestion[] => {
+    if (typeof question === "string") return [{ ...createFormQuestion(index), title: question, type: "short-answer", options: [] }];
+    if (!question || typeof question !== "object" || Array.isArray(question)) return [];
+    const item = question as Partial<FormQuestion>;
+    const type = formQuestionTypes.some((candidate) => candidate.value === item.type) ? item.type as FormQuestionType : "short-answer";
+    const options = Array.isArray(item.options) ? item.options.filter((option): option is string => typeof option === "string").slice(0, 50) : [];
+    const rows = Array.isArray(item.rows) ? item.rows.filter((row): row is string => typeof row === "string").slice(0, 50) : [];
+    const columns = Array.isArray(item.columns) ? item.columns.filter((column): column is string => typeof column === "string").slice(0, 50) : [];
+    return [{
+      id: typeof item.id === "string" && item.id ? item.id : createFormQuestion(index).id,
+      title: typeof item.title === "string" ? item.title : "",
+      description: typeof item.description === "string" ? item.description : "",
+      type,
+      options: type === "multiple-choice" || type === "checkboxes" || type === "dropdown" ? (options.length > 0 ? options : ["Option 1"]) : [],
+      rows: type === "multiple-choice-grid" || type === "checkbox-grid" ? (rows.length > 0 ? rows : ["Row 1"]) : [],
+      columns: type === "multiple-choice-grid" || type === "checkbox-grid" ? (columns.length > 0 ? columns : ["Column 1"]) : [],
+      required: item.required === true,
+      scaleMin: typeof item.scaleMin === "number" && item.scaleMin >= 0 && item.scaleMin < 10 ? item.scaleMin : 1,
+      scaleMax: typeof item.scaleMax === "number" && item.scaleMax > 0 && item.scaleMax <= 10 ? item.scaleMax : 5,
+      scaleMinLabel: typeof item.scaleMinLabel === "string" ? item.scaleMinLabel : "",
+      scaleMaxLabel: typeof item.scaleMaxLabel === "string" ? item.scaleMaxLabel : "",
+      ratingIcon: item.ratingIcon === "heart" || item.ratingIcon === "thumb" ? item.ratingIcon : "star"
+    }];
+  });
+}
+
+const formThemes = {
+  violet: { accent: "#673ab7", background: "#f3f0f9", name: "Violet" },
+  ocean: { accent: "#00796b", background: "#edf8f7", name: "Ocean" },
+  forest: { accent: "#2e7d32", background: "#f1f8f1", name: "Forest" },
+  sunset: { accent: "#e65100", background: "#fff4eb", name: "Sunset" },
+  rose: { accent: "#c2185b", background: "#fff1f6", name: "Rose" }
+} as const;
+
+type FormTheme = keyof typeof formThemes;
+
+function formTheme(value: unknown): FormTheme {
+  return typeof value === "string" && value in formThemes ? value as FormTheme : "violet";
+}
+
+function LegacyFormComposer({ description, questions, title, onChange }: { description: string; questions: FormQuestion[]; title: string; onChange: (next: { description: string; questions: FormQuestion[]; title: string }) => void }) {
+  const updateQuestion = (id: string, change: Partial<FormQuestion>) => onChange({ title, description, questions: questions.map((question) => question.id === id ? { ...question, ...change } : question) });
+  const isChoiceQuestion = (type: FormQuestionType) => type === "multiple-choice" || type === "checkboxes" || type === "dropdown";
+  const addQuestion = () => onChange({ title, description, questions: [...questions, createFormQuestion(questions.length)] });
+
+  return <div className="min-h-full bg-[#f3f0f9] px-4 py-6 md:px-8 md:py-10"><div className="mx-auto max-w-3xl"><div className="mb-5 flex items-center justify-between border-b border-slate-200 px-2"><span className="border-b-2 border-[#673ab7] px-3 pb-3 text-sm font-semibold text-[#673ab7]">Questions</span><span className="px-3 pb-3 text-sm font-medium text-slate-400">Private draft</span></div><section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"><div className="h-2 bg-[#673ab7]" /><div className="p-6 md:p-8"><input aria-label="Form title" className="w-full border-0 border-b border-slate-200 bg-transparent pb-2 text-3xl font-semibold tracking-tight text-slate-900 outline-none placeholder:text-slate-300 focus:border-[#673ab7]" placeholder="Untitled form" value={title} onChange={(event) => onChange({ title: event.target.value, description, questions })} /><textarea aria-label="Form description" className="mt-4 min-h-12 w-full resize-none border-0 bg-transparent text-sm leading-6 text-slate-600 outline-none placeholder:text-slate-400" placeholder="Form description" value={description} onChange={(event) => onChange({ title, description: event.target.value, questions })} /></div></section><div className="relative mt-4 space-y-4">{questions.map((question, index) => <section className="relative overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm focus-within:border-[#673ab7] focus-within:ring-2 focus-within:ring-[#ede7f6]" key={question.id}><div className="absolute inset-y-0 left-0 w-1 bg-[#673ab7]" /><div className="p-5 pl-6 md:p-7 md:pl-8"><div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_12rem]"><input aria-label={`Question ${index + 1}`} className="min-w-0 border-0 border-b border-slate-300 bg-slate-50 px-3 py-3 text-base font-medium text-slate-900 outline-none focus:border-[#673ab7]" placeholder="Question" value={question.title} onChange={(event) => updateQuestion(question.id, { title: event.target.value })} /><select aria-label={`Question ${index + 1} type`} className="rounded border border-slate-300 bg-white px-3 py-3 text-sm font-medium text-slate-700 outline-none focus:border-[#673ab7]" value={question.type} onChange={(event) => { const type = event.target.value as FormQuestionType; updateQuestion(question.id, { type, options: isChoiceQuestion(type) ? (question.options.length > 0 ? question.options : ["Option 1"]) : [] }); }}>{formQuestionTypes.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></div><input aria-label={`Question ${index + 1} description`} className="mt-3 w-full border-0 border-b border-transparent bg-transparent py-2 text-sm text-slate-600 outline-none placeholder:text-slate-400 focus:border-[#673ab7]" placeholder="Description (optional)" value={question.description} onChange={(event) => updateQuestion(question.id, { description: event.target.value })} />{isChoiceQuestion(question.type) ? <div className="mt-5 space-y-2">{question.options.map((option, optionIndex) => <div className="flex items-center gap-3" key={`${question.id}-${optionIndex}`}><span className={`size-4 shrink-0 border border-slate-400 ${question.type === "checkboxes" ? "rounded-sm" : question.type === "dropdown" ? "rounded" : "rounded-full"}`} /><input aria-label={`Question ${index + 1} option ${optionIndex + 1}`} className="min-w-0 flex-1 border-0 border-b border-transparent px-1 py-2 text-sm text-slate-700 outline-none placeholder:text-slate-400 focus:border-[#673ab7]" placeholder={`Option ${optionIndex + 1}`} value={option} onChange={(event) => updateQuestion(question.id, { options: question.options.map((item, itemIndex) => itemIndex === optionIndex ? event.target.value : item) })} /><button aria-label={`Remove option ${optionIndex + 1} from question ${index + 1}`} className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600" disabled={question.options.length === 1} onClick={() => updateQuestion(question.id, { options: question.options.filter((_, itemIndex) => itemIndex !== optionIndex) })}><X size={16} /></button></div>)}<button className="ml-7 text-sm font-medium text-[#673ab7] hover:underline" onClick={() => updateQuestion(question.id, { options: [...question.options, `Option ${question.options.length + 1}`] })}>Add option</button></div> : <div className={`mt-5 border-b border-slate-300 text-sm text-slate-400 ${question.type === "paragraph" ? "pb-12" : "pb-2"}`}>{question.type === "paragraph" ? "Long answer text" : "Short answer text"}</div>}<div className="mt-6 flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-4"><button aria-label={`Duplicate question ${index + 1}`} className="rounded-md p-2 text-slate-500 hover:bg-[#f3f0f9] hover:text-[#673ab7]" onClick={() => onChange({ title, description, questions: [...questions.slice(0, index + 1), { ...question, id: createFormQuestion(index).id, options: [...question.options] }, ...questions.slice(index + 1)] })}><Copy size={17} /></button><button aria-label={`Remove question ${index + 1}`} className="rounded-md p-2 text-slate-500 hover:bg-red-50 hover:text-red-600" onClick={() => onChange({ title, description, questions: questions.filter((item) => item.id !== question.id) })}><Trash2 size={17} /></button><span className="mx-1 h-6 border-l border-slate-200" /><label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-slate-600">Required<input aria-label={`Question ${index + 1} required`} className="accent-[#673ab7]" type="checkbox" checked={question.required} onChange={(event) => updateQuestion(question.id, { required: event.target.checked })} /></label></div></div></section>)}<div className="sticky bottom-6 flex justify-end"><button className="flex items-center gap-2 rounded-full bg-[#673ab7] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-900/20 transition hover:bg-[#5b2fa1]" onClick={addQuestion}><Plus size={18} /> Add question</button></div></div></div></div>;
+}
+
+function FormComposer({ description, questions, theme = "violet", title, onChange }: { description: string; questions: FormQuestion[]; theme?: FormTheme; title: string; onChange: (next: { description: string; questions: FormQuestion[]; title: string }) => void }) {
+  const accent = formThemes[theme].accent;
+  const updateQuestion = (id: string, change: Partial<FormQuestion>) => onChange({ title, description, questions: questions.map((question) => question.id === id ? { ...question, ...change } : question) });
+  const insertQuestion = (type: FormQuestionType = "multiple-choice") => onChange({ title, description, questions: [...questions, createFormQuestion(questions.length, type)] });
+  const addListItem = (question: FormQuestion, field: "options" | "rows" | "columns", label: string) => updateQuestion(question.id, { [field]: [...question[field], `${label} ${question[field].length + 1}`] });
+  const isChoice = (type: FormQuestionType) => type === "multiple-choice" || type === "checkboxes" || type === "dropdown";
+  const isGrid = (type: FormQuestionType) => type === "multiple-choice-grid" || type === "checkbox-grid";
+  return <div className="min-h-full px-4 py-7 md:px-8 md:py-10" style={{ background: formThemes[theme].background }}><div className="mx-auto max-w-3xl"><section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"><div className="h-2" style={{ background: accent }} /><div className="p-6 md:p-8"><input aria-label="Form title" className="w-full border-0 border-b border-slate-200 bg-transparent pb-2 text-3xl font-semibold tracking-tight text-slate-900 outline-none placeholder:text-slate-300 focus:border-[var(--form-accent)]" style={{ "--form-accent": accent } as React.CSSProperties} placeholder="Untitled form" value={title} onChange={(event) => onChange({ title: event.target.value, description, questions })} /><textarea aria-label="Form description" className="mt-4 min-h-12 w-full resize-none border-0 bg-transparent text-sm leading-6 text-slate-600 outline-none placeholder:text-slate-400" placeholder="Form description" value={description} onChange={(event) => onChange({ title, description: event.target.value, questions })} /></div></section><div className="mt-4 space-y-4">{questions.map((question, index) => <section className="relative overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm focus-within:ring-2" style={{ "--tw-ring-color": `${accent}30` } as React.CSSProperties} key={question.id}><div className="absolute inset-y-0 left-0 w-1" style={{ background: accent }} /><div className="p-5 pl-6 md:p-7 md:pl-8"><div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_14rem]"><input aria-label={`Question ${index + 1}`} className="min-w-0 border-0 border-b border-slate-300 bg-slate-50 px-3 py-3 text-base font-medium text-slate-900 outline-none focus:border-slate-500" placeholder="Question" value={question.title} onChange={(event) => updateQuestion(question.id, { title: event.target.value })} /><select aria-label={`Question ${index + 1} type`} className="rounded border border-slate-300 bg-white px-3 py-3 text-sm font-medium text-slate-700 outline-none focus:border-slate-500" value={question.type} onChange={(event) => { const type = event.target.value as FormQuestionType; updateQuestion(question.id, { ...createFormQuestion(index, type), id: question.id, title: question.title, description: question.description, required: question.required }); }}>{formQuestionTypes.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></div><input aria-label={`Question ${index + 1} description`} className="mt-3 w-full border-0 border-b border-transparent bg-transparent py-2 text-sm text-slate-600 outline-none placeholder:text-slate-400 focus:border-slate-400" placeholder="Description (optional)" value={question.description} onChange={(event) => updateQuestion(question.id, { description: event.target.value })} />{isChoice(question.type) && <EditableOptionList accent={accent} field="options" label="Option" question={question} onAdd={addListItem} onChange={updateQuestion} />} {isGrid(question.type) && <div className="mt-5 grid gap-6 md:grid-cols-2"><EditableOptionList accent={accent} field="rows" label="Row" question={question} onAdd={addListItem} onChange={updateQuestion} /><EditableOptionList accent={accent} field="columns" label="Column" question={question} onAdd={addListItem} onChange={updateQuestion} /></div>}{question.type === "linear-scale" && <div className="mt-5 grid gap-4 sm:grid-cols-[8rem_8rem_minmax(0,1fr)]"><label className="text-sm font-medium text-slate-600">From<select aria-label={`Question ${index + 1} scale minimum`} className="mt-1 block w-full rounded border border-slate-300 bg-white px-2 py-2" value={question.scaleMin} onChange={(event) => updateQuestion(question.id, { scaleMin: Number(event.target.value) })}>{[0, 1].map((value) => <option key={value} value={value}>{value}</option>)}</select></label><label className="text-sm font-medium text-slate-600">To<select aria-label={`Question ${index + 1} scale maximum`} className="mt-1 block w-full rounded border border-slate-300 bg-white px-2 py-2" value={question.scaleMax} onChange={(event) => updateQuestion(question.id, { scaleMax: Number(event.target.value) })}>{[3, 4, 5, 6, 7, 8, 9, 10].map((value) => <option key={value} value={value}>{value}</option>)}</select></label><div className="grid gap-2 sm:grid-cols-2"><input aria-label={`Question ${index + 1} scale low label`} className="rounded border border-slate-300 px-2 py-2 text-sm" placeholder="Low label (optional)" value={question.scaleMinLabel} onChange={(event) => updateQuestion(question.id, { scaleMinLabel: event.target.value })} /><input aria-label={`Question ${index + 1} scale high label`} className="rounded border border-slate-300 px-2 py-2 text-sm" placeholder="High label (optional)" value={question.scaleMaxLabel} onChange={(event) => updateQuestion(question.id, { scaleMaxLabel: event.target.value })} /></div></div>}{question.type === "rating" && <div className="mt-5 flex flex-wrap items-center gap-3"><select aria-label={`Question ${index + 1} rating icon`} className="rounded border border-slate-300 bg-white px-2 py-2 text-sm" value={question.ratingIcon} onChange={(event) => updateQuestion(question.id, { ratingIcon: event.target.value as FormQuestion["ratingIcon"] })}><option value="star">Stars</option><option value="heart">Hearts</option><option value="thumb">Thumbs</option></select><select aria-label={`Question ${index + 1} rating limit`} className="rounded border border-slate-300 bg-white px-2 py-2 text-sm" value={question.scaleMax} onChange={(event) => updateQuestion(question.id, { scaleMax: Number(event.target.value) })}>{[3, 4, 5, 6, 7, 8, 9, 10].map((value) => <option key={value} value={value}>{value} icons</option>)}</select><span className="text-xl tracking-wide text-slate-400">{Array.from({ length: question.scaleMax }, () => question.ratingIcon === "heart" ? "♡" : question.ratingIcon === "thumb" ? "👍" : "☆").join("")}</span></div>}{["short-answer", "paragraph", "date", "time"].includes(question.type) && <div className={`mt-5 border-b border-slate-300 text-sm text-slate-400 ${question.type === "paragraph" ? "pb-12" : "pb-2"}`}>{question.type === "paragraph" ? "Long answer text" : question.type === "date" ? "Date" : question.type === "time" ? "Time" : "Short answer text"}</div>}<div className="mt-6 flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-4"><button aria-label={`Duplicate question ${index + 1}`} className="rounded-md p-2 text-slate-500 hover:bg-slate-100" type="button" onClick={() => onChange({ title, description, questions: [...questions.slice(0, index + 1), { ...question, id: createFormQuestion(index).id, options: [...question.options], rows: [...question.rows], columns: [...question.columns] }, ...questions.slice(index + 1)] })}><Copy size={17} /></button><button aria-label={`Remove question ${index + 1}`} className="rounded-md p-2 text-slate-500 hover:bg-red-50 hover:text-red-600" type="button" onClick={() => onChange({ title, description, questions: questions.filter((item) => item.id !== question.id) })}><Trash2 size={17} /></button><span className="mx-1 h-6 border-l border-slate-200" /><label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-slate-600">Required<input aria-label={`Question ${index + 1} required`} className="size-4" style={{ accentColor: accent }} type="checkbox" checked={question.required} onChange={(event) => updateQuestion(question.id, { required: event.target.checked })} /></label></div></div></section>)}</div><div className="sticky bottom-6 mt-5 flex justify-end"><button className="flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold text-white shadow-lg" style={{ background: accent }} onClick={() => insertQuestion()} type="button"><Plus size={18} /> Add question</button></div></div></div>;
+}
+
+function EditableOptionList({ accent, field, label, question, onAdd, onChange }: { accent: string; field: "options" | "rows" | "columns"; label: string; question: FormQuestion; onAdd: (question: FormQuestion, field: "options" | "rows" | "columns", label: string) => void; onChange: (id: string, change: Partial<FormQuestion>) => void }) {
+  const values = question[field];
+  return <div className="space-y-2"><p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}s</p>{values.map((value, index) => <div className="flex items-center gap-2" key={`${question.id}-${field}-${index}`}><span className="size-3 rounded-full border border-slate-400" /><input aria-label={`${label} ${index + 1}`} className="min-w-0 flex-1 border-0 border-b border-transparent px-1 py-2 text-sm text-slate-700 outline-none focus:border-slate-400" placeholder={`${label} ${index + 1}`} value={value} onChange={(event) => onChange(question.id, { [field]: values.map((item, itemIndex) => itemIndex === index ? event.target.value : item) })} /><button aria-label={`Remove ${label} ${index + 1}`} className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600" disabled={values.length === 1} onClick={() => onChange(question.id, { [field]: values.filter((_, itemIndex) => itemIndex !== index) })} type="button"><X size={15} /></button></div>)}<button className="text-sm font-medium hover:underline" style={{ color: accent }} onClick={() => onAdd(question, field, label)} type="button">Add {label.toLowerCase()}</button></div>;
+}
+
+function FormNativeEditor({ initialContent, initialFileName, onClose, onListResponses, onPublish, onRename, onSave }: { initialContent: NativeFileContent; initialFileName: string; onClose: () => void; onListResponses: (id: string) => Promise<FormResponse[]>; onPublish: () => Promise<PublishedForm>; onRename: (name: string) => Promise<void>; onSave: (content: NativeFileContent) => Promise<void> }) {
+  const [content, setContent] = useState(initialContent);
+  const [fileName, setFileName] = useState(initialFileName);
+  const [publishedForm, setPublishedForm] = useState<PublishedForm | null>(null);
+  const [tab, setTab] = useState<"questions" | "responses" | "settings">("questions");
+  const [preview, setPreview] = useState(false);
+  const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
+  const savedContent = useRef(JSON.stringify(initialContent));
+  const saveTimer = useRef<number | null>(null);
+  const renameTimer = useRef<number | null>(null);
+  const settingsValue = content.settings && typeof content.settings === "object" && !Array.isArray(content.settings) ? content.settings as Record<string, unknown> : {};
+  const settings = { acceptingResponses: settingsValue.acceptingResponses !== false, confirmationMessage: typeof settingsValue.confirmationMessage === "string" ? settingsValue.confirmationMessage : "Your response has been recorded.", showProgressBar: settingsValue.showProgressBar === true };
+  const theme = formTheme(content.theme);
+  const responsesQuery = useQuery({ queryKey: ["form-responses", publishedForm?.id], queryFn: () => onListResponses(publishedForm!.id), enabled: tab === "responses" && Boolean(publishedForm?.id) });
+
+  useEffect(() => {
+    const signature = JSON.stringify(content);
+    if (signature === savedContent.current) return;
+    setSaveState("saving");
+    saveTimer.current = window.setTimeout(() => { void onSave(content).then(() => { savedContent.current = signature; setSaveState("saved"); }).catch(() => setSaveState("error")); }, 700);
+    return () => { if (saveTimer.current !== null) window.clearTimeout(saveTimer.current); };
+  }, [content, onSave]);
+
+  useEffect(() => {
+    if (!fileName.trim() || fileName.trim() === initialFileName) return;
+    renameTimer.current = window.setTimeout(() => { void onRename(fileName.trim()).catch(() => toast.error("Could not rename the form")); }, 700);
+    return () => { if (renameTimer.current !== null) window.clearTimeout(renameTimer.current); };
+  }, [fileName, initialFileName, onRename]);
+
+  async function saveNow() {
+    if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
+    const signature = JSON.stringify(content);
+    if (signature === savedContent.current) return;
+    setSaveState("saving");
+    await onSave(content);
+    savedContent.current = signature;
+    setSaveState("saved");
+  }
+
+  async function publish() {
+    try {
+      await saveNow();
+      const form = await onPublish();
+      setPublishedForm(form);
+      await copyText(formLink(form.shortCode), "Form link copied");
+      toast.success("Form published");
+    } catch { toast.error("Could not publish the form"); }
+  }
+
+  async function close() {
+    try { await saveNow(); await onRename(fileName.trim() || initialFileName); onClose(); } catch { toast.error("Could not save the latest changes"); }
+  }
+
+  const questions = parseFormQuestions(content.questions);
+  const updateSettings = (change: Partial<typeof settings>) => setContent({ ...content, settings: { ...settings, ...change } });
+  if (preview) return <FormPreview content={content} fileName={fileName} onClose={() => setPreview(false)} />;
+  return <div className="fixed inset-0 z-50 flex flex-col bg-slate-100" role="dialog" aria-modal="true" aria-label="Edit Zo Form"><header className="flex min-h-16 items-center gap-3 border-b border-slate-200 bg-white px-4 md:px-6"><button aria-label="Close editor" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" onClick={() => void close()}><X size={20} /></button><input aria-label="File name" className="min-w-0 flex-1 border-0 bg-transparent text-base font-semibold text-slate-800 outline-none md:max-w-sm" value={fileName} onChange={(event) => setFileName(event.target.value)} /><span aria-live="polite" className={`hidden text-xs font-medium sm:block ${saveState === "error" ? "text-red-600" : "text-slate-400"}`}>{saveState === "saving" ? "Saving…" : saveState === "error" ? "Changes not saved" : "All changes saved"}</span><button aria-label="Preview form" className="rounded-lg p-2 text-slate-600 hover:bg-slate-100" onClick={() => setPreview(true)}><Eye size={20} /></button><button className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-white" style={{ background: formThemes[theme].accent }} onClick={() => void publish()}><Send size={17} /> {publishedForm ? "Copy form link" : "Publish"}</button></header><nav className="flex justify-center gap-1 border-b border-slate-200 bg-white px-4"><FormTab active={tab === "questions"} label="Questions" onClick={() => setTab("questions")} /><FormTab active={tab === "responses"} label={publishedForm ? "Responses" : "Responses"} onClick={() => { setTab("responses"); if (!publishedForm) void publish(); }} /><FormTab active={tab === "settings"} label="Settings" onClick={() => setTab("settings")} /></nav><main className="min-h-0 flex-1 overflow-auto">{tab === "questions" && <FormComposer description={typeof content.description === "string" ? content.description : ""} questions={questions} theme={theme} title={typeof content.title === "string" ? content.title : ""} onChange={(form) => setContent({ ...content, ...form, theme })} />}{tab === "responses" && <FormResponsesPanel publishedForm={publishedForm} query={responsesQuery} theme={theme} />}{tab === "settings" && <FormSettingsPanel settings={settings} theme={theme} onSettingsChange={updateSettings} onThemeChange={(nextTheme) => setContent({ ...content, theme: nextTheme })} />}</main></div>;
+}
+
+function FormTab({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
+  return <button className={`border-b-2 px-5 py-4 text-sm font-semibold ${active ? "border-violet-600 text-violet-700" : "border-transparent text-slate-500 hover:text-slate-800"}`} onClick={onClick} type="button">{label}</button>;
+}
+
+function FormResponsesPanel({ publishedForm, query, theme }: { publishedForm: PublishedForm | null; query: UseQueryResult<FormResponse[], Error>; theme: FormTheme }) {
+  const responses = Array.isArray(query.data) ? query.data : [];
+  return <div className="min-h-full p-5 md:p-9" style={{ background: formThemes[theme].background }}><section className="mx-auto max-w-4xl rounded-xl border border-slate-200 bg-white shadow-sm"><header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-6"><div><h2 className="text-2xl font-semibold text-slate-900">{publishedForm ? `${responses.length} response${responses.length === 1 ? "" : "s"}` : "Publish to collect responses"}</h2><p className="mt-1 text-sm text-slate-500">Responses are private to this Zo Drive form.</p></div>{publishedForm && <button className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" onClick={() => void copyText(formLink(publishedForm.shortCode), "Form link copied")}>Copy form link</button>}</header>{query.isPending ? <div className="p-10 text-center text-sm text-slate-500">Loading responses…</div> : responses.length === 0 ? <div className="p-12 text-center text-sm text-slate-500">No responses yet. Share the published link to start collecting them.</div> : <div className="divide-y divide-slate-100">{responses.map((response) => <article className="p-5" key={response.id}><p className="text-xs font-medium text-slate-400">{new Date(response.submittedAt).toLocaleString()}</p><dl className="mt-3 grid gap-2 text-sm">{Object.entries(response.answers).map(([questionId, answer]) => <div className="grid grid-cols-[9rem_minmax(0,1fr)] gap-3" key={questionId}><dt className="truncate text-slate-400">{questionId}</dt><dd className="break-words text-slate-700">{Array.isArray(answer) ? answer.join(", ") : answer}</dd></div>)}</dl></article>)}</div>}</section></div>;
+}
+
+function LegacyFormSettingsPanel({ settings, theme, onSettingsChange, onThemeChange }: { settings: { acceptingResponses: boolean; confirmationMessage: string; showProgressBar: boolean }; theme: FormTheme; onSettingsChange: (change: Partial<{ acceptingResponses: boolean; confirmationMessage: string; showProgressBar: boolean }>) => void; onThemeChange: (theme: FormTheme) => void }) {
+  return <div className="min-h-full p-5 md:p-9" style={{ background: formThemes[theme].background }}><div className="mx-auto grid max-w-4xl gap-5"><section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm"><h2 className="text-xl font-semibold text-slate-900">Response settings</h2><label className="mt-6 flex items-center justify-between gap-6 text-sm font-medium text-slate-700">Accepting responses<input aria-label="Accepting responses" className="size-5" style={{ accentColor: formThemes[theme].accent }} type="checkbox" checked={settings.acceptingResponses} onChange={(event) => onSettingsChange({ acceptingResponses: event.target.checked })} /></label><label className="mt-6 block text-sm font-medium text-slate-700">Confirmation message<textarea aria-label="Confirmation message" className="mt-2 min-h-24 w-full rounded-lg border border-slate-300 p-3 text-sm font-normal outline-none" value={settings.confirmationMessage} onChange={(event) => onSettingsChange({ confirmationMessage: event.target.value })} /></label><label className="mt-6 flex items-center justify-between gap-6 text-sm font-medium text-slate-700">Show a completion progress bar<input aria-label="Show progress bar" className="size-5" style={{ accentColor: formThemes[theme].accent }} type="checkbox" checked={settings.showProgressBar} onChange={(event) => onSettingsChange({ showProgressBar: event.target.checked })} /></label></section><section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm"><h2 className="text-xl font-semibold text-slate-900">Theme</h2><p className="mt-1 text-sm text-slate-500">Applies to the editor, preview, and public form.</p><div className="mt-5 flex flex-wrap gap-3">{(Object.keys(formThemes) as FormTheme[]).map((name) => <button aria-label={`${formThemes[name].name} theme`} className={`grid size-12 place-items-center rounded-full border-4 ${name === theme ? "border-slate-900" : "border-white"}`} key={name} style={{ background: formThemes[name].accent }} onClick={() => onThemeChange(name)} type="button">{name === theme && <span className="text-lg text-white">✓</span>}</button>)}</div></section></div></div>;
+}
+
+function FormSettingsPanel({ settings, theme, onSettingsChange, onThemeChange }: { settings: { acceptingResponses: boolean; confirmationMessage: string; showProgressBar: boolean }; theme: FormTheme; onSettingsChange: (change: Partial<{ acceptingResponses: boolean; confirmationMessage: string; showProgressBar: boolean }>) => void; onThemeChange: (theme: FormTheme) => void }) {
+  const accent = formThemes[theme].accent;
+  const toggleClass = "size-5 cursor-pointer rounded border-slate-300";
+  return <div className="min-h-full p-5 md:p-9" style={{ background: formThemes[theme].background }}><div className="mx-auto grid max-w-5xl gap-5 lg:grid-cols-[minmax(0,1fr)_19rem]"><div className="space-y-5"><section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"><header className="border-b border-slate-100 px-6 py-5"><p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Responses</p><h2 className="mt-1 text-xl font-semibold text-slate-900">Response collection</h2><p className="mt-1 text-sm text-slate-500">Control when people can submit and what they see afterwards.</p></header><div className="divide-y divide-slate-100 px-6"><label className="flex items-center justify-between gap-6 py-5 text-sm font-medium text-slate-700"><span><span className="block">Accepting responses</span><span className="mt-1 block text-xs font-normal text-slate-500">Turn this off to close the published form.</span></span><input aria-label="Accepting responses" className={toggleClass} style={{ accentColor: accent }} type="checkbox" checked={settings.acceptingResponses} onChange={(event) => onSettingsChange({ acceptingResponses: event.target.checked })} /></label><label className="block py-5 text-sm font-medium text-slate-700">Confirmation message<textarea aria-label="Confirmation message" className="mt-2 min-h-24 w-full rounded-lg border border-slate-300 p-3 text-sm font-normal outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100" value={settings.confirmationMessage} onChange={(event) => onSettingsChange({ confirmationMessage: event.target.value })} /></label></div></section><section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"><header className="border-b border-slate-100 px-6 py-5"><p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Presentation</p><h2 className="mt-1 text-xl font-semibold text-slate-900">Respondent experience</h2></header><label className="flex items-center justify-between gap-6 px-6 py-5 text-sm font-medium text-slate-700"><span><span className="block">Show progress bar</span><span className="mt-1 block text-xs font-normal text-slate-500">Shows completion progress while a respondent fills in the form.</span></span><input aria-label="Show progress bar" className={toggleClass} style={{ accentColor: accent }} type="checkbox" checked={settings.showProgressBar} onChange={(event) => onSettingsChange({ showProgressBar: event.target.checked })} /></label></section></div><aside className="h-fit overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"><header className="border-b border-slate-100 px-5 py-5"><p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Theme</p><h2 className="mt-1 text-xl font-semibold text-slate-900">Style your form</h2><p className="mt-1 text-sm text-slate-500">Applied to editing, preview, and the published form.</p></header><div className="space-y-5 p-5"><div><p className="text-sm font-semibold text-slate-700">Header image</p><div className="mt-3 grid gap-3"><button aria-label="Botanical header image" className={`overflow-hidden rounded-lg border-2 text-left transition ${theme === "ocean" ? "border-slate-900 ring-2 ring-slate-200" : "border-slate-200 hover:border-slate-400"}`} onClick={() => onThemeChange("ocean")} type="button"><img alt="Botanical form banner" className="h-20 w-full object-cover" src={`${appBasePath || ""}/form-banners/botanical.png`} /><span className="block px-3 py-2 text-xs font-semibold text-slate-700">Botanical</span></button><button aria-label="Fireworks header image" className={`overflow-hidden rounded-lg border-2 text-left transition ${theme === "violet" ? "border-slate-900 ring-2 ring-slate-200" : "border-slate-200 hover:border-slate-400"}`} onClick={() => onThemeChange("violet")} type="button"><img alt="Fireworks form banner" className="h-20 w-full object-cover" src={`${appBasePath || ""}/form-banners/fireworks.png`} /><span className="block px-3 py-2 text-xs font-semibold text-slate-700">Fireworks</span></button></div></div><div><p className="text-sm font-semibold text-slate-700">Colour</p><div className="mt-3 flex flex-wrap gap-2">{(Object.keys(formThemes) as FormTheme[]).map((name) => <button aria-label={`${formThemes[name].name} theme`} className={`grid size-10 place-items-center rounded-full border-4 ${name === theme ? "border-slate-900" : "border-white shadow-sm"}`} key={name} style={{ background: formThemes[name].accent }} onClick={() => onThemeChange(name)} type="button">{name === theme && <span className="text-sm text-white">✓</span>}</button>)}</div></div><p className="rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-500">Choose a header image to use its paired colour palette. Choose another colour to return to a clean, image-free header.</p></div></aside></div></div>;
+}
+
+function formBannerForTheme(theme: FormTheme): "none" | "botanical" | "fireworks" {
+  return theme === "ocean" ? "botanical" : theme === "violet" ? "fireworks" : "none";
+}
+
+function FormPreview({ content, fileName, onClose }: { content: NativeFileContent; fileName: string; onClose: () => void }) {
+  const theme = formTheme(content.theme);
+  const questions = parseFormQuestions(content.questions);
+  return <div className="fixed inset-0 z-[60] flex flex-col bg-slate-50"><header className="flex min-h-16 items-center gap-3 border-b border-slate-200 bg-white px-4"><button aria-label="Exit preview" className="rounded-lg p-2 text-slate-600 hover:bg-slate-100" onClick={onClose}><ArrowLeft size={21} /></button><p className="font-semibold text-slate-800">Preview mode</p><span className="ml-auto text-sm text-slate-500">{fileName}</span></header><main className="min-h-0 flex-1 overflow-auto px-4 py-8" style={{ background: formThemes[theme].background }}><div className="mx-auto max-w-2xl space-y-4"><section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"><FormBanner banner={formBannerForTheme(theme)} className="h-48 md:h-60" /><div className="h-2" style={{ background: formThemes[theme].accent }} /><div className="p-6"><h1 className="text-3xl font-semibold text-slate-900">{typeof content.title === "string" ? content.title : "Untitled form"}</h1><p className="mt-3 text-sm text-slate-600">{typeof content.description === "string" ? content.description : ""}</p></div></section>{questions.map((question) => <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm" key={question.id}><p className="font-medium text-slate-900">{question.title || "Untitled question"}{question.required && <span className="ml-1 text-red-600">*</span>}</p><p className="mt-4 text-sm text-slate-400">{question.type.replaceAll("-", " ")}</p></section>)}</div></main></div>;
+}
+
+function NativeEditor({ content: initialContent, fileName: initialFileName, onClose, onListResponses, onPublish, onRename, onSave, onShare }: { content: NativeFileContent; fileName: string; onClose: () => void; onListResponses: (id: string) => Promise<FormResponse[]>; onPublish: () => Promise<PublishedForm>; onRename: (name: string) => Promise<void>; onSave: (content: NativeFileContent) => Promise<void>; onShare: (settings?: PasteShareSettings) => void }) {
   const [content, setContent] = useState(initialContent);
   const [activeSlide, setActiveSlide] = useState(0);
-  const [saving, setSaving] = useState(false);
+  const [fileName, setFileName] = useState(initialFileName);
+  const [saveState, setSaveState] = useState<"error" | "saved" | "saving">("saved");
+  const [renaming, setRenaming] = useState(false);
+  const [publishedForm, setPublishedForm] = useState<PublishedForm | null>(null);
+  const [pasteShareSettings, setPasteShareSettings] = useState<PasteShareSettings>({ access: "public", passcode: "", ttl: "never" });
+  const savedContent = useRef(JSON.stringify(initialContent));
+  const saveGeneration = useRef(0);
+  const saveTimer = useRef<number | null>(null);
+  const renameTimer = useRef<number | null>(null);
   const type = content.type;
 
-  async function save() {
-    setSaving(true);
+  if (initialContent.type === "form") return <FormNativeEditor initialContent={initialContent} initialFileName={initialFileName} onClose={onClose} onListResponses={onListResponses} onPublish={onPublish} onRename={onRename} onSave={onSave} />;
+
+  async function saveNow() {
+    if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
+    const nextContent = content;
+    const signature = JSON.stringify(nextContent);
+    if (signature === savedContent.current) return;
+    const generation = ++saveGeneration.current;
+    setSaveState("saving");
     try {
-      await onSave(content);
+      await onSave(nextContent);
+      if (generation === saveGeneration.current) {
+        savedContent.current = signature;
+        setSaveState("saved");
+      }
+    } catch {
+      if (generation === saveGeneration.current) setSaveState("error");
+      throw new Error("Could not save");
+    }
+  }
+
+  async function renameNow() {
+    if (renameTimer.current !== null) window.clearTimeout(renameTimer.current);
+    const nextName = fileName.trim();
+    if (!nextName || nextName === initialFileName) return;
+    setRenaming(true);
+    try {
+      await onRename(nextName);
     } finally {
-      setSaving(false);
+      setRenaming(false);
+    }
+  }
+
+  useEffect(() => {
+    const signature = JSON.stringify(content);
+    if (signature === savedContent.current) return;
+    const generation = ++saveGeneration.current;
+    setSaveState("saving");
+    saveTimer.current = window.setTimeout(() => {
+      void onSave(content).then(() => {
+        if (generation === saveGeneration.current) {
+          savedContent.current = signature;
+          setSaveState("saved");
+        }
+      }).catch(() => {
+        if (generation === saveGeneration.current) setSaveState("error");
+      });
+    }, 700);
+    return () => { if (saveTimer.current !== null) window.clearTimeout(saveTimer.current); };
+  }, [content]);
+
+  useEffect(() => {
+    if (fileName.trim() === initialFileName) return;
+    renameTimer.current = window.setTimeout(() => { void renameNow(); }, 700);
+    return () => { if (renameTimer.current !== null) window.clearTimeout(renameTimer.current); };
+  }, [fileName]);
+
+  async function sharePaste() {
+    if (pasteShareSettings.access === "passcode" && !pasteShareSettings.passcode) {
+      toast.error("Enter a passcode before creating a protected paste link");
+      return;
+    }
+    await saveNow();
+    onShare(pasteShareSettings);
+  }
+
+  async function publishForm() {
+    try {
+      await saveNow();
+      const form = await onPublish();
+      setPublishedForm(form);
+      await copyText(formLink(form.id), "Form link copied");
+      toast.success("Form published");
+    } catch {
+      toast.error("Could not publish the form");
+    }
+  }
+
+  async function closeEditor() {
+    try {
+      await saveNow();
+      await renameNow();
+      onClose();
+    } catch {
+      toast.error("Could not save the latest changes");
     }
   }
 
@@ -959,12 +1734,17 @@ function NativeEditor({ content: initialContent, fileName, onClose, onSave }: { 
     const slide = slides[currentIndex] ?? { title: "Untitled slide", body: "" };
     const updateSlide = (change: Record<string, unknown>) => setContent({ ...content, slides: slides.map((item, index) => index === currentIndex ? { ...item, ...change } : item) });
     editor = <PresentationComposer activeSlide={currentIndex} onAdd={() => { setContent({ ...content, slides: [...slides, { title: `Slide ${slides.length + 1}`, body: "", theme: "ocean" }] }); setActiveSlide(slides.length); }} onSelect={setActiveSlide} onUpdate={updateSlide} slide={slide} slides={slides} />;
+  } else if (type === "paste") {
+    const tags = Array.isArray(content.tags) ? content.tags.filter((tag): tag is string => typeof tag === "string") : [];
+    editor = <PasteComposer language={typeof content.language === "string" && pasteLanguages.includes(content.language) ? content.language : "plaintext"} settings={pasteShareSettings} tags={tags} text={typeof content.text === "string" ? content.text : ""} onChange={(paste) => setContent({ ...content, ...paste })} onSettingsChange={setPasteShareSettings} />;
   } else {
-    const questions = Array.isArray(content.questions) ? content.questions.filter((question): question is string => typeof question === "string") : [];
-    editor = <div className="mx-auto max-w-3xl space-y-4 p-6 md:p-10"><div className="rounded-xl border border-blue-100 bg-blue-50 p-5"><input aria-label="Form title" className="w-full bg-transparent text-2xl font-semibold text-slate-900 outline-none placeholder:text-slate-400" placeholder="Untitled form" value={typeof content.title === "string" ? content.title : ""} onChange={(event) => setContent({ ...content, title: event.target.value })} /><p className="mt-2 text-sm text-slate-500">Add questions for this private Zo-native form.</p></div>{questions.map((question, index) => <div className="flex gap-2 rounded-xl border border-slate-200 bg-white p-4" key={index}><input aria-label={`Question ${index + 1}`} className="min-w-0 flex-1 border-0 text-sm font-medium text-slate-800 outline-none" value={question} onChange={(event) => setContent({ ...content, questions: questions.map((item, itemIndex) => itemIndex === index ? event.target.value : item) })} /><button aria-label={`Remove question ${index + 1}`} className="rounded-md p-2 text-slate-400 hover:bg-red-50 hover:text-red-600" onClick={() => setContent({ ...content, questions: questions.filter((_, itemIndex) => itemIndex !== index) })}><Trash2 size={17} /></button></div>)}<button className="rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50" onClick={() => setContent({ ...content, questions: [...questions, "New question"] })}>Add question</button></div>;
+    const questions = parseFormQuestions(content.questions);
+    const theme = formTheme(content.theme);
+    editor = <div style={{ background: formThemes[theme].background }}><div className="mx-auto flex max-w-3xl items-center justify-end gap-2 px-4 pt-5 md:px-8"><Palette size={16} className="text-slate-500" /><label className="text-sm font-medium text-slate-600">Theme <select aria-label="Form theme" className="ml-1 rounded-md border border-slate-300 bg-white px-2 py-1.5" value={theme} onChange={(event) => setContent({ ...content, theme: event.target.value })}>{Object.entries(formThemes).map(([name, option]) => <option key={name} value={name}>{option.name}</option>)}</select></label></div><FormComposer description={typeof content.description === "string" ? content.description : ""} questions={questions} title={typeof content.title === "string" ? content.title : ""} onChange={(form) => setContent({ ...content, ...form, theme })} />{publishedForm && <section className="mx-auto max-w-3xl border-t border-slate-200 bg-white px-4 pb-6 md:px-8"><p className="pt-5 text-sm font-semibold text-slate-800">Published form link</p><div className="mt-2 flex gap-2"><input aria-label="Published form link" className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-700" value={formLink(publishedForm.id)} readOnly /><button aria-label="Copy published form link" className="rounded-lg border border-slate-300 px-3 text-slate-600 hover:bg-slate-50" onClick={() => void copyText(formLink(publishedForm.id), "Form link copied")}><Copy size={17} /></button></div></section>}</div>;
   }
 
-  return <div className="fixed inset-0 z-50 flex flex-col bg-slate-100" role="dialog" aria-modal="true" aria-label={`Edit Zo ${nativeFileLabel(type)}`}><header className="flex min-h-16 items-center gap-3 border-b border-slate-200 bg-white px-4 md:px-6"><button aria-label="Close editor" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" onClick={onClose}><X size={20} /></button><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-800">{fileName}</p><p className="text-xs text-slate-400">Zo {nativeFileLabel(type)} · private</p></div><button className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-300" disabled={saving} onClick={() => void save()}>{saving ? "Saving…" : "Save"}</button></header><main className="min-h-0 flex-1 overflow-auto">{editor}</main></div>;
+  const status = renaming || saveState === "saving" ? "Saving…" : saveState === "error" ? "Changes not saved" : "All changes saved";
+  return <div className="fixed inset-0 z-50 flex flex-col bg-slate-100" role="dialog" aria-modal="true" aria-label={`Edit Zo ${nativeFileLabel(type)}`}><header className="flex min-h-16 items-center gap-3 border-b border-slate-200 bg-white px-4 md:px-6"><button aria-label="Close editor" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" onClick={() => void closeEditor()}><X size={20} /></button><p className="text-sm font-medium text-slate-500">Zo {nativeFileLabel(type)} · private</p><div className="ml-auto flex min-w-0 items-center gap-3"><span aria-live="polite" className={`hidden shrink-0 text-xs font-medium sm:block ${saveState === "error" ? "text-red-600" : "text-slate-400"}`}>{status}</span><div className="min-w-0"><label className="sr-only" htmlFor="native-file-name">File name</label><input id="native-file-name" aria-label="File name" className="w-40 border-0 border-b border-transparent bg-transparent py-1 text-right text-sm font-semibold text-slate-800 outline-none placeholder:text-slate-400 focus:border-blue-500 md:w-56" value={fileName} onChange={(event) => setFileName(event.target.value)} /></div>{type === "form" && <button className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-white" style={{ background: formThemes[formTheme(content.theme)].accent }} onClick={() => void publishForm()}><Send size={17} /> {publishedForm ? "Copy form link" : "Publish"}</button>}{type === "paste" && <button className="flex shrink-0 items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700" onClick={() => void sharePaste()}><Share2 size={17} /> Share paste</button>}</div></header><main className="min-h-0 flex-1 overflow-auto">{editor}</main></div>;
 }
 
 function visibleFiles(objects: DriveObject[], currentPath: string) {
@@ -987,7 +1767,7 @@ function fileIcon(contentType: string) {
 }
 
 function nativeFileLabel(type: NativeFileType): string {
-  return { document: "Document", spreadsheet: "Spreadsheet", presentation: "Presentation", form: "Form" }[type];
+  return { document: "Document", spreadsheet: "Spreadsheet", presentation: "Presentation", form: "Form", paste: "Paste" }[type];
 }
 
 function parseNativeFileContent(value: string, expectedType: NativeFileType): NativeFileContent {
@@ -998,6 +1778,18 @@ function parseNativeFileContent(value: string, expectedType: NativeFileType): Na
     throw new Error("This Zo-native file has an unsupported format");
   }
   return content as NativeFileContent;
+}
+
+function parsePasteContent(value: string): { language: string; tags: string[]; text: string } {
+  const parsed: unknown = JSON.parse(value);
+  if (!parsed || typeof parsed !== "object") throw new Error("Invalid paste");
+  const content = parsed as { format?: unknown; language?: unknown; tags?: unknown; text?: unknown; type?: unknown; version?: unknown };
+  if (content.format !== "zo-native" || content.type !== "paste" || content.version !== 1 || typeof content.text !== "string") throw new Error("Invalid paste");
+  return {
+    language: typeof content.language === "string" ? content.language : "plaintext",
+    tags: Array.isArray(content.tags) ? content.tags.filter((tag): tag is string => typeof tag === "string") : [],
+    text: content.text
+  };
 }
 
 const presentationThemes = {
@@ -1115,6 +1907,7 @@ function matchesContentTypeCategory(contentType: string, type: AdvancedFileType)
   if (type === "spreadsheet") return contentType === "application/vnd.zo.spreadsheet+json";
   if (type === "presentation") return contentType === "application/vnd.zo.presentation+json";
   if (type === "form") return contentType === "application/vnd.zo.form+json";
+  if (type === "paste") return contentType === "application/vnd.zo.paste+json";
   if (type === "image") return contentType.startsWith("image/");
   if (type === "video") return contentType.startsWith("video/");
   if (type === "audio") return contentType.startsWith("audio/");
@@ -1194,8 +1987,24 @@ function driveHomeUrl(): string {
   return `${window.location.origin}${appBasePath || "/"}`;
 }
 
+function landingUrl(): string {
+  return appBasePath || "/";
+}
+
+function driveAppUrl(): string {
+  return `${driveHomeUrl()}?app=1`;
+}
+
+function docsUrl(mode: "gui" | "cli" = "gui"): string {
+  return `${driveHomeUrl()}?docs=1&mode=${mode}`;
+}
+
 function shareLink(id: string): string {
   return `${driveHomeUrl()}?share=${encodeURIComponent(id)}`;
+}
+
+function formLink(id: string): string {
+  return `${driveHomeUrl()}?form=${encodeURIComponent(id)}`;
 }
 
 async function copyShareLink(id: string): Promise<void> {

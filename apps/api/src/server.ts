@@ -7,6 +7,7 @@ import { createApp } from "./app.js";
 import { LocalAuthStore } from "./auth/local-auth-store.js";
 import { SessionService } from "./auth/session.js";
 import { LocalShareStore } from "./sharing/local-share-store.js";
+import { LocalFormStore } from "./forms/local-form-store.js";
 import { LocalDriveStorage } from "./storage/local-drive-storage.js";
 
 const dataRoot = requiredEnvironmentVariable("ZO_DRIVE_DATA_ROOT");
@@ -15,6 +16,7 @@ const allowedOrigin = process.env.ZO_DRIVE_ALLOWED_ORIGIN;
 const sessionSecret = process.env.ZO_DRIVE_SESSION_SECRET ?? developmentSessionSecret();
 const sessions = new SessionService(sessionSecret);
 const shareStore = new LocalShareStore({ root: dataRoot });
+const formStore = new LocalFormStore({ root: dataRoot });
 const storage = new LocalDriveStorage({ root: dataRoot });
 const webRoot = process.env.ZO_DRIVE_WEB_ROOT ?? resolve(dirname(fileURLToPath(import.meta.url)), "../../web/dist");
 
@@ -27,7 +29,8 @@ const app = createApp({
     sessions,
     secureCookies: process.env.NODE_ENV === "production"
   },
-  sharing: shareStore
+  sharing: shareStore,
+  forms: formStore
 });
 
 async function purgeExpiredTrash() {
@@ -73,9 +76,20 @@ if (process.env.NODE_ENV === "production") {
   });
 }
 
-serve({ fetch: app.fetch, port }, () => {
+serve({ fetch: requestWithAppBasePath, port }, () => {
   console.log(`Zo Drive API listening on http://localhost:${port}`);
 });
+
+function requestWithAppBasePath(request: Request): Response | Promise<Response> {
+  const url = new URL(request.url);
+  // Zo routes this service at /drive. Some proxy paths preserve that prefix,
+  // while local access and other proxies send root-relative requests.
+  if (url.pathname === "/drive" || url.pathname.startsWith("/drive/")) {
+    url.pathname = url.pathname === "/drive" ? "/" : url.pathname.slice("/drive".length);
+    return app.fetch(new Request(url, request));
+  }
+  return app.fetch(request);
+}
 
 function requiredEnvironmentVariable(name: string): string {
   const value = process.env[name];

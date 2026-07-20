@@ -53,6 +53,15 @@ describe("ZoDriveClient", () => {
     await expect(client.delete("missing.txt")).rejects.toMatchObject({ code: "NOT_FOUND", status: 404 });
   });
 
+  it("updates the storage quota through the usage endpoint", async () => {
+    const usage = { fileCount: 0, usedBytes: 0, quotaBytes: 200 * 1024 * 1024 * 1024, quotaAvailableBytes: 200 * 1024 * 1024 * 1024, minQuotaBytes: 1024 * 1024 * 1024, maxQuotaBytes: 400 * 1024 * 1024 * 1024, totalBytes: 500 * 1024 * 1024 * 1024, availableBytes: 499 * 1024 * 1024 * 1024, systemUsedBytes: 1024 * 1024 * 1024, categories: [{ id: "photos", bytes: 0, fileCount: 0 }, { id: "videos", bytes: 0, fileCount: 0 }, { id: "documents", bytes: 0, fileCount: 0 }, { id: "audio", bytes: 0, fileCount: 0 }, { id: "archives", bytes: 0, fileCount: 0 }, { id: "other", bytes: 0, fileCount: 0 }, { id: "trash", bytes: 0, fileCount: 0 }] };
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify(usage), { status: 200 }));
+    const client = new ZoDriveClient({ baseUrl: "https://drive.example", fetcher });
+
+    await expect(client.setQuota(usage.quotaBytes)).resolves.toMatchObject({ quotaBytes: usage.quotaBytes });
+    expect(fetcher).toHaveBeenCalledWith("https://drive.example/usage/quota", expect.objectContaining({ method: "PUT" }));
+  });
+
   it("creates and lists empty folders through the API", async () => {
     const fetcher = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ key: "Projects", name: "Projects", updatedAt: "2026-01-01T00:00:00.000Z" }), { status: 201 }))
@@ -83,6 +92,15 @@ describe("ZoDriveClient", () => {
     expect(fetcher).toHaveBeenCalledWith("https://drive.example/native-files/Projects/Notes", expect.objectContaining({ method: "PUT" }));
   });
 
+  it("renames files through the API", async () => {
+    const file = { key: "Projects/Strategy", name: "Strategy", size: 10, contentType: "application/vnd.zo.document+json", nativeType: "document", updatedAt: "2026-01-01T00:00:00.000Z", starred: false };
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify(file), { status: 200 }));
+    const client = new ZoDriveClient({ baseUrl: "https://drive.example", fetcher });
+
+    await expect(client.rename("Projects/Notes", "Strategy")).resolves.toEqual(file);
+    expect(fetcher).toHaveBeenCalledWith("https://drive.example/objects/Projects/Notes", expect.objectContaining({ method: "PATCH" }));
+  });
+
   it("lists and updates starred files through the API", async () => {
     const starredFile = { key: "Notes/hello.txt", name: "hello.txt", size: 5, contentType: "text/plain", updatedAt: "2026-01-01T00:00:00.000Z", starred: true };
     const fetcher = vi.fn()
@@ -98,7 +116,7 @@ describe("ZoDriveClient", () => {
   });
 
   it("updates a passcode-protected share through the API", async () => {
-    const share = { id: "share-123", key: "hello.txt", name: "hello.txt", size: 5, contentType: "text/plain", access: "passcode", expiresAt: null, createdAt: "2026-01-01T00:00:00.000Z" };
+    const share = { id: "share-123", key: "hello.txt", name: "hello.txt", size: 5, contentType: "text/plain", access: "passcode", kind: "share", expiresAt: null, createdAt: "2026-01-01T00:00:00.000Z" };
     const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify(share), { status: 200 }));
     const client = new ZoDriveClient({ baseUrl: "https://drive.example", fetcher });
 

@@ -6,12 +6,14 @@ import { promisify } from "node:util";
 const scrypt = promisify(scryptCallback);
 
 export type ShareAccess = "public" | "passcode";
+export type ShareKind = "share" | "transfer";
 
 export type StoredShare = {
   id: string;
   ownerUserId: string;
   key: string;
   access: ShareAccess;
+  kind?: ShareKind;
   passcodeHash: string | null;
   expiresAt: string | null;
   createdAt: string;
@@ -27,13 +29,14 @@ export class LocalShareStore {
     this.sharesFile = join(root, "v1", "shares", "shares.json");
   }
 
-  async create({ ownerUserId, key, access, passcode, expiresAt }: { ownerUserId: string; key: string; access: ShareAccess; passcode?: string; expiresAt: string | null }): Promise<StoredShare> {
+  async create({ ownerUserId, key, access, kind = "share", passcode, expiresAt }: { ownerUserId: string; key: string; access: ShareAccess; kind?: ShareKind; passcode?: string; expiresAt: string | null }): Promise<StoredShare> {
     const shares = await this.readShares();
     const share: StoredShare = {
       id: randomUUID(),
       ownerUserId,
       key,
       access,
+      kind,
       passcodeHash: access === "passcode" && passcode ? await hashSecret(passcode) : null,
       expiresAt,
       createdAt: new Date().toISOString()
@@ -83,6 +86,19 @@ export class LocalShareStore {
     for (const share of shares.shares) {
       if (share.ownerUserId === fromUserId) {
         share.ownerUserId = toUserId;
+        changed = true;
+      }
+    }
+    if (changed) await this.writeShares(shares);
+  }
+
+  async renameKey({ ownerUserId, fromKey, toKey }: { ownerUserId: string; fromKey: string; toKey: string }): Promise<void> {
+    if (fromKey === toKey) return;
+    const shares = await this.readShares();
+    let changed = false;
+    for (const share of shares.shares) {
+      if (share.ownerUserId === ownerUserId && share.key === fromKey) {
+        share.key = toKey;
         changed = true;
       }
     }

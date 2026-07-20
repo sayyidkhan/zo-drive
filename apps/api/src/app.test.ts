@@ -7,6 +7,7 @@ import { createApp } from "./app.js";
 import { LocalAuthStore } from "./auth/local-auth-store.js";
 import { SessionService } from "./auth/session.js";
 import { LocalShareStore } from "./sharing/local-share-store.js";
+import { LocalFormStore } from "./forms/local-form-store.js";
 import { LocalDriveStorage } from "./storage/local-drive-storage.js";
 
 describe("Zo Drive API", () => {
@@ -16,11 +17,11 @@ describe("Zo Drive API", () => {
     await Promise.all(roots.splice(0).map((root) => rm(root, { force: true, recursive: true })));
   });
 
-  async function createTestApp() {
+  async function createTestApp({ quotaBytes }: { quotaBytes?: number } = {}) {
     const root = await mkdtemp(join(tmpdir(), "zo-drive-api-"));
     roots.push(root);
     return createApp({
-      storage: new LocalDriveStorage({ root }),
+      storage: new LocalDriveStorage({ root, quotaBytes }),
       resolveUserId: (request) => request.headers.get("x-test-user-id")
     });
   }
@@ -57,7 +58,7 @@ describe("Zo Drive API", () => {
     await expect(listed.json()).resolves.toMatchObject({ objects: [{ key: "Notes/hello.txt" }] });
 
     const usage = await app.request("http://localhost/usage", { headers: { "x-test-user-id": "alice" } });
-    await expect(usage.json()).resolves.toEqual({ fileCount: 1, usedBytes: 19 });
+    await expect(usage.json()).resolves.toMatchObject({ fileCount: 1, usedBytes: 19, totalBytes: expect.any(Number), availableBytes: expect.any(Number), systemUsedBytes: expect.any(Number), categories: expect.arrayContaining([{ id: "documents", bytes: 19, fileCount: 1 }]) });
 
     const downloaded = await app.request("http://localhost/objects/Notes/hello.txt", { headers: { "x-test-user-id": "alice" } });
     expect(downloaded.headers.get("content-type")).toContain("text/plain");
@@ -80,6 +81,44 @@ describe("Zo Drive API", () => {
     const restored = await app.request(`http://localhost/trash/${trashBody.items[0]?.id}/restore`, { method: "PUT", headers: { "x-test-user-id": "alice" } });
     expect(restored.status).toBe(200);
     await expect(restored.json()).resolves.toMatchObject({ key: "Notes/hello.txt" });
+  });
+
+  it("rejects streamed uploads that exceed the configured storage quota", async () => {
+    const app = await createTestApp({ quotaBytes: 5 });
+
+    const response = await app.request("http://localhost/objects", {
+      method: "POST",
+      headers: { "content-type": "text/plain", "x-test-user-id": "alice", "x-zo-drive-file-name": "too-large.txt" },
+      body: "123456"
+    });
+
+    expect(response.status).toBe(413);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "STORAGE_QUOTA_EXCEEDED" } });
+    const files = await app.request("http://localhost/objects", { headers: { "x-test-user-id": "alice" } });
+    await expect(files.json()).resolves.toEqual({ objects: [] });
+  });
+
+  it("updates a user's persisted storage quota within the machine limits", async () => {
+    const app = await createTestApp();
+    const usageResponse = await app.request("http://localhost/usage", { headers: { "x-test-user-id": "alice" } });
+    const usage = await usageResponse.json() as { maxQuotaBytes: number };
+    const quotaBytes = Math.min(200 * 1024 * 1024 * 1024, usage.maxQuotaBytes);
+
+    const updated = await app.request("http://localhost/usage/quota", {
+      method: "PUT",
+      headers: { "content-type": "application/json", "x-test-user-id": "alice" },
+      body: JSON.stringify({ quotaBytes })
+    });
+    expect(updated.status).toBe(200);
+    await expect(updated.json()).resolves.toMatchObject({ quotaBytes });
+
+    const invalid = await app.request("http://localhost/usage/quota", {
+      method: "PUT",
+      headers: { "content-type": "application/json", "x-test-user-id": "alice" },
+      body: JSON.stringify({ quotaBytes: usage.maxQuotaBytes + 1 })
+    });
+    expect(invalid.status).toBe(400);
+    await expect(invalid.json()).resolves.toMatchObject({ error: { code: "INVALID_STORAGE_QUOTA" } });
   });
 
   it("streams a movie upload to disk without multipart parsing", async () => {
@@ -335,17 +374,25 @@ describe("Zo Drive API", () => {
       body: "shared contents"
     })).status).toBe(201);
 
-    const publicShare = await app.request("http://localhost/shares", { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ key: "shared.txt", access: "public" }) });
-    const publicBody = await publicShare.json() as { id: string };
+    const publicShare = await app.request("http://localhost/shares", { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ key: "shared.txt", access: "public", kind: "transfer" }) });
+    const publicBody = await publicShare.json() as { id: string; kind: string };
     expect(publicShare.status).toBe(201);
+    expect(publicBody.kind).toBe("transfer");
     await expect((await app.request(`http://localhost/shared/${publicBody.id}`)).json()).resolves.toMatchObject({ name: "shared.txt", requiresPasscode: false });
     await expect((await app.request(`http://localhost/shared/${publicBody.id}/content`)).text()).resolves.toBe("shared contents");
 
-    const expiredShare = await app.request("http://localhost/shares", { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ key: "shared.txt", access: "public", expiresAt: new Date(Date.now() - 60_000).toISOString() }) });
+    const renamed = await app.request("http://localhost/objects/shared.txt", { method: "PATCH", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ name: "renamed.txt" }) });
+    expect(renamed.status).toBe(200);
+    await expect(renamed.json()).resolves.toMatchObject({ key: "renamed.txt", name: "renamed.txt" });
+    await expect((await app.request(`http://localhost/shared/${publicBody.id}`)).json()).resolves.toMatchObject({ name: "renamed.txt" });
+    await expect((await app.request(`http://localhost/shared/${publicBody.id}/content`)).text()).resolves.toBe("shared contents");
+
+    const expiredShare = await app.request("http://localhost/shares", { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ key: "renamed.txt", access: "public", expiresAt: new Date(Date.now() - 60_000).toISOString() }) });
     expect(expiredShare.status).toBe(400);
 
-    const protectedShare = await app.request("http://localhost/shares", { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ key: "shared.txt", access: "passcode", passcode: "open-sesame", expiresAt: new Date(Date.now() + 60_000).toISOString() }) });
-    const protectedBody = await protectedShare.json() as { id: string };
+    const protectedShare = await app.request("http://localhost/shares", { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ key: "renamed.txt", access: "passcode", kind: "transfer", passcode: "open-sesame", expiresAt: new Date(Date.now() + 60_000).toISOString() }) });
+    const protectedBody = await protectedShare.json() as { id: string; kind: string };
+    expect(protectedBody.kind).toBe("transfer");
     expect((await app.request(`http://localhost/shared/${protectedBody.id}/content`)).status).toBe(401);
     await expect((await app.request(`http://localhost/shared/${protectedBody.id}/content`, { headers: { "x-zo-drive-share-passcode": "open-sesame" } })).text()).resolves.toBe("shared contents");
 
@@ -357,5 +404,30 @@ describe("Zo Drive API", () => {
 
     expect((await app.request(`http://localhost/shares/${publicBody.id}`, { method: "DELETE", headers: { cookie } })).status).toBe(204);
     expect((await app.request(`http://localhost/shared/${publicBody.id}`)).status).toBe(404);
+  });
+
+  it("publishes Zo Forms and records public responses", async () => {
+    const root = await mkdtemp(join(tmpdir(), "zo-drive-forms-"));
+    roots.push(root);
+    const sessions = new SessionService("test-session-secret-that-is-more-than-thirty-two-characters");
+    const app = createApp({
+      storage: new LocalDriveStorage({ root }),
+      resolveUserId: (request) => sessions.userIdFromRequest(request),
+      auth: { store: new LocalAuthStore({ root }), sessions, secureCookies: false },
+      forms: new LocalFormStore({ root })
+    });
+    const registration = await app.request("http://localhost/auth/register", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: "owner", password: "secret1" }) });
+    const cookie = registration.headers.get("set-cookie")!;
+    expect((await app.request("http://localhost/native-files", { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ name: "Feedback", type: "form" }) })).status).toBe(201);
+    expect((await app.request("http://localhost/native-files/Feedback", { method: "PUT", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ content: { format: "zo-native", type: "form", version: 1, title: "Feedback", theme: "ocean", settings: { acceptingResponses: true, confirmationMessage: "Thanks for your feedback.", showProgressBar: true }, questions: [{ id: "q1", title: "How was it?", description: "", type: "multiple-choice", options: ["Great", "Okay"], required: true }, { id: "q2", title: "Rate each area", description: "", type: "multiple-choice-grid", options: [], rows: ["Support"], columns: ["Good", "Great"], required: true }] } }) })).status).toBe(200);
+
+    const published = await app.request("http://localhost/forms", { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ key: "Feedback" }) });
+    expect(published.status).toBe(201);
+    const form = await published.json() as { id: string; shortCode: string; theme: string; questions: Array<{ id: string }> };
+    expect(form).toMatchObject({ theme: "ocean", settings: { confirmationMessage: "Thanks for your feedback.", showProgressBar: true }, questions: [{ id: "q1" }, { id: "q2", type: "multiple-choice-grid", rows: ["Support"] }] });
+    await expect((await app.request(`http://localhost/public/forms/${form.id}`)).json()).resolves.toMatchObject({ id: form.id, title: "Feedback" });
+    await expect((await app.request(`http://localhost/public/forms/${form.shortCode}`)).json()).resolves.toMatchObject({ id: form.id, shortCode: form.shortCode, title: "Feedback" });
+    expect((await app.request(`http://localhost/public/forms/${form.id}/responses`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ answers: { q1: "Great", q2: ["Support::Great"] } }) })).status).toBe(201);
+    await expect((await app.request(`http://localhost/forms/${form.id}/responses`, { headers: { cookie } })).json()).resolves.toMatchObject({ responses: [{ answers: { q1: "Great", q2: ["Support::Great"] } }] });
   });
 });

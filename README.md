@@ -11,9 +11,11 @@ Zo Drive is a private Drive-like file manager for your Zo server. The source cod
 - Shared TypeScript SDK used by both the CLI and React app
 - `zo-drive` CLI: upload, list, download, delete, and usage
 - React GUI: folder browsing, search, drag-and-drop/multiple upload of any file type, list/grid views, previews, deletion, and usage display
-- Zo-native files: documents, spreadsheets, presentations, and forms created privately inside the drive
+- Zo-native files: documents, spreadsheets, presentations, forms, and secure text pastes created privately inside the drive
+- Zo Paste: dark text editor with language and tag metadata; shared paste links honour the existing expiry and passcode controls
 - Home for recently updated files; My Drive as the default; Starred files and Shared with others for managed links
 - Share links: public or passcode-protected, with one-day, seven-day, thirty-day, or no-expiry TTL; copy and revoke controls
+- Zo Transfer: upload a file or select one already in Drive to create and manage public or passcode-protected expiring links; payment-gated delivery is coming soon
 - Account lifecycle design for keeping files or permanently removing everything in [the plan](docs/PLAN.md)
 
 ## Storage layout
@@ -71,6 +73,64 @@ ZO_DRIVE_API_URL="http://127.0.0.1:43071" node apps/cli/dist/index.js upload ./e
 ZO_DRIVE_API_URL="http://127.0.0.1:43071" node apps/cli/dist/index.js mkdir Documents/Receipts
 ZO_DRIVE_API_URL="http://127.0.0.1:43071" node apps/cli/dist/index.js ls Documents
 ```
+
+## Upload from another machine
+
+The hosted UI includes a public landing page at the Drive URL. Select **Zo Drive**
+in the top-right corner to open the private browser workspace, or select **Docs**
+for the in-product upload guide.
+
+### Browser GUI
+
+After signing in, use the fixed **Upload** button in the bottom-right corner. You
+can drop a file or folder into the panel, or use **Choose file** and **Choose
+folder**. Folder uploads retain their directory structure below the current Drive
+folder.
+
+### CLI
+
+On the machine that will upload files, clone this repository and build the CLI:
+
+```bash
+pnpm install
+pnpm --filter @zo-drive/cli build
+```
+
+Sign in once to create a session token, export the printed value, then upload:
+
+```bash
+ZO_DRIVE_API_URL="https://your-drive.example/drive" \
+node apps/cli/dist/index.js login --username sayyid --password 'your-password'
+
+# Export the ZO_DRIVE_SESSION_TOKEN printed by login, then:
+ZO_DRIVE_API_URL="https://your-drive.example/drive" \
+node apps/cli/dist/index.js upload ./launch-plan.pdf --path Product/Launch
+```
+
+### TypeScript SDK
+
+The workspace SDK powers both the web app and CLI. Build it with
+`pnpm --filter @zo-drive/sdk build`, then use it from a script in this repository:
+
+```ts
+import { readFile } from "node:fs/promises";
+import { ZoDriveClient } from "@zo-drive/sdk";
+
+const client = new ZoDriveClient({
+  baseUrl: "https://your-drive.example/drive",
+  headers: { authorization: `Bearer ${process.env.ZO_DRIVE_SESSION_TOKEN}` }
+});
+
+const bytes = await readFile("./launch-plan.pdf");
+await client.upload({
+  file: new Blob([bytes], { type: "application/pdf" }),
+  fileName: "launch-plan.pdf",
+  path: "Product/Launch"
+});
+```
+
+The CLI token is a bearer credential. Keep it in your environment or a secret
+manager and never commit it to source control.
 
 ## Verify before trying it
 

@@ -3,11 +3,13 @@ import type { Context } from "hono";
 import { cors } from "hono/cors";
 import { z } from "zod";
 import { Readable } from "node:stream";
+import { readFile } from "node:fs/promises";
 
 import { LocalAuthStore } from "./auth/local-auth-store.js";
 import { SessionService } from "./auth/session.js";
 import { LocalShareStore, type StoredShare } from "./sharing/local-share-store.js";
-import { LocalDriveStorage, TrashRestoreConflictError, UnsafeDrivePathError, nativeFileTypes, type DriveFileCategory } from "./storage/local-drive-storage.js";
+import { LocalFormStore, type PublishedForm } from "./forms/local-form-store.js";
+import { LocalDriveStorage, StorageQuotaConfigurationError, StorageQuotaExceededError, TrashRestoreConflictError, UnsafeDrivePathError, nativeFileTypes, type DriveFileCategory } from "./storage/local-drive-storage.js";
 
 export type UserResolver = (request: Request) => string | null | Promise<string | null>;
 
@@ -21,13 +23,14 @@ type CreateAppOptions = {
     secureCookies: boolean;
   };
   sharing?: LocalShareStore;
+  forms?: LocalFormStore;
 };
 
 const listQuerySchema = z.object({
   prefix: z.string().max(1_024).optional(),
   query: z.string().max(256).optional(),
   contentQuery: z.string().max(256).optional(),
-  type: z.enum(["document", "spreadsheet", "presentation", "form", "image", "video", "audio", "pdf", "other"] satisfies [DriveFileCategory, ...DriveFileCategory[]]).optional(),
+  type: z.enum(["document", "spreadsheet", "presentation", "form", "paste", "image", "video", "audio", "pdf", "other"] satisfies [DriveFileCategory, ...DriveFileCategory[]]).optional(),
   starred: z.enum(["true"]).optional().transform((value) => value === "true" ? true : undefined),
   modifiedAfter: z.string().datetime().optional(),
   modifiedBefore: z.string().datetime().optional()
@@ -48,6 +51,13 @@ const updateNativeFileSchema = z.object({
     version: z.literal(1)
   }).passthrough()
 });
+const renameFileSchema = z.object({
+  name: z.string().trim().min(1).max(1_024)
+});
+const publishFormSchema = z.object({ key: z.string().min(1).max(1_024) });
+const submitFormResponseSchema = z.object({
+  answers: z.record(z.string().max(256), z.union([z.string().max(10_000), z.array(z.string().max(1_024)).max(100)]))
+});
 
 const credentialsSchema = z.object({
   username: z.string().trim().min(3).max(32).regex(/^[a-zA-Z0-9_-]+$/),
@@ -66,6 +76,7 @@ const deleteAccountSchema = z.object({
 const createShareSchema = z.object({
   key: z.string().min(1).max(1_024),
   access: z.enum(["public", "passcode"]),
+  kind: z.enum(["share", "transfer"]).optional(),
   passcode: z.string().min(1).max(256).optional(),
   expiresAt: z.string().datetime().nullable().optional()
 }).superRefine((value, context) => {
@@ -74,8 +85,11 @@ const createShareSchema = z.object({
 const changeSharePasscodeSchema = z.object({
   passcode: z.string().min(1).max(256)
 });
+const updateStorageQuotaSchema = z.object({
+  quotaBytes: z.number().int().positive()
+});
 
-export function createApp({ storage, resolveUserId, allowedOrigin, auth, sharing }: CreateAppOptions) {
+export function createApp({ storage, resolveUserId, allowedOrigin, auth, sharing, forms }: CreateAppOptions) {
   const app = new Hono();
   const resolveActiveUser: UserResolver = async (request) => {
     const userId = await resolveUserId(request);
@@ -90,6 +104,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, sharing
     app.use("/native-files", cors(corsOptions));
     app.use("/native-files/*", cors(corsOptions));
     app.use("/usage", cors(corsOptions));
+    app.use("/usage/*", cors(corsOptions));
     app.use("/stars", cors(corsOptions));
     app.use("/stars/*", cors(corsOptions));
     app.use("/trash", cors(corsOptions));
@@ -98,6 +113,9 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, sharing
     app.use("/shares", cors(corsOptions));
     app.use("/shares/*", cors(corsOptions));
     app.use("/shared/*", cors(corsOptions));
+    app.use("/forms", cors(corsOptions));
+    app.use("/forms/*", cors(corsOptions));
+    app.use("/public/forms/*", cors(corsOptions));
   }
 
   app.get("/health", (context) => context.json({ status: "ok" }));
@@ -149,6 +167,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, sharing
       const nextUserId = parsed.data.username.trim().toLowerCase();
       await storage.renameUser({ fromUserId: userId, toUserId: nextUserId });
       await sharing?.renameOwner({ fromUserId: userId, toUserId: nextUserId });
+      await forms?.renameOwner({ fromUserId: userId, toUserId: nextUserId });
       const user = await auth.store.renameUser(userId, nextUserId);
       if (!user) return context.json({ error: { code: "PROFILE_UPDATE_FAILED", message: "Could not update the username" } }, 409);
       context.header("set-cookie", auth.sessions.cookieHeader(auth.sessions.create(user.id), auth.secureCookies));
@@ -176,6 +195,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, sharing
       }
       await storage.removeUser({ userId });
       await sharing?.removeByOwner(userId);
+      await forms?.removeByOwner(userId);
       await auth.store.removeUser(userId);
       context.header("set-cookie", auth.sessions.clearCookieHeader(auth.secureCookies));
       return context.body(null, 204);
@@ -218,6 +238,50 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, sharing
         return context.body(null, 204);
       });
     }
+
+    if (forms) {
+      app.post("/forms", async (context) => {
+        const userId = await requireUser(context.req.raw, resolveActiveUser);
+        if (!userId) return unauthorized(context);
+        const parsed = publishFormSchema.safeParse(await context.req.json().catch(() => null));
+        if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Select a valid Zo Form" } }, 400);
+        const file = await storage.read({ userId, key: parsed.data.key });
+        if (file.nativeType !== "form") return context.json({ error: { code: "INVALID_REQUEST", message: "Only Zo Forms can be published" } }, 400);
+        const published = await forms.publish({ ownerUserId: userId, key: parsed.data.key });
+        const form = await describePublishedForm(storage, published);
+        return form ? context.json(form, 201) : context.json({ error: { code: "NOT_FOUND", message: "Form not found" } }, 404);
+      });
+
+      app.get("/forms/:id/responses", async (context) => {
+        const userId = await requireUser(context.req.raw, resolveActiveUser);
+        if (!userId) return unauthorized(context);
+        const responses = await forms.listResponses({ formId: context.req.param("id"), ownerUserId: userId });
+        if (!responses) return context.json({ error: { code: "NOT_FOUND", message: "Published form not found" } }, 404);
+        return context.json({ responses: responses.map(({ id, submittedAt, answers }) => ({ id, submittedAt, answers })) });
+      });
+    }
+  }
+
+  if (forms) {
+    app.get("/public/forms/:id", async (context) => {
+      const published = await forms.find(context.req.param("id"));
+      if (!published) return context.json({ error: { code: "NOT_FOUND", message: "Form not found" } }, 404);
+      const form = await describePublishedForm(storage, published);
+      return form ? context.json(form) : context.json({ error: { code: "NOT_FOUND", message: "Form not found" } }, 404);
+    });
+
+    app.post("/public/forms/:id/responses", async (context) => {
+      const published = await forms.find(context.req.param("id"));
+      if (!published) return context.json({ error: { code: "NOT_FOUND", message: "Form not found" } }, 404);
+      const form = await describePublishedForm(storage, published);
+      if (!form) return context.json({ error: { code: "NOT_FOUND", message: "Form not found" } }, 404);
+      if (!form.settings.acceptingResponses) return context.json({ error: { code: "RESPONSES_CLOSED", message: "This form is not accepting responses" } }, 403);
+      const parsed = submitFormResponseSchema.safeParse(await context.req.json().catch(() => null));
+      if (!parsed.success || !isValidFormResponse(form, parsed.success ? parsed.data.answers : {})) return context.json({ error: { code: "INVALID_RESPONSE", message: "Complete every required question with a valid answer" } }, 400);
+      const response = await forms.addResponse({ formId: published.id, answers: parsed.data.answers });
+      if (!response) return context.json({ error: { code: "NOT_FOUND", message: "Form not found" } }, 404);
+      return context.json({ id: response.id, submittedAt: response.submittedAt, answers: response.answers }, 201);
+    });
   }
 
   if (sharing) {
@@ -363,6 +427,18 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, sharing
     return context.json(object, 201);
   });
 
+  app.patch("/objects/*", async (context) => {
+    const userId = await requireUser(context.req.raw, resolveActiveUser);
+    if (!userId) return unauthorized(context);
+    const parsed = renameFileSchema.safeParse(await context.req.json().catch(() => null));
+    if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Enter a valid file name" } }, 400);
+    const key = objectKeyFromPath(context.req.path);
+    const object = await storage.renameFile({ userId, key, name: parsed.data.name });
+    if (sharing) await sharing.renameKey({ ownerUserId: userId, fromKey: key, toKey: object.key });
+    if (forms) await forms.renameKey({ ownerUserId: userId, fromKey: key, toKey: object.key });
+    return context.json(object);
+  });
+
   app.get("/objects/*", async (context) => {
     const userId = await requireUser(context.req.raw, resolveActiveUser);
     if (!userId) {
@@ -387,7 +463,9 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, sharing
       return unauthorized(context);
     }
 
-    await storage.trash({ userId, key: objectKeyFromPath(context.req.path) });
+    const key = objectKeyFromPath(context.req.path);
+    await storage.trash({ userId, key });
+    await forms?.removeByKey({ ownerUserId: userId, key });
     return context.body(null, 204);
   });
 
@@ -399,6 +477,15 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, sharing
     return context.json(await storage.getUsage({ userId }));
   });
 
+  app.put("/usage/quota", async (context) => {
+    const userId = await requireUser(context.req.raw, resolveActiveUser);
+    if (!userId) {
+      return unauthorized(context);
+    }
+    const payload = updateStorageQuotaSchema.parse(await context.req.json());
+    return context.json(await storage.setQuota({ userId, quotaBytes: payload.quotaBytes }));
+  });
+
   app.onError((error, context) => {
     if (error instanceof UnsafeDrivePathError || error instanceof URIError) {
       return context.json({ error: { code: "INVALID_PATH", message: "Path must be a safe relative path" } }, 400);
@@ -408,6 +495,12 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, sharing
     }
     if (error instanceof TrashRestoreConflictError) {
       return context.json({ error: { code: "RESTORE_CONFLICT", message: error.message } }, 409);
+    }
+    if (error instanceof StorageQuotaExceededError) {
+      return context.json({ error: { code: "STORAGE_QUOTA_EXCEEDED", message: error.message } }, 413);
+    }
+    if (error instanceof StorageQuotaConfigurationError) {
+      return context.json({ error: { code: "INVALID_STORAGE_QUOTA", message: error.message } }, 400);
     }
     if (isAlreadyExists(error)) {
       return context.json({ error: { code: "ALREADY_EXISTS", message: "A file with this name already exists" } }, 409);
@@ -456,9 +549,97 @@ function isAlreadyExists(error: unknown): error is NodeJS.ErrnoException {
 async function describeShare(storage: LocalDriveStorage, share: StoredShare) {
   try {
     const object = await storage.read({ userId: share.ownerUserId, key: share.key });
-    return { id: share.id, key: share.key, name: object.name, size: object.size, contentType: object.contentType, access: share.access, expiresAt: share.expiresAt, createdAt: share.createdAt };
+    return { id: share.id, key: share.key, name: object.name, size: object.size, contentType: object.contentType, access: share.access, kind: share.kind === "transfer" ? "transfer" : "share", expiresAt: share.expiresAt, createdAt: share.createdAt };
   } catch (error) {
     if (isNotFound(error)) return null;
     throw error;
   }
+}
+
+type PublicForm = {
+  id: string;
+  shortCode: string;
+  title: string;
+  description: string;
+  theme: string;
+  banner: "none" | "botanical" | "fireworks";
+  questions: Array<{
+    id: string;
+    title: string;
+    description: string;
+    type: "short-answer" | "paragraph" | "multiple-choice" | "checkboxes" | "dropdown" | "linear-scale" | "rating" | "multiple-choice-grid" | "checkbox-grid" | "date" | "time";
+    options: string[];
+    required: boolean;
+    rows: string[];
+    columns: string[];
+    scaleMin: number;
+    scaleMax: number;
+    scaleMinLabel: string;
+    scaleMaxLabel: string;
+    ratingIcon: "star" | "heart" | "thumb";
+  }>;
+  settings: { acceptingResponses: boolean; confirmationMessage: string; showProgressBar: boolean };
+};
+
+const formThemes = new Set(["violet", "ocean", "forest", "sunset", "rose"]);
+const formQuestionTypes = new Set(["short-answer", "paragraph", "multiple-choice", "checkboxes", "dropdown", "linear-scale", "rating", "multiple-choice-grid", "checkbox-grid", "date", "time"]);
+
+async function describePublishedForm(storage: LocalDriveStorage, published: PublishedForm): Promise<PublicForm | null> {
+  try {
+    const file = await storage.read({ userId: published.ownerUserId, key: published.key });
+    if (file.nativeType !== "form") return null;
+    const content = JSON.parse(await readFile(file.filePath, "utf8")) as Record<string, unknown>;
+    const questions = Array.isArray(content.questions) ? content.questions.flatMap((item): PublicForm["questions"] => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+      const question = item as Record<string, unknown>;
+      if (typeof question.id !== "string" || typeof question.title !== "string" || typeof question.type !== "string" || !formQuestionTypes.has(question.type)) return [];
+      return [{
+        id: question.id,
+        title: question.title,
+        description: typeof question.description === "string" ? question.description : "",
+        type: question.type as PublicForm["questions"][number]["type"],
+        options: Array.isArray(question.options) ? question.options.filter((option): option is string => typeof option === "string").slice(0, 50) : [],
+        required: question.required === true,
+        rows: Array.isArray(question.rows) ? question.rows.filter((item): item is string => typeof item === "string").slice(0, 50) : [],
+        columns: Array.isArray(question.columns) ? question.columns.filter((item): item is string => typeof item === "string").slice(0, 50) : [],
+        scaleMin: typeof question.scaleMin === "number" && Number.isInteger(question.scaleMin) && question.scaleMin >= 0 && question.scaleMin < 10 ? question.scaleMin : 1,
+        scaleMax: typeof question.scaleMax === "number" && Number.isInteger(question.scaleMax) && question.scaleMax > 0 && question.scaleMax <= 10 ? question.scaleMax : 5,
+        scaleMinLabel: typeof question.scaleMinLabel === "string" ? question.scaleMinLabel : "",
+        scaleMaxLabel: typeof question.scaleMaxLabel === "string" ? question.scaleMaxLabel : "",
+        ratingIcon: question.ratingIcon === "heart" || question.ratingIcon === "thumb" ? question.ratingIcon : "star"
+      }];
+    }) : [];
+    return {
+      id: published.id,
+      shortCode: published.shortCode,
+      title: typeof content.title === "string" && content.title.trim() ? content.title.trim() : "Untitled form",
+      description: typeof content.description === "string" ? content.description : "",
+      theme: typeof content.theme === "string" && formThemes.has(content.theme) ? content.theme : "violet",
+      banner: content.banner === "botanical" || content.banner === "fireworks" ? content.banner : content.theme === "ocean" ? "botanical" : content.theme === "violet" ? "fireworks" : "none",
+      questions,
+      settings: {
+        acceptingResponses: content.settings && typeof content.settings === "object" && !Array.isArray(content.settings) && (content.settings as Record<string, unknown>).acceptingResponses === false ? false : true,
+        confirmationMessage: content.settings && typeof content.settings === "object" && !Array.isArray(content.settings) && typeof (content.settings as Record<string, unknown>).confirmationMessage === "string" ? (content.settings as Record<string, unknown>).confirmationMessage as string : "Your response has been recorded.",
+        showProgressBar: Boolean(content.settings && typeof content.settings === "object" && !Array.isArray(content.settings) && (content.settings as Record<string, unknown>).showProgressBar === true)
+      }
+    };
+  } catch (error) {
+    if (isNotFound(error)) return null;
+    throw error;
+  }
+}
+
+function isValidFormResponse(form: PublicForm, answers: Record<string, string | string[]>): boolean {
+  return form.questions.every((question) => {
+    const answer = answers[question.id];
+    if (question.required && (answer === undefined || answer === "" || (Array.isArray(answer) && answer.length === 0))) return false;
+    if (answer === undefined) return true;
+    if (["short-answer", "paragraph", "date", "time", "linear-scale", "rating"].includes(question.type)) return typeof answer === "string";
+    if (question.type === "multiple-choice-grid" || question.type === "checkbox-grid") {
+      const values = Array.isArray(answer) ? answer : [answer];
+      return values.every((value) => typeof value === "string" && value.includes("::"));
+    }
+    const values = Array.isArray(answer) ? answer : [answer];
+    return values.every((value) => typeof value === "string" && question.options.includes(value));
+  });
 }
