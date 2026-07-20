@@ -141,10 +141,15 @@ const appBasePath = normalizeAppBasePath(
 const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.1.0";
+const GUI_VERSION = "1.1.1";
 const CLI_VERSION = "1.0.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.1.1",
+    date: "20 July 2026",
+    changes: ["Moved Profile & controls into the full-width Drive workspace and aligned its layout with API Keys."]
+  },
   {
     version: "v1.1.0",
     date: "20 July 2026",
@@ -374,13 +379,11 @@ function CodeBlock({ code, label }: { code: string; label: string }) {
 
 function DriveGate({ client, authClient }: { client: DriveClient; authClient: AuthClient }) {
   const queryClient = useQueryClient();
-  const [page, setPage] = useState<"drive" | "account">("drive");
   const authQuery = useQuery({ queryKey: ["auth-status"], queryFn: () => authClient.getAuthStatus(), retry: false });
   const logoutMutation = useMutation({
     mutationFn: () => authClient.logout(),
     onSuccess: async () => {
       useDriveUi.getState().setCurrentPath("");
-      setPage("drive");
       await queryClient.invalidateQueries();
       toast.success("Signed out");
     },
@@ -392,10 +395,7 @@ function DriveGate({ client, authClient }: { client: DriveClient; authClient: Au
   if (!authQuery.data.authenticated || !authQuery.data.user) {
     return <AuthScreen auth={authQuery.data} client={authClient} onAuthenticated={() => void authQuery.refetch()} />;
   }
-  if (page === "account") {
-    return <AccountScreen user={authQuery.data.user} client={authClient} onBack={() => setPage("drive")} onAccountDeleted={() => void authQuery.refetch()} onSignOut={() => logoutMutation.mutate()} />;
-  }
-  return <DriveScreen client={client} user={authQuery.data.user} onAccount={() => setPage("account")} onSignOut={() => logoutMutation.mutate()} />;
+  return <DriveScreen authClient={authClient} client={client} user={authQuery.data.user} onAccountDeleted={() => void authQuery.refetch()} onSignOut={() => logoutMutation.mutate()} />;
 }
 
 function AuthLoading() {
@@ -446,7 +446,7 @@ function AuthScreen({ auth, client, onAuthenticated }: { auth: AuthStatus; clien
   );
 }
 
-function AccountScreen({ user, client, onBack, onAccountDeleted, onSignOut }: { user: DriveUser; client: AuthClient; onBack: () => void; onAccountDeleted: () => void; onSignOut: () => void }) {
+function AccountScreen({ user, client, onAccountDeleted }: { user: DriveUser; client: AuthClient; onAccountDeleted: () => void }) {
   const queryClient = useQueryClient();
   const [username, setUsername] = useState(user.username);
   const [currentPassword, setCurrentPassword] = useState("");
@@ -480,14 +480,10 @@ function AccountScreen({ user, client, onBack, onAccountDeleted, onSignOut }: { 
   });
 
   return (
-    <main className="min-h-screen bg-[#f8faff] text-slate-800">
-      <header className="flex h-18 items-center gap-4 border-b border-slate-200 bg-white px-5">
-        <button className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100" onClick={onBack}><ArrowLeft size={18} /> Back to Drive</button>
-        <div className="ml-auto flex items-center gap-2"><button className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100" onClick={onSignOut}>Sign out</button></div>
-      </header>
-      <section className="mx-auto max-w-3xl p-6 md:p-10">
-        <div><p className="text-sm font-medium text-blue-600">Account</p><h1 className="mt-1 text-3xl font-semibold tracking-tight text-slate-900">Profile & controls</h1><p className="mt-2 text-sm text-slate-500">Manage the owner account for this private drive.</p></div>
-        <div className="mt-8 space-y-5">
+    <div className="max-w-5xl space-y-6">
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 px-6 py-8 text-white"><span className="inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-cyan-200/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100"><UserRound size={14} /> Owner account</span><h2 className="mt-4 text-3xl font-semibold tracking-tight">Your private Drive, under your control.</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">Manage the owner sign-in details for this Drive. Device API keys remain separate, so a lost machine can be revoked without changing your password.</p></div>
+        <div className="space-y-5 p-5">
           <SettingsCard icon={<UserRound size={20} />} title="Profile" description="Your username is how you sign in.">
             <form className="flex flex-col gap-3 sm:flex-row" onSubmit={(event) => { event.preventDefault(); profileMutation.mutate(); }}><input aria-label="Account username" className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" minLength={3} maxLength={32} value={username} onChange={(event) => setUsername(event.target.value)} required /><button className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-300" disabled={profileMutation.isPending || username === user.username} type="submit">Save username</button></form>
           </SettingsCard>
@@ -502,7 +498,7 @@ function AccountScreen({ user, client, onBack, onAccountDeleted, onSignOut }: { 
           </SettingsCard>
         </div>
       </section>
-    </main>
+    </div>
   );
 }
 
@@ -510,9 +506,9 @@ function SettingsCard({ children, description, danger = false, icon, title }: { 
   return <section className={`rounded-xl border bg-white p-5 shadow-sm ${danger ? "border-red-200" : "border-slate-200"}`}><div className={`flex items-start gap-3 ${danger ? "text-red-600" : "text-blue-600"}`}><span className="rounded-lg bg-current/10 p-2">{icon}</span><div><h2 className="font-semibold text-slate-900">{title}</h2><p className="mt-1 text-sm leading-5 text-slate-500">{description}</p></div></div><div className="mt-5">{children}</div></section>;
 }
 
-function DriveScreen({ client, user, onAccount, onSignOut }: { client: DriveClient; user: DriveUser; onAccount: () => void; onSignOut: () => void }) {
+function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: { authClient: AuthClient; client: DriveClient; user: DriveUser; onAccountDeleted: () => void; onSignOut: () => void }) {
   const { currentPath, setCurrentPath, viewMode, setViewMode } = useDriveUi();
-  const [section, setSection] = useState<"api-keys" | "home" | "my-drive" | "pastes" | "shared" | "starred" | "transfer" | "trash">("my-drive");
+  const [section, setSection] = useState<"api-keys" | "home" | "my-drive" | "pastes" | "profile" | "shared" | "starred" | "transfer" | "trash">("my-drive");
   const [search, setSearch] = useState("");
   const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);
   const [storageBreakdownOpen, setStorageBreakdownOpen] = useState(false);
@@ -824,7 +820,7 @@ function DriveScreen({ client, user, onAccount, onSignOut }: { client: DriveClie
               <p className="truncate px-3 py-2 text-xs font-medium text-slate-400">{user.username}</p>
               <a className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" href={landingUrl()}><ArrowLeft size={17} /> Landing page</a>
               <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={() => { setAccountMenuOpen(false); setSection("api-keys"); setCurrentPath(""); }}><KeyRound size={17} /> API Keys</button>
-              <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={() => { setAccountMenuOpen(false); onAccount(); }}><UserRound size={17} /> Profile & controls</button>
+              <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={() => { setAccountMenuOpen(false); setSection("profile"); setCurrentPath(""); }}><UserRound size={17} /> Profile & controls</button>
               <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={onSignOut}><LogOut size={17} /> Sign out</button>
             </div>}
           </div>
@@ -867,15 +863,16 @@ function DriveScreen({ client, user, onAccount, onSignOut }: { client: DriveClie
           <div className="mb-7 flex flex-wrap items-center justify-between gap-4">
             <div>
               {section === "my-drive" && currentPath && <FolderNavigation currentPath={currentPath} onNavigate={setCurrentPath} />}
-              <h1 className={`${section === "my-drive" && currentPath ? "mt-3" : ""} text-2xl font-semibold tracking-tight text-slate-900`}>{search || advancedSearchActive ? "Search results" : section === "api-keys" ? "API Keys" : section === "home" ? "Recent" : section === "pastes" ? "Zo Paste" : section === "transfer" ? "Zo Transfer" : section === "shared" ? "Shared with others" : section === "starred" ? "Starred" : section === "trash" ? "Trash" : currentPath ? currentPath.split("/").at(-1) : "Files"}</h1>
+              <h1 className={`${section === "my-drive" && currentPath ? "mt-3" : ""} text-2xl font-semibold tracking-tight text-slate-900`}>{search || advancedSearchActive ? "Search results" : section === "api-keys" ? "API Keys" : section === "profile" ? "Profile & controls" : section === "home" ? "Recent" : section === "pastes" ? "Zo Paste" : section === "transfer" ? "Zo Transfer" : section === "shared" ? "Shared with others" : section === "starred" ? "Starred" : section === "trash" ? "Trash" : currentPath ? currentPath.split("/").at(-1) : "Files"}</h1>
               {section === "api-keys" && <p className="mt-1 text-sm text-slate-500">Provision and revoke scoped access for local computers and automations.</p>}
+              {section === "profile" && <p className="mt-1 text-sm text-slate-500">Manage the owner account for this private drive.</p>}
               {section === "home" && <p className="mt-1 text-sm text-slate-500">Files you recently created, uploaded, or updated.</p>}
               {section === "pastes" && <p className="mt-1 text-sm text-slate-500">Create, keep, and securely share code or text snippets.</p>}
               {section === "transfer" && <p className="mt-1 text-sm text-slate-500">Create and manage public file links from Zo Drive.</p>}
               {section === "shared" && <p className="mt-1 text-sm text-slate-500">Manage links you have shared outside your drive.</p>}
               {section === "trash" && <p className="mt-1 text-sm text-slate-500">Items are permanently deleted 30 days after being moved here.</p>}
             </div>
-            {section === "trash" && trashItems.length > 0 ? <button className="rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50" onClick={() => void emptyTrash()}>Empty trash</button> : section === "pastes" ? <button className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800" onClick={() => startNativeFile("paste")}><Plus size={17} /> New paste</button> : section !== "home" && section !== "transfer" && section !== "api-keys" && <div className="flex rounded-lg border border-slate-200 bg-white p-1">
+            {section === "trash" && trashItems.length > 0 ? <button className="rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50" onClick={() => void emptyTrash()}>Empty trash</button> : section === "pastes" ? <button className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800" onClick={() => startNativeFile("paste")}><Plus size={17} /> New paste</button> : section !== "home" && section !== "transfer" && section !== "api-keys" && section !== "profile" && <div className="flex rounded-lg border border-slate-200 bg-white p-1">
               <button aria-label="List view" className={`rounded-md p-2 ${viewMode === "list" ? "bg-slate-100 text-slate-900" : "text-slate-400"}`} onClick={() => setViewMode("list")}><List size={18} /></button>
               <button aria-label="Grid view" className={`rounded-md p-2 ${viewMode === "grid" ? "bg-slate-100 text-slate-900" : "text-slate-400"}`} onClick={() => setViewMode("grid")}><Grid2X2 size={18} /></button>
             </div>}
@@ -883,7 +880,7 @@ function DriveScreen({ client, user, onAccount, onSignOut }: { client: DriveClie
 
           {section === "home" && <RecentFiltersBar filters={recentFilters} onChange={setRecentFilters} />}
 
-          {section === "api-keys" ? <ApiKeys client={client} /> : section === "transfer" ? <ZoTransfer client={client} onCreated={async () => { await refresh(); await queryClient.invalidateQueries({ queryKey: ["shares"] }); }} /> : section === "pastes" ? <ZoPaste files={displayedFiles} isError={filesQuery.isError} isLoading={isLoading} onCreate={() => startNativeFile("paste")} onDelete={(key) => deleteMutation.mutate(key)} onPreview={openPreview} onRetry={() => void filesQuery.refetch()} onShare={(file) => { setShareSettings(null); setShareFile(file); }} onToggleStar={(file) => starMutation.mutate({ key: file.key, starred: file.starred })} /> : isLoading ? (
+          {section === "api-keys" ? <ApiKeys client={client} /> : section === "profile" ? <AccountScreen client={authClient} onAccountDeleted={onAccountDeleted} user={user} /> : section === "transfer" ? <ZoTransfer client={client} onCreated={async () => { await refresh(); await queryClient.invalidateQueries({ queryKey: ["shares"] }); }} /> : section === "pastes" ? <ZoPaste files={displayedFiles} isError={filesQuery.isError} isLoading={isLoading} onCreate={() => startNativeFile("paste")} onDelete={(key) => deleteMutation.mutate(key)} onPreview={openPreview} onRetry={() => void filesQuery.refetch()} onShare={(file) => { setShareSettings(null); setShareFile(file); }} onToggleStar={(file) => starMutation.mutate({ key: file.key, starred: file.starred })} /> : isLoading ? (
             <div className="grid h-64 place-items-center text-sm text-slate-500"><LoaderCircle className="mr-2 animate-spin" size={20} /> Loading your drive…</div>
           ) : (section === "shared" ? sharesQuery.isError : section === "starred" ? starredQuery.isError : section === "trash" ? trashQuery.isError : filesQuery.isError) ? (
             <EmptyState

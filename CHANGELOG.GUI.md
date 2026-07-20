@@ -8,6 +8,12 @@ All notable changes to the Zo Drive browser experience are recorded here.
 
 - Moved the GUI and CLI changelogs into dedicated versioned release-history pages, linked from the top-right of the documentation header.
 
+## v1.1.1 - 2026-07-20
+
+### Changed
+
+- Moved Profile & controls into the full-width Drive workspace and aligned its layout with API Keys.
+
 ## v1.1.0 - 2026-07-20
 
 ### Added
