@@ -141,10 +141,15 @@ const appBasePath = normalizeAppBasePath(
 const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.1.2";
+const GUI_VERSION = "1.1.3";
 const CLI_VERSION = "1.0.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.1.3",
+    date: "20 July 2026",
+    changes: ["Added a Documentation link to the top-right account menu."]
+  },
   {
     version: "v1.1.2",
     date: "20 July 2026",
@@ -824,6 +829,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
             {accountMenuOpen && <div className="absolute right-0 top-11 z-20 w-52 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg">
               <p className="truncate px-3 py-2 text-xs font-medium text-slate-400">{user.username}</p>
               <a className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" href={landingUrl()}><ArrowLeft size={17} /> Landing page</a>
+              <a className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" href={docsUrl("gui")}><ScrollText size={17} /> Documentation</a>
               <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={() => { setAccountMenuOpen(false); setSection("api-keys"); setCurrentPath(""); }}><KeyRound size={17} /> API Keys</button>
               <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={() => { setAccountMenuOpen(false); setSection("profile"); setCurrentPath(""); }}><UserRound size={17} /> Profile & controls</button>
               <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={onSignOut}><LogOut size={17} /> Sign out</button>
