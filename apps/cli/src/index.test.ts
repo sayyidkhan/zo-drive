@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { runCli } from "./index.js";
+import { collectConfiguration, runCli } from "./index.js";
 
 describe("zo-drive CLI", () => {
   it("lists files through the shared SDK as JSON", async () => {
@@ -54,7 +54,29 @@ describe("zo-drive CLI", () => {
     const code = await runCli(["--version"], { client: {}, write });
 
     expect(code).toBe(0);
-    expect(write).toHaveBeenCalledWith("zo-drive 1.0.0\n");
+    expect(write).toHaveBeenCalledWith("zo-drive 1.1.0\n");
+  });
+
+  it("collects a Drive URL and device key for interactive configuration", async () => {
+    const prompts = { askApiKey: vi.fn().mockResolvedValue("zdk_example_key"), askUrl: vi.fn().mockResolvedValue("https://drive.example/drive/") };
+
+    await expect(collectConfiguration({ prompts })).resolves.toEqual({ apiKey: "zdk_example_key", apiUrl: "https://drive.example/drive" });
+    expect(prompts.askUrl).toHaveBeenCalledOnce();
+    expect(prompts.askApiKey).toHaveBeenCalledOnce();
+  });
+
+  it("uses environment values for non-interactive automation without prompting", async () => {
+    const prompts = { askApiKey: vi.fn(), askUrl: vi.fn() };
+
+    await expect(collectConfiguration({ apiKey: "zdk_example_key", apiUrl: "https://drive.example/drive", prompts })).resolves.toEqual({ apiKey: "zdk_example_key", apiUrl: "https://drive.example/drive" });
+    expect(prompts.askUrl).not.toHaveBeenCalled();
+    expect(prompts.askApiKey).not.toHaveBeenCalled();
+  });
+
+  it("rejects unsafe URLs and invalid API keys before writing a configuration", async () => {
+    const prompts = { askApiKey: vi.fn().mockResolvedValue("not-a-device-key"), askUrl: vi.fn().mockResolvedValue("https://drive.example/drive?token=secret") };
+
+    await expect(collectConfiguration({ prompts })).rejects.toThrow("plain HTTP(S) Zo Drive URL");
   });
 
   it("returns a non-zero result and a useful error for invalid commands", async () => {

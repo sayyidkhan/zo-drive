@@ -141,10 +141,15 @@ const appBasePath = normalizeAppBasePath(
 const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.1.3";
-const CLI_VERSION = "1.0.0";
+const GUI_VERSION = "1.1.4";
+const CLI_VERSION = "1.1.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.1.4",
+    date: "20 July 2026",
+    changes: ["Simplified CLI connection guidance to use one interactive configuration command."]
+  },
   {
     version: "v1.1.3",
     date: "20 July 2026",
@@ -213,6 +218,11 @@ const GUI_CHANGELOG = [
 ];
 
 const CLI_CHANGELOG = [
+  {
+    version: "v1.1.0",
+    date: "20 July 2026",
+    changes: ["Made zo-drive configure interactive: it now securely asks for the Drive URL and device API key, then stores the connection locally."]
+  },
   {
     version: "v1.0.0",
     date: "20 July 2026",
@@ -344,7 +354,7 @@ function DocsChangelogLink({ mode }: { mode: "gui" | "cli" }) {
 function DocsGuidesPage({ mode }: { mode: "gui" | "cli" }) {
   const serverUrl = `${window.location.origin}${appBasePath}`;
   const cliInstall = `git clone https://github.com/sayyidkhan/zo-drive.git\ncd zo-drive\npnpm install\npnpm build\n(cd apps/cli && npm link)\nzo-drive --help`;
-  const cliConnect = `# Create a key in Zo Drive > API Keys, then paste it without echoing\nexport ZO_DRIVE_API_URL="${serverUrl}"\nread -rs "ZO_DRIVE_API_KEY?Paste your Zo Drive API key: "\necho\nzo-drive configure\nunset ZO_DRIVE_API_KEY`;
+  const cliConnect = `zo-drive configure\n\n# Zo Drive URL: ${serverUrl}\n# Zo Drive API key: [input hidden]`;
   const cliUpload = `zo-drive upload ./launch-plan.pdf --path Product/Launch`;
   const cliUpdate = `cd zo-drive\ngit pull --ff-only\npnpm install --frozen-lockfile\npnpm build\nzo-drive --help`;
   const cliRelease = `cd zo-drive\ngit fetch origin --tags\ngit tag --sort=-v:refname | head -n 1\ngit checkout <release-tag>\npnpm install --frozen-lockfile\npnpm build`;
@@ -362,7 +372,7 @@ function DocsGuidesPage({ mode }: { mode: "gui" | "cli" }) {
       ]
     : [
         { id: "installation", eyebrow: "Installation", icon: <Terminal size={20} />, title: "Install zo-drive on your machine", body: "Set up the zo-drive command once, then use it from any folder on your machine.", steps: ["Clone the Zo Drive repository, install dependencies, and build the workspace.", "Run npm link inside apps/cli to make the zo-drive command available globally in your terminal.", "Confirm the installation by running zo-drive --help."] },
-        { id: "connection", eyebrow: "Local-to-cloud connection", icon: <Cloud size={20} />, title: "Connect your local computer to Zo", body: "zo-drive connects from your local terminal to this Zo Computer over its public HTTPS /drive address. You do not need SSH, Tailscale, or a Zo dashboard session on the local machine.", steps: ["Create a named, scoped key in Zo Drive > API Keys for this computer.", "Copy the public Zo Drive address shown below into ZO_DRIVE_API_URL, then paste the key without echoing it into the terminal.", "Run zo-drive configure once. It saves the connection in ~/.config/zo-drive/config.json with owner-only permissions."] },
+        { id: "connection", eyebrow: "Local-to-cloud connection", icon: <Cloud size={20} />, title: "Connect your local computer to Zo", body: "zo-drive connects from your local terminal to this Zo Computer over its public HTTPS /drive address. You do not need SSH, Tailscale, or a Zo dashboard session on the local machine.", steps: ["Create a named, scoped key in Zo Drive > API Keys for this computer.", "Run zo-drive configure. It asks for the public Zo Drive URL and your device key without exposing either in shell history.", "The command saves the connection in ~/.config/zo-drive/config.json with owner-only permissions. Future zo-drive commands use it automatically."] },
         { id: "cli", eyebrow: "Command line", icon: <Terminal size={20} />, title: "Upload with zo-drive", body: "Once configured, send files directly to your private Drive.", steps: ["The command reads the device key from its protected local configuration.", "Run zo-drive upload with a local file path and optional destination folder.", "Use zo-drive ls, download, delete, mkdir, and usage against the same private Drive."] },
         { id: "updates", eyebrow: "CLI releases", icon: <RefreshCw size={20} />, title: `CLI version ${CLI_VERSION}`, body: "The local CLI has its own release track. Pull and rebuild when a CLI update is released; you do not need to install it again.", steps: ["Run zo-drive --version to check the installed CLI version.", "Use the main branch when you want the latest changes as they are pushed.", "Use a cli-v Git release tag when you want a fixed, reproducible CLI version on a machine."] },
         { id: "sdk", eyebrow: "TypeScript SDK", icon: <Database size={20} />, title: "Automate uploads in code", body: "Use the shared @zo-drive/sdk package from this repository for scripts, jobs and app integrations.", steps: ["Build the workspace SDK with pnpm --filter @zo-drive/sdk build.", "Store a scoped API key in your automation secret manager and send it as a Bearer token.", "Create ZoDriveClient with your Drive URL, then call upload with a Blob, filename and optional folder path."] }

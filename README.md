@@ -72,7 +72,7 @@ The CLI uses the same API:
 ```bash
 pnpm --filter @zo-drive/cli build
 # Create a scoped device key in the browser at Zo Drive > API Keys first.
-ZO_DRIVE_API_URL="http://127.0.0.1:43071" ZO_DRIVE_API_KEY="zdk_..." node apps/cli/dist/index.js configure
+node apps/cli/dist/index.js configure
 node apps/cli/dist/index.js upload ./example.pdf --path Documents
 node apps/cli/dist/index.js mkdir Documents/Receipts
 node apps/cli/dist/index.js ls Documents
@@ -93,7 +93,7 @@ folder.
 
 #### GUI versioning
 
-The browser GUI has its own release track, currently `GUI v0.2.0`. GUI changes
+The browser GUI has its own release track, currently `GUI v1.1.4`. GUI changes
 are deployed to Zo Drive directly; browser users receive the current version by
 loading the page. Use `gui-v*` Git tags to trace a deployed GUI release. CLI
 releases are separate and do not change the GUI version.
@@ -116,29 +116,26 @@ zo-drive --help
 
 #### Connect your local computer to Zo
 
-From any local computer with internet access, point the CLI at the public
-`/drive` address of this Zo Computer, then create a named, scoped API key from
-the **API Keys** page in Zo Drive. This is a direct HTTPS connection to Zo
-Drive: you do not need SSH, Tailscale, or a Zo dashboard session on the local
-machine.
+From any local computer with internet access, create a named, scoped API key
+from the **API Keys** page in Zo Drive. This is a direct HTTPS connection to
+Zo Drive: you do not need SSH, Tailscale, or a Zo dashboard session on the
+local machine.
 
-Paste the key without echoing it, then configure the device once. `zo-drive`
-stores the connection in `~/.config/zo-drive/config.json` with `0600`
-permissions; environment variables can still override it for automation.
+Run one command. It asks for the public `/drive` address of this Zo Computer,
+then accepts the device key with hidden terminal input. `zo-drive` stores the
+connection in `~/.config/zo-drive/config.json` with `0600` permissions, so
+future commands use it automatically.
 
 ```bash
-# Public /drive address of your Zo Computer
-export ZO_DRIVE_API_URL="https://your-drive.example/drive"
-read -rs "ZO_DRIVE_API_KEY?Paste your Zo Drive API key: "
-echo
 zo-drive configure
-unset ZO_DRIVE_API_KEY
+# Zo Drive URL: https://your-drive.example/drive
+# Zo Drive API key: [input hidden]
 zo-drive usage
 ```
 
 #### Upload a file
 
-With the cloud address and session token exported, upload directly to Drive:
+With the local connection saved, upload directly to Drive:
 
 ```bash
 zo-drive upload ./launch-plan.pdf --path Product/Launch
@@ -146,7 +143,7 @@ zo-drive upload ./launch-plan.pdf --path Product/Launch
 
 #### CLI updates and versioning
 
-The CLI has its own release track, currently `CLI v1.0.0`. Check an installed
+The CLI has its own release track, currently `CLI v1.1.0`. Check an installed
 copy with `zo-drive --version`. The global command remains linked to the
 repository checkout, so a rebuild updates the existing CLI without running
 `npm link` again. Use the `main` branch for the latest pushed changes:

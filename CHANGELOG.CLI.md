@@ -4,6 +4,18 @@ All notable changes to the `zo-drive` command-line tool are recorded here.
 
 ## Unreleased
 
+## v1.1.0 - 2026-07-20
+
+### Added
+
+- `zo-drive configure` now asks for the Zo Drive URL and device API key, then
+  saves the connection locally.
+
+### Security
+
+- API key input is hidden during interactive setup, avoiding shell history and
+  terminal output. Environment variables remain supported for automation.
+
 ## v1.0.0 - 2026-07-20
 
 ### Changed
