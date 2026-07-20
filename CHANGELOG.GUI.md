@@ -4,6 +4,12 @@ All notable changes to the Zo Drive browser experience are recorded here.
 
 ## Unreleased
 
+## v1.4.3 - 2026-07-20
+
+### Changed
+
+- Restyled the Zo Databases catalog with the same high-contrast hero and workspace composition as Zo Transfer.
+
 ## v1.4.2 - 2026-07-20
 
 ### Added
