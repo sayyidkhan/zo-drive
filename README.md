@@ -102,8 +102,22 @@ releases are separate and do not change the GUI version.
 
 #### Installation
 
-On the machine that will upload files, clone this repository, build it, then
-link the CLI globally once. This makes `zo-drive` available from any folder:
+The production distribution target is a standalone npm package:
+
+```bash
+npm install --global zo-drive
+zo-drive --help
+```
+
+That package is not published yet. Do not rely on the command above until a
+CLI release announcement confirms it is available. The current temporary
+setup is for developers and release testing only.
+
+#### Developer setup (temporary)
+
+Clone this repository, build it, then link the CLI globally. This makes
+`zo-drive` available from any folder, but it executes the checked-out source
+and is not the supported end-user installation path:
 
 ```bash
 git clone https://github.com/sayyidkhan/zo-drive.git
@@ -113,6 +127,13 @@ pnpm build
 (cd apps/cli && npm link)
 zo-drive --help
 ```
+
+#### Production packaging direction
+
+The published `zo-drive` package will bundle its internal SDK and types so an
+end user installs one package and does not need this repository, pnpm, or npm
+links. Until that release exists, use the developer setup above only for local
+testing.
 
 #### Connect your local computer to Zo
 
@@ -143,10 +164,11 @@ zo-drive upload ./launch-plan.pdf --path Product/Launch
 
 #### CLI updates and versioning
 
-The CLI has its own release track, currently `CLI v1.1.0`. Check an installed
-copy with `zo-drive --version`. The global command remains linked to the
-repository checkout, so a rebuild updates the existing CLI without running
-`npm link` again. Use the `main` branch for the latest pushed changes:
+The CLI has its own independent release track. This checkout reports `CLI
+v1.1.1`; check an installed copy with `zo-drive --version`.
+
+For a developer checkout linked with npm, rebuild after pulling changes; the
+existing link then uses the updated build:
 
 ```bash
 cd zo-drive
@@ -156,8 +178,15 @@ pnpm build
 zo-drive --help
 ```
 
-Stable CLI releases use `cli-v*` Git tags. To pin a machine to a release, fetch
-the tags, choose the version returned by the third command, then rebuild:
+Stable CLI releases use `cli-v*` Git tags. After the standalone package is
+published, update a global installation with:
+
+```bash
+npm update --global zo-drive
+```
+
+To test a source checkout at a tagged release, fetch the tags, choose the
+version returned by the third command, then rebuild:
 
 ```bash
 cd zo-drive

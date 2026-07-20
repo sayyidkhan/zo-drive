@@ -4,6 +4,18 @@ All notable changes to the `zo-drive` command-line tool are recorded here.
 
 ## Unreleased
 
+## v1.1.1 - 2026-07-20
+
+### Fixed
+
+- Global `zo-drive` commands now run correctly when the CLI is installed with
+  `npm link`.
+
+### Changed
+
+- Clarified that npm linking is a developer workflow and documented the
+  planned single-package global npm installation experience.
+
 ## v1.1.0 - 2026-07-20
 
 ### Added

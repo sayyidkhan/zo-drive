@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
+import { realpathSync } from "node:fs";
 import { basename } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import { readFile as readFileFromDisk, writeFile as writeFileToDisk } from "node:fs/promises";
 import { createInterface } from "node:readline/promises";
 
@@ -10,7 +11,7 @@ import type { DriveObject, StorageUsage } from "@zo-drive/types";
 
 import { readLocalConfig, writeLocalConfig } from "./config.js";
 
-const CLI_VERSION = "1.1.0";
+const CLI_VERSION = "1.1.1";
 
 type CliClient = Partial<Pick<ZoDriveClient, "createFolder" | "delete" | "download" | "getUsage" | "list" | "upload">>;
 
@@ -303,6 +304,16 @@ async function main() {
   process.exitCode = await runCli(args, { client });
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+export function isMainModule(entryPath: string | undefined, moduleUrl: string): boolean {
+  if (!entryPath) return false;
+
+  try {
+    return realpathSync(entryPath) === realpathSync(fileURLToPath(moduleUrl));
+  } catch {
+    return false;
+  }
+}
+
+if (isMainModule(process.argv[1], import.meta.url)) {
   void main();
 }

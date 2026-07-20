@@ -1,6 +1,10 @@
+import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 
-import { collectConfiguration, runCli } from "./index.js";
+import { collectConfiguration, isMainModule, runCli } from "./index.js";
 
 describe("zo-drive CLI", () => {
   it("lists files through the shared SDK as JSON", async () => {
@@ -54,7 +58,22 @@ describe("zo-drive CLI", () => {
     const code = await runCli(["--version"], { client: {}, write });
 
     expect(code).toBe(0);
-    expect(write).toHaveBeenCalledWith("zo-drive 1.1.0\n");
+    expect(write).toHaveBeenCalledWith("zo-drive 1.1.1\n");
+  });
+
+  it("recognizes an npm-linked executable as the main module", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "zo-drive-cli-"));
+    const executable = join(directory, "index.js");
+    const linkedExecutable = join(directory, "zo-drive");
+
+    try {
+      await writeFile(executable, "#!/usr/bin/env node\n");
+      await symlink(executable, linkedExecutable);
+
+      expect(isMainModule(linkedExecutable, pathToFileURL(executable).href)).toBe(true);
+    } finally {
+      await rm(directory, { force: true, recursive: true });
+    }
   });
 
   it("collects a Drive URL and device key for interactive configuration", async () => {
