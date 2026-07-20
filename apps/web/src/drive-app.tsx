@@ -182,10 +182,15 @@ const appBasePath = normalizeAppBasePath(
 const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.4.1";
+const GUI_VERSION = "1.4.2";
 const CLI_VERSION = "1.2.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.4.2",
+    date: "20 July 2026",
+    changes: ["Added Zo Databases to the Zo Drive SaaS Killer Features panel on the landing page."]
+  },
   {
     version: "v1.4.1",
     date: "20 July 2026",
@@ -402,7 +407,7 @@ function LandingPage() {
               <div className="mt-7 space-y-3">
                 {[['Product/Launch', '4 files', 'bg-amber-100 text-amber-700'], ['Design/Assets', '18 files', 'bg-violet-100 text-violet-700'], ['Reports/2026', '7 files', 'bg-emerald-100 text-emerald-700']].map(([name, count, tone]) => <div className="flex items-center gap-3 rounded-xl border border-slate-100 p-3.5" key={name}><span className={`grid size-10 place-items-center rounded-xl ${tone}`}><Folder size={19} /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-800">{name}</span><span className="text-xs text-slate-400">{count}</span></span><MoreHorizontal size={18} className="text-slate-300" /></div>)}
               </div>
-              <div className="mt-5"><div className="mb-3 flex items-center justify-between"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Zo Drive SaaS Killer Features</p><span className="text-[10px] font-medium text-slate-400">Built in</span></div><div className="grid grid-cols-2 gap-3"><div className="rounded-xl bg-slate-950 p-4 text-white"><Code2 size={18} className="text-cyan-300" /><p className="mt-4 text-sm font-semibold">Zo Paste</p><p className="mt-1 text-xs leading-5 text-slate-400">Share code securely.</p></div><div className="rounded-xl bg-blue-50 p-4 text-blue-950"><Send size={18} className="text-blue-600" /><p className="mt-4 text-sm font-semibold">Zo Transfer</p><p className="mt-1 text-xs leading-5 text-blue-700/70">Deliver files your way.</p></div></div></div>
+              <div className="mt-5"><div className="mb-3 flex items-center justify-between"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Zo Drive SaaS Killer Features</p><span className="text-[10px] font-medium text-slate-400">Built in</span></div><div className="grid grid-cols-2 gap-3"><div className="rounded-xl bg-slate-950 p-4 text-white"><Code2 size={18} className="text-cyan-300" /><p className="mt-4 text-sm font-semibold">Zo Paste</p><p className="mt-1 text-xs leading-5 text-slate-400">Share code securely.</p></div><div className="rounded-xl bg-blue-50 p-4 text-blue-950"><Send size={18} className="text-blue-600" /><p className="mt-4 text-sm font-semibold">Zo Transfer</p><p className="mt-1 text-xs leading-5 text-blue-700/70">Deliver files your way.</p></div><a aria-label="Open Zo Databases" className="col-span-2 rounded-xl bg-emerald-50 p-4 text-emerald-950 transition hover:bg-emerald-100" href={`${driveAppUrl()}&section=databases&databaseView=catalog`}><Database size={18} className="text-emerald-600" /><p className="mt-4 text-sm font-semibold">Zo Databases</p><p className="mt-1 text-xs leading-5 text-emerald-800/70">Private databases, built into your Drive.</p></a></div></div>
             </div>
           </div>
         </div>

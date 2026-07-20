@@ -4,6 +4,12 @@ All notable changes to the Zo Drive browser experience are recorded here.
 
 ## Unreleased
 
+## v1.4.2 - 2026-07-20
+
+### Added
+
+- Added Zo Databases to the Zo Drive SaaS Killer Features panel on the landing page.
+
 ## v1.4.1 - 2026-07-20
 
 ### Fixed
