@@ -783,7 +783,7 @@ export class LocalDriveStorage {
 
   private async describe(filePath: string, key: string, starred: boolean, storedContentType?: string): Promise<DriveFile> {
     const fileStat = await stat(filePath);
-    const contentType = storedContentType ?? contentTypeFor(key);
+    const contentType = resolvedContentType(key, storedContentType);
     return {
       key,
       name: basename(key),
@@ -835,6 +835,12 @@ export class LocalDriveStorage {
 function contentTypeFor(key: string): string {
   const extension = key.slice(key.lastIndexOf(".")).toLowerCase();
   return contentTypes[extension] ?? "application/octet-stream";
+}
+
+function resolvedContentType(key: string, storedContentType?: string): string {
+  if (storedContentType !== "application/octet-stream") return storedContentType ?? contentTypeFor(key);
+  const inferredContentType = contentTypeFor(key);
+  return inferredContentType === "application/octet-stream" ? storedContentType : inferredContentType;
 }
 
 function normalizeContentType(value: string | undefined): string | null {

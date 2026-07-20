@@ -47,7 +47,14 @@ export class DatabaseImportError extends Error {
   }
 }
 
-export const MAX_DATABASE_IMPORT_BYTES = 100 * 1024 * 1024;
+export const DEFAULT_DATABASE_IMPORT_LIMIT_BYTES = 100 * 1024 * 1024;
+export const MIN_DATABASE_IMPORT_LIMIT_BYTES = 1 * 1024 * 1024;
+
+export type DatabaseImportSettings = {
+  importLimitBytes: number;
+  minImportLimitBytes: number;
+  maxImportLimitBytes: number;
+};
 
 export class LocalDatabaseStore {
   constructor(private readonly root: string) {}
@@ -80,9 +87,28 @@ export class LocalDatabaseStore {
     return { ...database, sizeBytes: await this.sizeBytes(ownerUserId, database.id) };
   }
 
-  async import({ ownerUserId, name, bytes }: { ownerUserId: string; name: string; bytes: Uint8Array }): Promise<DriveDatabase> {
+  async getImportSettings({ ownerUserId, maxImportLimitBytes }: { ownerUserId: string; maxImportLimitBytes: number }): Promise<DatabaseImportSettings> {
+    const maximum = Math.max(MIN_DATABASE_IMPORT_LIMIT_BYTES, maxImportLimitBytes);
+    const stored = await this.readImportSettings(ownerUserId);
+    return {
+      importLimitBytes: Math.min(stored?.importLimitBytes ?? DEFAULT_DATABASE_IMPORT_LIMIT_BYTES, maximum),
+      minImportLimitBytes: MIN_DATABASE_IMPORT_LIMIT_BYTES,
+      maxImportLimitBytes: maximum
+    };
+  }
+
+  async setImportLimit({ ownerUserId, importLimitBytes, maxImportLimitBytes }: { ownerUserId: string; importLimitBytes: number; maxImportLimitBytes: number }): Promise<DatabaseImportSettings> {
+    const maximum = Math.max(MIN_DATABASE_IMPORT_LIMIT_BYTES, maxImportLimitBytes);
+    if (!Number.isSafeInteger(importLimitBytes) || importLimitBytes < MIN_DATABASE_IMPORT_LIMIT_BYTES || importLimitBytes > maximum) {
+      throw new DatabaseImportError(`Import limit must be between ${MIN_DATABASE_IMPORT_LIMIT_BYTES} and ${maximum} bytes`);
+    }
+    await this.writeImportSettings(ownerUserId, { importLimitBytes });
+    return { importLimitBytes, minImportLimitBytes: MIN_DATABASE_IMPORT_LIMIT_BYTES, maxImportLimitBytes: maximum };
+  }
+
+  async import({ ownerUserId, name, bytes, importLimitBytes }: { ownerUserId: string; name: string; bytes: Uint8Array; importLimitBytes: number }): Promise<DriveDatabase> {
     if (bytes.byteLength === 0) throw new DatabaseImportError("Choose a SQLite database file to import");
-    if (bytes.byteLength > MAX_DATABASE_IMPORT_BYTES) throw new DatabaseImportError("SQLite imports are limited to 100 MB");
+    if (bytes.byteLength > importLimitBytes) throw new DatabaseImportError("This SQLite file exceeds your configured import limit");
     const stored = await this.read(ownerUserId);
     if (stored.databases.some((database) => database.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
       throw Object.assign(new Error("A database with this name already exists"), { code: "EEXIST" });
@@ -237,6 +263,28 @@ export class LocalDatabaseStore {
 
   private registryPath(ownerUserId: string): string {
     return join(this.ownerDirectory(ownerUserId), "databases.json");
+  }
+
+  private importSettingsPath(ownerUserId: string): string {
+    return join(this.ownerDirectory(ownerUserId), "settings.json");
+  }
+
+  private async readImportSettings(ownerUserId: string): Promise<{ importLimitBytes: number } | null> {
+    try {
+      const parsed = JSON.parse(await readFile(this.importSettingsPath(ownerUserId), "utf8")) as { importLimitBytes?: unknown };
+      return typeof parsed.importLimitBytes === "number" && Number.isSafeInteger(parsed.importLimitBytes) && parsed.importLimitBytes >= MIN_DATABASE_IMPORT_LIMIT_BYTES ? { importLimitBytes: parsed.importLimitBytes } : null;
+    } catch (error: unknown) {
+      if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return null;
+      throw error;
+    }
+  }
+
+  private async writeImportSettings(ownerUserId: string, settings: { importLimitBytes: number }): Promise<void> {
+    const path = this.importSettingsPath(ownerUserId);
+    await mkdir(dirname(path), { recursive: true });
+    const temporary = `${path}.${randomUUID()}.tmp`;
+    await writeFile(temporary, JSON.stringify(settings), { encoding: "utf8", mode: 0o600 });
+    await rename(temporary, path);
   }
 
   private databasePath(ownerUserId: string, id: string): string {

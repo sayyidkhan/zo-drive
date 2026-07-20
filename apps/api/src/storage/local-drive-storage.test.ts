@@ -32,6 +32,20 @@ describe("LocalDriveStorage", () => {
     expect(stored).toBe("ship it");
   });
 
+  it("infers a recognised file type when an upload is labelled application/octet-stream", async () => {
+    const storage = await createStorage();
+
+    await storage.write({
+      userId: "user_123",
+      key: "Brand/Zo Drive logo.png",
+      content: Buffer.from("png bytes"),
+      contentType: "application/octet-stream"
+    });
+
+    await expect(storage.read({ userId: "user_123", key: "Brand/Zo Drive logo.png" })).resolves.toMatchObject({ contentType: "image/png" });
+    await expect(storage.list({ userId: "user_123", type: "image" })).resolves.toMatchObject([{ key: "Brand/Zo Drive logo.png", contentType: "image/png" }]);
+  });
+
   it("never allows a key to escape the user's file namespace", async () => {
     const storage = await createStorage();
 

@@ -140,6 +140,8 @@ describe("DriveApp", () => {
       deleteDatabase: vi.fn(),
       importDatabase: vi.fn(),
       exportDatabase: vi.fn().mockResolvedValue(new Blob(["sqlite database"])),
+      getDatabaseImportSettings: vi.fn().mockResolvedValue({ importLimitBytes: 100 * 1024 * 1024, minImportLimitBytes: 1024 * 1024, maxImportLimitBytes: 100 * 1024 * 1024 * 1024 }),
+      setDatabaseImportLimit: vi.fn(),
       listDatabaseApiKeys: vi.fn().mockResolvedValue([]),
       createDatabaseApiKey: vi.fn().mockResolvedValue({ id: "key-11111111-1111-4111-8111-111111111111", databaseId: "db-11111111-1111-4111-8111-111111111111", name: "Production backend", prefix: "zdb_test", scopes: ["read", "write"], createdAt: "2026-01-01T00:00:00.000Z", expiresAt: null, lastUsedAt: null, apiKey: "zdb_test_value" }),
       revokeDatabaseApiKey: vi.fn(),
@@ -161,6 +163,12 @@ describe("DriveApp", () => {
     render(<DriveApp client={client} authClient={authClient} />);
 
     expect(await screen.findByRole("link", { name: "Back to Zo Drive landing page" })).toHaveAttribute("href", "/");
+    fireEvent.click(screen.getByRole("button", { name: "Collapse navigation" }));
+    expect(screen.getByRole("button", { name: "New" })).toHaveAttribute("title", "New");
+    expect(screen.getByRole("button", { name: "My Drive" })).toHaveAttribute("title", "My Drive");
+    expect(screen.getByRole("button", { name: "Zo Databases" })).toHaveAttribute("title", "Zo Databases");
+    fireEvent.click(screen.getByRole("button", { name: "Expand navigation" }));
+    expect(screen.getByRole("button", { name: "New" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
     expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
     expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
@@ -175,13 +183,13 @@ describe("DriveApp", () => {
     expect(screen.queryByRole("button", { name: "API Keys" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "List view" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Grid view" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
-    fireEvent.click(screen.getByRole("button", { name: "Databases" }));
-    expect(await screen.findByRole("heading", { name: "Databases" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Zo Databases" }));
+    expect(await screen.findByRole("heading", { name: "SQLite databases" })).toBeInTheDocument();
     expect((await screen.findAllByText("app-data")).length).toBe(2);
     expect(await screen.findByText("tasks")).toBeInTheDocument();
     expect(await screen.findByText("Ship Database Engines")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Import SQLite file" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Import limit: 100.0 MB" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Export" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "SQL editor" }));
     fireEvent.click(screen.getByRole("button", { name: "Run query" }));
@@ -304,6 +312,16 @@ describe("DriveApp", () => {
     expect(screen.getByRole("heading", { name: "Danger zone" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "List view" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Grid view" })).not.toBeInTheDocument();
+
+    window.history.pushState({}, "", "?section=databases&database=db-11111111-1111-4111-8111-111111111111&databasePanel=access");
+    cleanup();
+    render(<DriveApp client={client} authClient={authClient} />);
+    expect(await screen.findByRole("heading", { name: "SQLite databases" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Connect from your backend" })).toBeInTheDocument();
+    const restoredRoute = new URLSearchParams(window.location.search);
+    expect(restoredRoute.get("section")).toBe("databases");
+    expect(restoredRoute.get("database")).toBe("db-11111111-1111-4111-8111-111111111111");
+    expect(restoredRoute.get("databasePanel")).toBe("access");
   });
 
   it("keeps an upload progress bar visible until the upload finishes", async () => {

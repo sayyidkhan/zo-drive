@@ -152,4 +152,16 @@ describe("ZoDriveClient", () => {
     expect(importRequest.body).toBeInstanceOf(FormData);
     expect(fetcher).toHaveBeenNthCalledWith(2, `https://drive.example/databases/${database.id}/export`, expect.objectContaining({ method: "GET" }));
   });
+
+  it("reads and updates the configurable SQLite import limit", async () => {
+    const settings = { importLimitBytes: 200 * 1024 * 1024, minImportLimitBytes: 1024 * 1024, maxImportLimitBytes: 100 * 1024 * 1024 * 1024 };
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(settings), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(settings), { status: 200 }));
+    const client = new ZoDriveClient({ baseUrl: "https://drive.example", fetcher });
+
+    await expect(client.getDatabaseImportSettings()).resolves.toEqual(settings);
+    await expect(client.setDatabaseImportLimit(settings.importLimitBytes)).resolves.toEqual(settings);
+    expect(fetcher).toHaveBeenNthCalledWith(2, "https://drive.example/databases/settings", expect.objectContaining({ method: "PUT" }));
+  });
 });

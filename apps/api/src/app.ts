@@ -30,6 +30,7 @@ type CreateAppOptions = {
   forms?: LocalFormStore;
   databases?: LocalDatabaseStore;
   databaseApiKeys?: LocalDatabaseApiKeyStore;
+  maxDatabaseImportBytes?: number;
 };
 
 const listQuerySchema = z.object({
@@ -102,6 +103,9 @@ const createApiKeySchema = z.object({
 const createDatabaseSchema = z.object({
   name: z.string().trim().min(1).max(80)
 });
+const updateDatabaseImportSettingsSchema = z.object({
+  importLimitBytes: z.number().int().positive()
+});
 const databaseRowsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(100),
   offset: z.coerce.number().int().min(0).default(0)
@@ -116,7 +120,7 @@ const createDatabaseApiKeySchema = z.object({
   expiresAt: z.string().datetime().nullable()
 });
 
-export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys, sharing, forms, databases = new LocalDatabaseStore(storage.root), databaseApiKeys = new LocalDatabaseApiKeyStore({ root: storage.root }) }: CreateAppOptions) {
+export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys, sharing, forms, databases = new LocalDatabaseStore(storage.root), databaseApiKeys = new LocalDatabaseApiKeyStore({ root: storage.root }), maxDatabaseImportBytes = Number.MAX_SAFE_INTEGER }: CreateAppOptions) {
   const app = new Hono();
   const resolveActiveUser: UserResolver = async (request) => {
     const userId = await resolveUserId(request);
@@ -387,6 +391,22 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     return context.json(await databases.create({ ownerUserId: userId, name: parsed.data.name }), 201);
   });
 
+  app.get("/databases/settings", async (context) => {
+    const userId = await requireDatabaseOwner(context.req.raw, resolveActiveUser, auth);
+    if (!userId) return unauthorized(context);
+    const usage = await storage.getUsage({ userId });
+    return context.json(await databases.getImportSettings({ ownerUserId: userId, maxImportLimitBytes: Math.min(maxDatabaseImportBytes, usage.quotaBytes) }));
+  });
+
+  app.put("/databases/settings", async (context) => {
+    const userId = await requireDatabaseOwner(context.req.raw, resolveActiveUser, auth);
+    if (!userId) return unauthorized(context);
+    const parsed = updateDatabaseImportSettingsSchema.safeParse(await context.req.json().catch(() => null));
+    if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Enter a whole-number import limit in bytes" } }, 400);
+    const usage = await storage.getUsage({ userId });
+    return context.json(await databases.setImportLimit({ ownerUserId: userId, importLimitBytes: parsed.data.importLimitBytes, maxImportLimitBytes: Math.min(maxDatabaseImportBytes, usage.quotaBytes) }));
+  });
+
   app.post("/databases/import", async (context) => {
     const userId = await requireDatabaseOwner(context.req.raw, resolveActiveUser, auth);
     if (!userId) return unauthorized(context);
@@ -396,7 +416,11 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     if (!(file instanceof File) || typeof name !== "string" || !name.trim() || name.trim().length > 80) {
       return context.json({ error: { code: "INVALID_REQUEST", message: "Choose a SQLite file and database name of up to 80 characters" } }, 400);
     }
-    return context.json(await databases.import({ ownerUserId: userId, name: name.trim(), bytes: new Uint8Array(await file.arrayBuffer()) }), 201);
+    const usage = await storage.getUsage({ userId });
+    const settings = await databases.getImportSettings({ ownerUserId: userId, maxImportLimitBytes: Math.min(maxDatabaseImportBytes, usage.quotaBytes) });
+    const effectiveLimit = Math.min(settings.importLimitBytes, usage.quotaAvailableBytes);
+    if (file.size > effectiveLimit) return context.json({ error: { code: "DATABASE_IMPORT_ERROR", message: effectiveLimit < settings.importLimitBytes ? "This SQLite file exceeds your available Drive storage" : "This SQLite file exceeds your configured import limit" } }, 400);
+    return context.json(await databases.import({ ownerUserId: userId, name: name.trim(), bytes: new Uint8Array(await file.arrayBuffer()), importLimitBytes: effectiveLimit }), 201);
   });
 
   app.delete("/databases/:id", async (context) => {

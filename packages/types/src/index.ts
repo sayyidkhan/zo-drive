@@ -116,6 +116,11 @@ export const databaseQueryResultSchema = z.object({
   changes: z.number().int().nonnegative(),
   lastInsertRowid: z.number().int().nullable()
 });
+export const databaseImportSettingsSchema = z.object({
+  importLimitBytes: z.number().int().positive(),
+  minImportLimitBytes: z.number().int().positive(),
+  maxImportLimitBytes: z.number().int().positive()
+});
 export const databaseApiKeyScopeSchema = z.enum(["read", "write"]);
 export const databaseApiKeySchema = z.object({
   id: z.string().uuid(),
@@ -205,6 +210,7 @@ export type DriveDatabase = z.infer<typeof driveDatabaseSchema>;
 export type DatabaseTable = z.infer<typeof databaseTableSchema>;
 export type DatabaseRows = z.infer<typeof databaseRowsSchema>;
 export type DatabaseQueryResult = z.infer<typeof databaseQueryResultSchema>;
+export type DatabaseImportSettings = z.infer<typeof databaseImportSettingsSchema>;
 export type DatabaseApiKeyScope = z.infer<typeof databaseApiKeyScopeSchema>;
 export type DatabaseApiKey = z.infer<typeof databaseApiKeySchema>;
 export type CreatedDatabaseApiKey = z.infer<typeof createdDatabaseApiKeySchema>;

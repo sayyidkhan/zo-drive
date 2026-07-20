@@ -2,6 +2,7 @@ import {
   apiErrorSchema,
   authStatusSchema,
   createdDatabaseApiKeySchema,
+  databaseImportSettingsSchema,
   databaseQueryResultSchema,
   databaseRowsSchema,
   databaseTableSchema,
@@ -26,7 +27,7 @@ import {
   listTrashResponseSchema,
   storageUsageSchema
 } from "@zo-drive/types";
-import type { ApiKeyScope, AuthStatus, CreatedDatabaseApiKey, CreatedDriveApiKey, DatabaseApiKey, DatabaseApiKeyScope, DatabaseQueryResult, DatabaseRows, DatabaseTable, DriveApiKey, DriveDatabase, DriveFolder, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, NativeFileType, PublicShare, PublishedForm, ShareAccess, ShareKind, StorageUsage } from "@zo-drive/types";
+import type { ApiKeyScope, AuthStatus, CreatedDatabaseApiKey, CreatedDriveApiKey, DatabaseApiKey, DatabaseApiKeyScope, DatabaseImportSettings, DatabaseQueryResult, DatabaseRows, DatabaseTable, DriveApiKey, DriveDatabase, DriveFolder, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, NativeFileType, PublicShare, PublishedForm, ShareAccess, ShareKind, StorageUsage } from "@zo-drive/types";
 
 type Fetcher = typeof fetch;
 
@@ -229,6 +230,16 @@ export class ZoDriveClient {
   async exportDatabase(id: string): Promise<Blob> {
     const response = await this.request(`/databases/${encodeURIComponent(id)}/export`, { method: "GET" });
     return response.blob();
+  }
+
+  async getDatabaseImportSettings(): Promise<DatabaseImportSettings> {
+    const response = await this.request("/databases/settings", { method: "GET" });
+    return databaseImportSettingsSchema.parse(await response.json());
+  }
+
+  async setDatabaseImportLimit(importLimitBytes: number): Promise<DatabaseImportSettings> {
+    const response = await this.request("/databases/settings", { body: JSON.stringify({ importLimitBytes }), headers: { "content-type": "application/json" }, method: "PUT" });
+    return databaseImportSettingsSchema.parse(await response.json());
   }
 
   async listDatabaseTables(id: string): Promise<DatabaseTable[]> {

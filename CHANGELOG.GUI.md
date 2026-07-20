@@ -6,7 +6,7 @@ All notable changes to the Zo Drive browser experience are recorded here.
 
 ### Added
 
-- Added validated SQLite import and consistent `.sqlite` export from Database Engines.
+- Added validated SQLite import and consistent `.sqlite` export from Database Engines, with an owner-configurable import limit.
 
 ### Changed
 

@@ -9,7 +9,7 @@ GUI/CLI versioning and release policy.
 ## What works now
 
 - Hono REST API for upload, list, download/preview, delete, search, and storage usage
-- Database HTTP API for private SQLite databases, with per-database read/write credentials for external backends and validated `.sqlite` import/export
+- Database HTTP API for private SQLite databases, with per-database read/write credentials for external backends and validated `.sqlite` import/export with owner-configurable limits
 - Owner-account authentication: signed HttpOnly sessions and one-time registration
 - Account controls for username, password, sign-out, and permanent account/data deletion
 - Traversal-safe, user-scoped filesystem data root

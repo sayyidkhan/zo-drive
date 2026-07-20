@@ -55,6 +55,15 @@ describe("Zo Drive API", () => {
     const database = await created.json() as { id: string; engine: string; name: string };
     expect(database).toMatchObject({ engine: "sqlite", name: "app-data" });
 
+    const importSettings = await app.request("http://localhost/databases/settings", { headers: { "x-test-user-id": "alice" } });
+    await expect(importSettings.json()).resolves.toMatchObject({ importLimitBytes: 100 * 1024 * 1024, minImportLimitBytes: 1024 * 1024 });
+    const updatedImportSettings = await app.request("http://localhost/databases/settings", {
+      method: "PUT",
+      headers: { "content-type": "application/json", "x-test-user-id": "alice" },
+      body: JSON.stringify({ importLimitBytes: 2 * 1024 * 1024 })
+    });
+    await expect(updatedImportSettings.json()).resolves.toMatchObject({ importLimitBytes: 2 * 1024 * 1024 });
+
     const createTable = await app.request(`http://localhost/databases/${database.id}/query`, {
       method: "POST",
       headers: { "content-type": "application/json", "x-test-user-id": "alice" },
@@ -100,6 +109,13 @@ describe("Zo Drive API", () => {
     const invalidImportResponse = await app.request("http://localhost/databases/import", { method: "POST", headers: { "x-test-user-id": "alice" }, body: invalidImport });
     expect(invalidImportResponse.status).toBe(400);
     await expect(invalidImportResponse.json()).resolves.toMatchObject({ error: { code: "DATABASE_IMPORT_ERROR" } });
+
+    const tooLargeImport = new FormData();
+    tooLargeImport.set("name", "too-large-data");
+    tooLargeImport.set("file", new File([new Uint8Array((2 * 1024 * 1024) + 1)], "too-large.sqlite", { type: "application/vnd.sqlite3" }));
+    const tooLargeImportResponse = await app.request("http://localhost/databases/import", { method: "POST", headers: { "x-test-user-id": "alice" }, body: tooLargeImport });
+    expect(tooLargeImportResponse.status).toBe(400);
+    await expect(tooLargeImportResponse.json()).resolves.toMatchObject({ error: { code: "DATABASE_IMPORT_ERROR", message: "This SQLite file exceeds your configured import limit" } });
 
     const blocked = await app.request(`http://localhost/databases/${database.id}/query`, {
       method: "POST",

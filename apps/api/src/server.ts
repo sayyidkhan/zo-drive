@@ -20,6 +20,7 @@ const apiKeys = new LocalApiKeyStore({ root: dataRoot });
 const shareStore = new LocalShareStore({ root: dataRoot });
 const formStore = new LocalFormStore({ root: dataRoot });
 const storage = new LocalDriveStorage({ root: dataRoot });
+const maxDatabaseImportBytes = positiveIntegerEnvironmentVariable("ZO_DRIVE_MAX_DATABASE_IMPORT_BYTES", Number.MAX_SAFE_INTEGER);
 const webRoot = process.env.ZO_DRIVE_WEB_ROOT ?? resolve(dirname(fileURLToPath(import.meta.url)), "../../web/dist");
 
 const app = createApp({
@@ -33,7 +34,8 @@ const app = createApp({
   },
   apiKeys,
   sharing: shareStore,
-  forms: formStore
+  forms: formStore,
+  maxDatabaseImportBytes
 });
 
 async function purgeExpiredTrash() {
@@ -109,6 +111,14 @@ function numberEnvironmentVariable(name: string, fallback: number): number {
   if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65_535) {
     throw new Error(`${name} must be a valid port number`);
   }
+  return parsed;
+}
+
+function positiveIntegerEnvironmentVariable(name: string, fallback: number): number {
+  const value = process.env[name];
+  if (!value) return fallback;
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 1) throw new Error(`${name} must be a positive integer`);
   return parsed;
 }
 

@@ -35,6 +35,8 @@ import {
   MoreHorizontal,
   Plus,
   Palette,
+  PanelLeftClose,
+  PanelLeftOpen,
   Search,
   Send,
   ShieldCheck,
@@ -60,13 +62,15 @@ import { toast, Toaster } from "sonner";
 import { create } from "zustand";
 
 import { ZoDriveClient } from "@zo-drive/sdk";
-import type { ApiKeyScope, AuthStatus, DatabaseApiKey, DatabaseApiKeyScope, DatabaseRows, DriveApiKey, DriveDatabase, DriveFolder, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, NativeFileType, PublicShare, PublishedForm, ShareAccess, StorageUsage } from "@zo-drive/types";
+import type { ApiKeyScope, AuthStatus, DatabaseApiKey, DatabaseApiKeyScope, DatabaseImportSettings, DatabaseRows, DriveApiKey, DriveDatabase, DriveFolder, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, NativeFileType, PublicShare, PublishedForm, ShareAccess, StorageUsage } from "@zo-drive/types";
 
-type DriveClient = Pick<ZoDriveClient, "createApiKey" | "createFolder" | "createNativeFile" | "createShare" | "delete" | "download" | "emptyTrash" | "getUsage" | "list" | "listApiKeys" | "listFolders" | "listFormResponses" | "listShares" | "listStarred" | "listTrash" | "permanentlyDeleteTrash" | "publishForm" | "rename" | "restoreTrash" | "revokeApiKey" | "revokeShare" | "saveNativeFile" | "setQuota" | "star" | "unstar" | "updateSharePasscode" | "upload"> & Partial<Pick<ZoDriveClient, "createDatabase" | "createDatabaseApiKey" | "deleteDatabase" | "exportDatabase" | "importDatabase" | "listDatabaseApiKeys" | "listDatabases" | "listDatabaseRows" | "listDatabaseTables" | "queryDatabase" | "revokeDatabaseApiKey">>;
+type DriveClient = Pick<ZoDriveClient, "createApiKey" | "createFolder" | "createNativeFile" | "createShare" | "delete" | "download" | "emptyTrash" | "getUsage" | "list" | "listApiKeys" | "listFolders" | "listFormResponses" | "listShares" | "listStarred" | "listTrash" | "permanentlyDeleteTrash" | "publishForm" | "rename" | "restoreTrash" | "revokeApiKey" | "revokeShare" | "saveNativeFile" | "setQuota" | "star" | "unstar" | "updateSharePasscode" | "upload"> & Partial<Pick<ZoDriveClient, "createDatabase" | "createDatabaseApiKey" | "deleteDatabase" | "exportDatabase" | "getDatabaseImportSettings" | "importDatabase" | "listDatabaseApiKeys" | "listDatabases" | "listDatabaseRows" | "listDatabaseTables" | "queryDatabase" | "revokeDatabaseApiKey" | "setDatabaseImportLimit">>;
 type AuthClient = Pick<ZoDriveClient, "changePassword" | "deleteAccount" | "getAuthStatus" | "login" | "logout" | "registerInitialUser" | "updateProfile">;
 type SharedClient = Pick<ZoDriveClient, "downloadShared" | "getPublicShare">;
 type PublicFormClient = Pick<ZoDriveClient, "getPublicForm" | "submitFormResponse">;
 type ViewMode = "grid" | "list";
+type DriveSection = "api-keys" | "databases" | "home" | "my-drive" | "pastes" | "profile" | "shared" | "starred" | "transfer" | "trash";
+type DatabasePanel = "data" | "sql" | "access";
 type AdvancedFileType = "document" | "spreadsheet" | "presentation" | "form" | "paste" | "image" | "video" | "audio" | "pdf" | "other";
 type AdvancedFilters = {
   contentQuery: string;
@@ -109,6 +113,28 @@ const defaultRecentFilters: RecentFilters = {
   source: "any",
   type: "any"
 };
+
+const driveSections: DriveSection[] = ["api-keys", "databases", "home", "my-drive", "pastes", "profile", "shared", "starred", "transfer", "trash"];
+const databasePanels: DatabasePanel[] = ["data", "sql", "access"];
+
+function currentDriveSection(): DriveSection {
+  const section = new URLSearchParams(window.location.search).get("section");
+  return driveSections.includes(section as DriveSection) ? section as DriveSection : "my-drive";
+}
+
+function currentDatabasePanel(): DatabasePanel {
+  const panel = new URLSearchParams(window.location.search).get("databasePanel");
+  return databasePanels.includes(panel as DatabasePanel) ? panel as DatabasePanel : "data";
+}
+
+function updateDriveUrl(changes: Record<string, string | null>) {
+  const url = new URL(window.location.href);
+  for (const [key, value] of Object.entries(changes)) {
+    if (value) url.searchParams.set(key, value);
+    else url.searchParams.delete(key);
+  }
+  window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+}
 
 type UploadTask = {
   id: string;
@@ -545,7 +571,7 @@ function SettingsCard({ children, description, danger = false, icon, title }: { 
 
 function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: { authClient: AuthClient; client: DriveClient; user: DriveUser; onAccountDeleted: () => void; onSignOut: () => void }) {
   const { currentPath, setCurrentPath, viewMode, setViewMode } = useDriveUi();
-  const [section, setSection] = useState<"api-keys" | "databases" | "home" | "my-drive" | "pastes" | "profile" | "shared" | "starred" | "transfer" | "trash">("my-drive");
+  const [section, setSection] = useState<DriveSection>(currentDriveSection);
   const [search, setSearch] = useState("");
   const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);
   const [storageBreakdownOpen, setStorageBreakdownOpen] = useState(false);
@@ -553,6 +579,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
   const [appliedAdvancedFilters, setAppliedAdvancedFilters] = useState<AdvancedFilters>(defaultAdvancedFilters);
   const [recentFilters, setRecentFilters] = useState<RecentFilters>(defaultRecentFilters);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [folderDialogOpen, setFolderDialogOpen] = useState(false);
   const [folderName, setFolderName] = useState("");
@@ -568,6 +595,24 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
   const fileInput = useRef<HTMLInputElement>(null);
   const folderInput = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const restoreRoute = () => {
+      const params = new URLSearchParams(window.location.search);
+      setSection(currentDriveSection());
+      setCurrentPath(params.get("folder") ?? "");
+    };
+    restoreRoute();
+    window.addEventListener("popstate", restoreRoute);
+    return () => window.removeEventListener("popstate", restoreRoute);
+  }, [setCurrentPath]);
+
+  useEffect(() => {
+    updateDriveUrl({
+      section,
+      folder: section === "my-drive" && currentPath ? currentPath : null
+    });
+  }, [currentPath, section]);
 
   const advancedSearchActive = !sameAdvancedFilters(appliedAdvancedFilters, defaultAdvancedFilters);
   const advancedDateRange = dateRangeFor(appliedAdvancedFilters.modified);
@@ -858,7 +903,6 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
               <a className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" href={landingUrl()}><ArrowLeft size={17} /> Landing page</a>
               <a className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" href={docsUrl("gui")}><ScrollText size={17} /> Documentation</a>
               <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={() => { setAccountMenuOpen(false); setSection("api-keys"); setCurrentPath(""); }}><KeyRound size={17} /> API Keys</button>
-              <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={() => { setAccountMenuOpen(false); setSection("databases"); setCurrentPath(""); }}><Database size={17} /> Databases</button>
               <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={() => { setAccountMenuOpen(false); setSection("profile"); setCurrentPath(""); }}><UserRound size={17} /> Profile & controls</button>
               <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={onSignOut}><LogOut size={17} /> Sign out</button>
             </div>}
@@ -867,8 +911,9 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
       </header>
 
       <div className="flex min-h-[calc(100vh-4.5rem)]">
-        <aside className="w-64 shrink-0 border-r border-slate-200 bg-white px-3 py-5">
-          <div className="relative">
+        <aside id="drive-navigation" className={`${sidebarOpen ? "w-64 px-3" : "w-16 px-1.5"} shrink-0 overflow-hidden border-r border-slate-200 bg-white py-5 transition-[width,padding] duration-200`}>
+          <div className={`flex gap-2 ${sidebarOpen ? "items-center" : "flex-col items-center"}`}>
+          {sidebarOpen ? <div className="relative flex-1">
             <button aria-expanded={newMenuOpen} className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700" onClick={() => setNewMenuOpen((open) => !open)}>
               <Plus size={18} /> New
             </button>
@@ -880,29 +925,34 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
               {(["document", "spreadsheet", "presentation", "form"] as NativeFileType[]).map((type) => <button aria-label={`New Zo ${nativeFileLabel(type)}`} className="new-menu-item new-menu-native-item" key={type} onClick={() => startNativeFile(type)}><img className="size-9 shrink-0 rounded-md" src={nativeIllustrationUrl(type)} alt={`${nativeFileLabel(type)} illustration`} /><span>New Zo {nativeFileLabel(type)}</span></button>)}
               <button aria-label="New Zo Paste" className="new-menu-item new-menu-native-item" onClick={() => startNativeFile("paste")}><span className="grid size-9 shrink-0 place-items-center rounded-md bg-slate-900 text-cyan-300"><Code2 size={20} /></span><span>New Zo Paste</span></button>
             </div>}
+          </div> : <button aria-label="New" className="grid size-10 shrink-0 place-items-center rounded-xl bg-blue-600 text-white shadow-sm hover:bg-blue-700" onClick={() => { setSidebarOpen(true); setNewMenuOpen(true); }} title="New"><Plus size={19} /></button>}
+            <button aria-controls="drive-navigation" aria-expanded={sidebarOpen} aria-label={sidebarOpen ? "Collapse navigation" : "Expand navigation"} className="grid size-10 shrink-0 place-items-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-800" onClick={() => { setNewMenuOpen(false); setSidebarOpen((open) => !open); }} title={sidebarOpen ? "Collapse navigation" : "Expand navigation"}>
+              {sidebarOpen ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
+            </button>
           </div>
           <input ref={fileInput} aria-label="Upload files" className="hidden" type="file" multiple onChange={handleFileInput} />
           <input ref={folderInput} aria-label="Upload folder" className="hidden" type="file" multiple {...{ webkitdirectory: "" }} onChange={handleFolderInput} />
 
-          <nav className="mt-6 space-y-1">
-            <button className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold ${section === "home" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => { setSection("home"); setCurrentPath(""); }}><Clock3 size={18} /> Recent</button>
-            <button className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold ${section === "my-drive" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => { setSection("my-drive"); setCurrentPath(""); }}><HardDrive size={18} /> My Drive</button>
-            <button className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold ${section === "starred" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => { setSection("starred"); setCurrentPath(""); }}><Star size={18} /> Starred</button>
-            <button className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold ${section === "shared" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => setSection("shared")}><UsersRound size={18} /> Shared with others</button>
-            <button className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold ${section === "trash" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => { setSection("trash"); setCurrentPath(""); }}><Trash2 size={18} /> Trash</button>
-            <div className="my-3 border-t border-slate-200" role="separator" />
-            <button className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold ${section === "pastes" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => { setSection("pastes"); setCurrentPath(""); }}><Code2 size={18} /> Zo Paste</button>
-            <button className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold ${section === "transfer" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => { setSection("transfer"); setCurrentPath(""); }}><Send size={18} /> Zo Transfer</button>
+          <nav className={`${sidebarOpen ? "mt-6 space-y-1" : "mt-5 space-y-2"}`}>
+            <button aria-label="Recent" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "home" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => { setSection("home"); setCurrentPath(""); }} title="Recent"><Clock3 size={18} />{sidebarOpen && <span>Recent</span>}</button>
+            <button aria-label="My Drive" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "my-drive" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => { setSection("my-drive"); setCurrentPath(""); }} title="My Drive"><HardDrive size={18} />{sidebarOpen && <span>My Drive</span>}</button>
+            <button aria-label="Starred" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "starred" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => { setSection("starred"); setCurrentPath(""); }} title="Starred"><Star size={18} />{sidebarOpen && <span>Starred</span>}</button>
+            <button aria-label="Shared with others" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "shared" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => setSection("shared")} title="Shared with others"><UsersRound size={18} />{sidebarOpen && <span>Shared with others</span>}</button>
+            <button aria-label="Trash" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "trash" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => { setSection("trash"); setCurrentPath(""); }} title="Trash"><Trash2 size={18} />{sidebarOpen && <span>Trash</span>}</button>
+            <div className={`${sidebarOpen ? "my-3" : "mx-auto my-3 w-7"} border-t border-slate-200`} role="separator" />
+            <button aria-label="Zo Paste" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "pastes" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => { setSection("pastes"); setCurrentPath(""); }} title="Zo Paste"><Code2 size={18} />{sidebarOpen && <span>Zo Paste</span>}</button>
+            <button aria-label="Zo Transfer" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "transfer" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => { setSection("transfer"); setCurrentPath(""); }} title="Zo Transfer"><Send size={18} />{sidebarOpen && <span>Zo Transfer</span>}</button>
+            <button aria-label="Zo Databases" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "databases" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => { setSection("databases"); setCurrentPath(""); }} title="Zo Databases"><Database size={18} />{sidebarOpen && <span>Zo Databases</span>}</button>
           </nav>
 
-          <UsageCard usage={usageQuery.data} onOpenBreakdown={() => setStorageBreakdownOpen(true)} />
+          {sidebarOpen && <UsageCard usage={usageQuery.data} onOpenBreakdown={() => setStorageBreakdownOpen(true)} />}
         </aside>
 
         <section className="min-w-0 flex-1 p-6 md:p-9">
           <div className="mb-7 flex flex-wrap items-center justify-between gap-4">
             <div>
               {section === "my-drive" && currentPath && <FolderNavigation currentPath={currentPath} onNavigate={setCurrentPath} />}
-              <h1 className={`${section === "my-drive" && currentPath ? "mt-3" : ""} text-2xl font-semibold tracking-tight text-slate-900`}>{search || advancedSearchActive ? "Search results" : section === "api-keys" ? "API Keys" : section === "databases" ? "Databases" : section === "profile" ? "Profile & controls" : section === "home" ? "Recent" : section === "pastes" ? "Zo Paste" : section === "transfer" ? "Zo Transfer" : section === "shared" ? "Shared with others" : section === "starred" ? "Starred" : section === "trash" ? "Trash" : currentPath ? currentPath.split("/").at(-1) : "Files"}</h1>
+              <h1 className={`${section === "my-drive" && currentPath ? "mt-3" : ""} text-2xl font-semibold tracking-tight text-slate-900`}>{search || advancedSearchActive ? "Search results" : section === "api-keys" ? "API Keys" : section === "databases" ? "SQLite databases" : section === "profile" ? "Profile & controls" : section === "home" ? "Recent" : section === "pastes" ? "Zo Paste" : section === "transfer" ? "Zo Transfer" : section === "shared" ? "Shared with others" : section === "starred" ? "Starred" : section === "trash" ? "Trash" : currentPath ? currentPath.split("/").at(-1) : "Files"}</h1>
               {section === "api-keys" && <p className="mt-1 text-sm text-slate-500">Provision and revoke scoped access for local computers and automations.</p>}
               {section === "databases" && <p className="mt-1 text-sm text-slate-500">Create SQLite databases, inspect data, and run parameterised SQL from your private Drive.</p>}
               {section === "profile" && <p className="mt-1 text-sm text-slate-500">Manage the owner account for this private drive.</p>}
@@ -977,19 +1027,21 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
 function Databases({ client }: { client: DriveClient }) {
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [selectedTable, setSelectedTable] = useState<string | null>(null);
-  const [activePanel, setActivePanel] = useState<"data" | "sql" | "access">("data");
+  const [selectedId, setSelectedId] = useState<string | null>(() => new URLSearchParams(window.location.search).get("database"));
+  const [selectedTable, setSelectedTable] = useState<string | null>(() => new URLSearchParams(window.location.search).get("table"));
+  const [activePanel, setActivePanel] = useState<DatabasePanel>(currentDatabasePanel);
+  const [importSettingsOpen, setImportSettingsOpen] = useState(false);
   const [sql, setSql] = useState("SELECT name, sql FROM sqlite_master WHERE type = 'table' ORDER BY name");
   const [queryResult, setQueryResult] = useState<DatabaseRows | null>(null);
   const importInput = useRef<HTMLInputElement>(null);
-  const supported = Boolean(client.listDatabases && client.createDatabase && client.deleteDatabase && client.exportDatabase && client.importDatabase && client.listDatabaseTables && client.listDatabaseRows && client.queryDatabase);
+  const supported = Boolean(client.listDatabases && client.createDatabase && client.deleteDatabase && client.exportDatabase && client.getDatabaseImportSettings && client.importDatabase && client.listDatabaseTables && client.listDatabaseRows && client.queryDatabase && client.setDatabaseImportLimit);
   const databasesQuery = useQuery({
     queryKey: ["databases"],
     queryFn: () => client.listDatabases!(),
     enabled: supported
   });
   const databases = databasesQuery.data ?? [];
+  const importSettingsQuery = useQuery({ queryKey: ["database-import-settings"], queryFn: () => client.getDatabaseImportSettings!(), enabled: supported });
   const activeDatabase = databases.find((database) => database.id === selectedId) ?? databases[0] ?? null;
   const tablesQuery = useQuery({
     queryKey: ["database-tables", activeDatabase?.id],
@@ -998,6 +1050,25 @@ function Databases({ client }: { client: DriveClient }) {
   });
   const tables = tablesQuery.data ?? [];
   const activeTable = tables.find((table) => table.name === selectedTable) ?? tables[0] ?? null;
+
+  useEffect(() => {
+    updateDriveUrl({
+      database: activeDatabase?.id ?? null,
+      databasePanel: activeDatabase ? activePanel : null,
+      table: activeDatabase && activePanel === "data" ? activeTable?.name ?? null : null
+    });
+  }, [activeDatabase?.id, activePanel, activeTable?.name]);
+
+  useEffect(() => {
+    const restoreWorkspace = () => {
+      const params = new URLSearchParams(window.location.search);
+      setSelectedId(params.get("database"));
+      setSelectedTable(params.get("table"));
+      setActivePanel(currentDatabasePanel());
+    };
+    window.addEventListener("popstate", restoreWorkspace);
+    return () => window.removeEventListener("popstate", restoreWorkspace);
+  }, []);
   const rowsQuery = useQuery({
     queryKey: ["database-rows", activeDatabase?.id, activeTable?.name],
     queryFn: () => client.listDatabaseRows!({ id: activeDatabase!.id, table: activeTable!.name }),
@@ -1052,6 +1123,15 @@ function Databases({ client }: { client: DriveClient }) {
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Could not export the SQLite database")
   });
+  const updateImportLimitMutation = useMutation({
+    mutationFn: (importLimitBytes: number) => client.setDatabaseImportLimit!(importLimitBytes),
+    onSuccess: async (settings) => {
+      await queryClient.invalidateQueries({ queryKey: ["database-import-settings"] });
+      setImportSettingsOpen(false);
+      toast.success(`Import limit set to ${formatBytes(settings.importLimitBytes)}`);
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not update the import limit")
+  });
   const queryMutation = useMutation({
     mutationFn: () => client.queryDatabase!({ id: activeDatabase!.id, sql }),
     onSuccess: async (result) => {
@@ -1077,13 +1157,14 @@ function Databases({ client }: { client: DriveClient }) {
     { id: "access" as const, label: "Backend access" }
   ];
 
-  return <div className="grid gap-5 md:grid-cols-[15rem_minmax(0,1fr)]">
-    <aside className="h-fit overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+  return <><div className="grid gap-5 md:grid-cols-[15rem_minmax(0,1fr)]">
+    <aside className="self-stretch overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-100 p-4">
         <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">SQLite</p><h2 className="mt-1 text-lg font-semibold text-slate-900">Your instances</h2></div><span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-500">{databases.length}</span></div>
         <form className="mt-4 flex gap-2" onSubmit={(event) => { event.preventDefault(); if (name.trim()) createMutation.mutate(); }}><input aria-label="New database name" className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" maxLength={80} placeholder="New database" value={name} onChange={(event) => setName(event.target.value)} /><button aria-label="Create database" className="grid size-9 shrink-0 place-items-center rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:bg-slate-300" disabled={!name.trim() || createMutation.isPending} type="submit"><Plus size={17} /></button></form>
         <input accept=".db,.sqlite,.sqlite3,application/vnd.sqlite3,application/x-sqlite3" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) importMutation.mutate(file); event.target.value = ""; }} ref={importInput} type="file" />
         <button className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:text-slate-400" disabled={importMutation.isPending} onClick={() => importInput.current?.click()} type="button"><Upload size={16} />{importMutation.isPending ? "Importing…" : "Import SQLite file"}</button>
+        <button className="mt-2 w-full text-center text-xs font-medium text-slate-500 hover:text-blue-600" onClick={() => setImportSettingsOpen(true)} type="button">Import limit: {formatBytes(importSettingsQuery.data?.importLimitBytes ?? 0)}</button>
       </div>
       {databasesQuery.isPending ? <p className="p-5 text-sm text-slate-500">Loading databases…</p> : databases.length === 0 ? <p className="p-5 text-sm leading-6 text-slate-500">Create a private SQLite database to get started.</p> : <div className="p-2">{databases.map((database) => <button className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${activeDatabase?.id === database.id ? "bg-blue-600 text-white shadow-sm" : "text-slate-700 hover:bg-slate-50"}`} key={database.id} onClick={() => { setSelectedId(database.id); setSelectedTable(null); setQueryResult(null); setActivePanel("data"); }}><span className={`grid size-9 place-items-center rounded-lg ${activeDatabase?.id === database.id ? "bg-white/15 text-white" : "bg-slate-100 text-slate-500"}`}><Database size={18} /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{database.name}</span><span className={`mt-0.5 block text-xs font-medium ${activeDatabase?.id === database.id ? "text-blue-100" : "text-slate-400"}`}>{formatBytes(database.sizeBytes)}</span></span></button>)}</div>}
     </aside>
@@ -1097,7 +1178,26 @@ function Databases({ client }: { client: DriveClient }) {
         {activePanel === "access" && <div className="p-4 sm:p-6"><DatabaseConnection client={client} database={activeDatabase} /></div>}
       </section>}
     </div>
-  </div>;
+  </div>{importSettingsOpen && importSettingsQuery.data && <DatabaseImportSettingsDialog isSaving={updateImportLimitMutation.isPending} onClose={() => setImportSettingsOpen(false)} onSave={(importLimitBytes) => updateImportLimitMutation.mutate(importLimitBytes)} settings={importSettingsQuery.data} />}</>;
+}
+
+function DatabaseImportSettingsDialog({ isSaving, onClose, onSave, settings }: { isSaving: boolean; onClose: () => void; onSave: (importLimitBytes: number) => void; settings: DatabaseImportSettings }) {
+  const [limitMb, setLimitMb] = useState(String(Math.round(settings.importLimitBytes / (1024 * 1024))));
+  const [error, setError] = useState<string | null>(null);
+  const minMb = settings.minImportLimitBytes / (1024 * 1024);
+  const maxMb = settings.maxImportLimitBytes / (1024 * 1024);
+
+  function save() {
+    const value = Number(limitMb);
+    if (!Number.isFinite(value) || value < minMb || value > maxMb) {
+      setError(`Enter a whole number between ${minMb.toLocaleString()} MB and ${maxMb.toLocaleString()} MB.`);
+      return;
+    }
+    setError(null);
+    onSave(Math.floor(value * 1024 * 1024));
+  }
+
+  return <div aria-label="Database import settings" className="fixed inset-0 z-50 grid place-items-center bg-slate-950/35 p-4" role="dialog" aria-modal="true" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><p className="text-sm font-medium text-blue-600">SQLite imports</p><h2 className="mt-1 text-xl font-semibold tracking-tight text-slate-900">Import size limit</h2><p className="mt-2 text-sm leading-6 text-slate-500">Set the largest SQLite file this Drive may import. The limit cannot exceed your Drive storage allocation.</p></div><button aria-label="Close import settings" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" onClick={onClose}><X size={19} /></button></div><label className="mt-6 block text-sm font-semibold text-slate-700">Maximum file size<div className="mt-2 flex items-center gap-2"><input aria-label="Database import limit in MB" className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" min={minMb} max={maxMb} onChange={(event) => setLimitMb(event.target.value)} step="1" type="number" value={limitMb} /><span className="text-sm font-medium text-slate-500">MB</span></div></label><p className="mt-2 text-xs leading-5 text-slate-500">Available range: {formatBytes(settings.minImportLimitBytes)} to {formatBytes(settings.maxImportLimitBytes)}.</p>{error && <p className="mt-3 text-sm font-medium text-red-600" role="alert">{error}</p>}<div className="mt-6 flex justify-end gap-3"><button className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100" onClick={onClose}>Cancel</button><button className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-300" disabled={isSaving} onClick={save}>{isSaving ? "Saving…" : "Save limit"}</button></div></section></div>;
 }
 
 function DatabaseConnection({ client, database }: { client: DriveClient; database: DriveDatabase }) {
