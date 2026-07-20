@@ -8,6 +8,12 @@ All notable changes to the Zo Drive browser experience are recorded here.
 
 - Moved the GUI and CLI changelogs into dedicated versioned release-history pages, linked from the top-right of the documentation header.
 
+## v1.1.0 - 2026-07-20
+
+### Added
+
+- Restored Profile & controls in the account menu, including username and password management, drive details, and the protected account-deletion flow.
+
 ## v1.0.0 - 2026-07-20
 
 ### Removed

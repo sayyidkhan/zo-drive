@@ -33,11 +33,11 @@ describe("DriveApp", () => {
 
       expect(screen.getByRole("heading", { name: "Manage files in your private Drive." })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Share files on your terms" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 1.0.0" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 1.1.0" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI changelog version 1.0.0" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
+      expect(screen.getByRole("link", { name: "GUI changelog version 1.1.0" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("GUI v1.0.0")).toBeInTheDocument();
+      expect(screen.getByText("GUI v1.1.0")).toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
 
       cleanup();
@@ -64,7 +64,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.0.0")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.1.0")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();
@@ -267,7 +267,9 @@ describe("DriveApp", () => {
     expect(await screen.findByText("Trash is empty")).toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText("Account menu"));
-    expect(screen.queryByText("Profile & controls")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Profile & controls" }));
+    expect(await screen.findByRole("heading", { name: "Profile & controls" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Danger zone" })).toBeInTheDocument();
   });
 
   it("keeps an upload progress bar visible until the upload finishes", async () => {
