@@ -34,7 +34,8 @@ patch, or no GUI release at all.
 2. Select the smallest justified semantic version increment for each affected
    track.
 3. Update the matching package version and any displayed version constant.
-4. Add an entry under the relevant heading in `CHANGELOG.md` before committing.
+4. Add an entry to `CHANGELOG.GUI.md`, `CHANGELOG.CLI.md`, or both before
+   committing.
 5. Run `pnpm test`, `pnpm typecheck`, and `pnpm build`.
 6. Commit the verified change, push `main`, and create an annotated tag for
    each affected track: `gui-vX.Y.Z` and/or `cli-vX.Y.Z`.
@@ -56,9 +57,12 @@ surface's user-facing documentation.
 
 ## Changelog rules
 
-- Keep `CHANGELOG.md` concise and user-facing.
-- Add entries under `Unreleased` while work is in progress.
-- On release, move those entries into the tagged GUI or CLI section with the
+- Keep `CHANGELOG.GUI.md` and `CHANGELOG.CLI.md` concise and user-facing.
+- Add entries under the relevant `Unreleased` heading while work is in
+  progress.
+- If one change affects both surfaces, record it in both changelogs and
+  release each track independently.
+- On release, move those entries into the relevant tagged section with the
   release date.
 - Use `Added`, `Changed`, `Fixed`, `Deprecated`, `Removed`, and `Security`
   headings where useful.
