@@ -4,11 +4,19 @@ All notable changes to the Zo Drive browser experience are recorded here.
 
 ## Unreleased
 
+### Changed
+
+- Moved the GUI and CLI changelogs into dedicated versioned release-history pages, linked from the top-right of the documentation header.
+
 ## v1.0.0 - 2026-07-20
 
 ### Removed
 
 - The Profile & controls screen. API Keys is now the sole account-management workspace.
+
+### Added
+
+- Labelled Zo Paste and Zo Transfer as Zo Drive SaaS Killer Features on the landing page.
 
 ## v0.3.2 - 2026-07-20
 

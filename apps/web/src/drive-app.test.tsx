@@ -22,6 +22,7 @@ describe("DriveApp", () => {
     expect(screen.getByRole("link", { name: "CLI" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=cli"));
     expect(screen.getByRole("link", { name: "Open Zo Drive" })).toHaveAttribute("href", expect.stringContaining("?app=1"));
     expect(screen.getByRole("link", { name: "Read the docs" })).toHaveAttribute("href", expect.stringContaining("?docs=1"));
+    expect(screen.getByText("Zo Drive SaaS Killer Features")).toBeInTheDocument();
   });
 
   it("documents separate GUI and CLI workflows", () => {
@@ -34,7 +35,7 @@ describe("DriveApp", () => {
       expect(screen.getByRole("heading", { name: "Share files on your terms" })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "GUI version 1.0.0" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "Changelog" })).toHaveAttribute("href", "#changelog");
+      expect(screen.getByRole("link", { name: "GUI changelog version 1.0.0" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
       expect(screen.getByText("GUI v1.0.0")).toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
@@ -57,6 +58,21 @@ describe("DriveApp", () => {
       expect(screen.getByText(/cli-v Git release tag/)).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Automate uploads in code" })).toBeInTheDocument();
       expect(screen.getAllByText(/@zo-drive\/sdk/).length).toBeGreaterThanOrEqual(1);
+
+      cleanup();
+      window.history.pushState({}, "", "?docs=1&mode=gui&page=changelog");
+      render(<DriveApp />);
+
+      expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.0.0")).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
+
+      cleanup();
+      window.history.pushState({}, "", "?docs=1&mode=cli&page=changelog");
+      render(<DriveApp />);
+
+      expect(screen.getByRole("heading", { name: "CLI changelog" })).toBeInTheDocument();
+      expect(screen.getAllByText("CLI v1.0.0").length).toBeGreaterThanOrEqual(1);
     } finally {
       window.history.pushState({}, "", originalPath);
     }
