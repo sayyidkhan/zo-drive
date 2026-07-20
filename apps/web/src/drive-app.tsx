@@ -144,6 +144,11 @@ function updateDriveUrl(changes: Record<string, string | null>) {
   window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
 }
 
+function collapsedNavigationTooltip(open: boolean): string {
+  if (open) return "";
+  return "relative after:pointer-events-none after:absolute after:left-[calc(100%+0.625rem)] after:top-1/2 after:z-50 after:-translate-y-1/2 after:whitespace-nowrap after:rounded-lg after:bg-slate-900 after:px-2.5 after:py-1.5 after:text-xs after:font-semibold after:text-white after:opacity-0 after:shadow-lg after:transition-opacity after:content-[attr(data-tooltip)] hover:after:opacity-100 focus-visible:after:opacity-100";
+}
+
 type UploadTask = {
   id: string;
   loaded: number;
@@ -177,10 +182,15 @@ const appBasePath = normalizeAppBasePath(
 const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.4.0";
+const GUI_VERSION = "1.4.1";
 const CLI_VERSION = "1.2.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.4.1",
+    date: "20 July 2026",
+    changes: ["Restored visible hover and keyboard-focus labels for every collapsed sidebar icon."]
+  },
   {
     version: "v1.4.0",
     date: "20 July 2026",
@@ -934,7 +944,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
       </header>
 
       <div className="flex min-h-[calc(100vh-4.5rem)]">
-        <aside id="drive-navigation" className={`${sidebarOpen ? "w-64 px-3" : "w-16 px-1.5"} shrink-0 overflow-hidden border-r border-slate-200 bg-white py-5 transition-[width,padding] duration-200`}>
+        <aside id="drive-navigation" className={`${sidebarOpen ? "w-64 overflow-hidden px-3" : "w-16 overflow-visible px-1.5"} shrink-0 border-r border-slate-200 bg-white py-5 transition-[width,padding] duration-200`}>
           <div className={`flex gap-2 ${sidebarOpen ? "items-center" : "flex-col items-center"}`}>
           {sidebarOpen ? <div className="relative flex-1">
             <button aria-expanded={newMenuOpen} className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700" onClick={() => setNewMenuOpen((open) => !open)}>
@@ -948,8 +958,8 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
               {(["document", "spreadsheet", "presentation", "form"] as NativeFileType[]).map((type) => <button aria-label={`New Zo ${nativeFileLabel(type)}`} className="new-menu-item new-menu-native-item" key={type} onClick={() => startNativeFile(type)}><img className="size-9 shrink-0 rounded-md" src={nativeIllustrationUrl(type)} alt={`${nativeFileLabel(type)} illustration`} /><span>New Zo {nativeFileLabel(type)}</span></button>)}
               <button aria-label="New Zo Paste" className="new-menu-item new-menu-native-item" onClick={() => startNativeFile("paste")}><span className="grid size-9 shrink-0 place-items-center rounded-md bg-slate-900 text-cyan-300"><Code2 size={20} /></span><span>New Zo Paste</span></button>
             </div>}
-          </div> : <button aria-label="New" className="grid size-10 shrink-0 place-items-center rounded-xl bg-blue-600 text-white shadow-sm hover:bg-blue-700" onClick={() => { setSidebarOpen(true); setNewMenuOpen(true); }} title="New"><Plus size={19} /></button>}
-            <button aria-controls="drive-navigation" aria-expanded={sidebarOpen} aria-label={sidebarOpen ? "Collapse navigation" : "Expand navigation"} className="grid size-10 shrink-0 place-items-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-800" onClick={() => { setNewMenuOpen(false); setSidebarOpen((open) => !open); }} title={sidebarOpen ? "Collapse navigation" : "Expand navigation"}>
+          </div> : <button aria-label="New" className={`grid size-10 shrink-0 place-items-center rounded-xl bg-blue-600 text-white shadow-sm hover:bg-blue-700 ${collapsedNavigationTooltip(sidebarOpen)}`} data-tooltip="New" onClick={() => { setSidebarOpen(true); setNewMenuOpen(true); }} title="New"><Plus size={19} /></button>}
+            <button aria-controls="drive-navigation" aria-expanded={sidebarOpen} aria-label={sidebarOpen ? "Collapse navigation" : "Expand navigation"} className={`grid size-10 shrink-0 place-items-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-800 ${collapsedNavigationTooltip(sidebarOpen)}`} data-tooltip={sidebarOpen ? "Collapse navigation" : "Expand navigation"} onClick={() => { setNewMenuOpen(false); setSidebarOpen((open) => !open); }} title={sidebarOpen ? "Collapse navigation" : "Expand navigation"}>
               {sidebarOpen ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
             </button>
           </div>
@@ -957,15 +967,15 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
           <input ref={folderInput} aria-label="Upload folder" className="hidden" type="file" multiple {...{ webkitdirectory: "" }} onChange={handleFolderInput} />
 
           <nav className={`${sidebarOpen ? "mt-6 space-y-1" : "mt-5 space-y-2"}`}>
-            <button aria-label="Recent" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "home" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => { setSection("home"); setCurrentPath(""); }} title="Recent"><Clock3 size={18} />{sidebarOpen && <span>Recent</span>}</button>
-            <button aria-label="My Drive" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "my-drive" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => { setSection("my-drive"); setCurrentPath(""); }} title="My Drive"><HardDrive size={18} />{sidebarOpen && <span>My Drive</span>}</button>
-            <button aria-label="Starred" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "starred" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => { setSection("starred"); setCurrentPath(""); }} title="Starred"><Star size={18} />{sidebarOpen && <span>Starred</span>}</button>
-            <button aria-label="Shared with others" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "shared" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => setSection("shared")} title="Shared with others"><UsersRound size={18} />{sidebarOpen && <span>Shared with others</span>}</button>
-            <button aria-label="Trash" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "trash" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => { setSection("trash"); setCurrentPath(""); }} title="Trash"><Trash2 size={18} />{sidebarOpen && <span>Trash</span>}</button>
+            <button aria-label="Recent" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "home" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"} ${collapsedNavigationTooltip(sidebarOpen)}`} data-tooltip="Recent" onClick={() => { setSection("home"); setCurrentPath(""); }} title="Recent"><Clock3 size={18} />{sidebarOpen && <span>Recent</span>}</button>
+            <button aria-label="My Drive" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "my-drive" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"} ${collapsedNavigationTooltip(sidebarOpen)}`} data-tooltip="My Drive" onClick={() => { setSection("my-drive"); setCurrentPath(""); }} title="My Drive"><HardDrive size={18} />{sidebarOpen && <span>My Drive</span>}</button>
+            <button aria-label="Starred" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "starred" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"} ${collapsedNavigationTooltip(sidebarOpen)}`} data-tooltip="Starred" onClick={() => { setSection("starred"); setCurrentPath(""); }} title="Starred"><Star size={18} />{sidebarOpen && <span>Starred</span>}</button>
+            <button aria-label="Shared with others" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "shared" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"} ${collapsedNavigationTooltip(sidebarOpen)}`} data-tooltip="Shared with others" onClick={() => setSection("shared")} title="Shared with others"><UsersRound size={18} />{sidebarOpen && <span>Shared with others</span>}</button>
+            <button aria-label="Trash" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "trash" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"} ${collapsedNavigationTooltip(sidebarOpen)}`} data-tooltip="Trash" onClick={() => { setSection("trash"); setCurrentPath(""); }} title="Trash"><Trash2 size={18} />{sidebarOpen && <span>Trash</span>}</button>
             <div className={`${sidebarOpen ? "my-3" : "mx-auto my-3 w-7"} border-t border-slate-200`} role="separator" />
-            <button aria-label="Zo Paste" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "pastes" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => { setSection("pastes"); setCurrentPath(""); }} title="Zo Paste"><Code2 size={18} />{sidebarOpen && <span>Zo Paste</span>}</button>
-            <button aria-label="Zo Transfer" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "transfer" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => { setSection("transfer"); setCurrentPath(""); }} title="Zo Transfer"><Send size={18} />{sidebarOpen && <span>Zo Transfer</span>}</button>
-            <button aria-label="Zo Databases" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "databases" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"}`} onClick={() => { updateDriveUrl({ database: null, databasePanel: null, databaseView: "catalog", table: null }); setSection("databases"); setCurrentPath(""); }} title="Zo Databases"><Database size={18} />{sidebarOpen && <span>Zo Databases</span>}</button>
+            <button aria-label="Zo Paste" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "pastes" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"} ${collapsedNavigationTooltip(sidebarOpen)}`} data-tooltip="Zo Paste" onClick={() => { setSection("pastes"); setCurrentPath(""); }} title="Zo Paste"><Code2 size={18} />{sidebarOpen && <span>Zo Paste</span>}</button>
+            <button aria-label="Zo Transfer" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "transfer" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"} ${collapsedNavigationTooltip(sidebarOpen)}`} data-tooltip="Zo Transfer" onClick={() => { setSection("transfer"); setCurrentPath(""); }} title="Zo Transfer"><Send size={18} />{sidebarOpen && <span>Zo Transfer</span>}</button>
+            <button aria-label="Zo Databases" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "databases" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"} ${collapsedNavigationTooltip(sidebarOpen)}`} data-tooltip="Zo Databases" onClick={() => { updateDriveUrl({ database: null, databasePanel: null, databaseView: "catalog", table: null }); setSection("databases"); setCurrentPath(""); }} title="Zo Databases"><Database size={18} />{sidebarOpen && <span>Zo Databases</span>}</button>
           </nav>
 
           {sidebarOpen && <UsageCard usage={usageQuery.data} onOpenBreakdown={() => setStorageBreakdownOpen(true)} />}

@@ -33,11 +33,11 @@ describe("DriveApp", () => {
 
       expect(screen.getByRole("heading", { name: "Manage files in your private Drive." })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Share files on your terms" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 1.4.0" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 1.4.1" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI changelog version 1.4.0" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
+      expect(screen.getByRole("link", { name: "GUI changelog version 1.4.1" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("GUI v1.4.0")).toBeInTheDocument();
+      expect(screen.getByText("GUI v1.4.1")).toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
 
       cleanup();
@@ -70,7 +70,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.4.0")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.4.1")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();
@@ -172,6 +172,10 @@ describe("DriveApp", () => {
     expect(screen.getByRole("button", { name: "New" })).toHaveAttribute("title", "New");
     expect(screen.getByRole("button", { name: "My Drive" })).toHaveAttribute("title", "My Drive");
     expect(screen.getByRole("button", { name: "Zo Databases" })).toHaveAttribute("title", "Zo Databases");
+    expect(screen.getByRole("button", { name: "New" })).toHaveAttribute("data-tooltip", "New");
+    expect(screen.getByRole("button", { name: "Recent" })).toHaveAttribute("data-tooltip", "Recent");
+    expect(screen.getByRole("button", { name: "Zo Databases" })).toHaveAttribute("data-tooltip", "Zo Databases");
+    expect(screen.getByRole("button", { name: "Zo Databases" })).toHaveClass("after:content-[attr(data-tooltip)]");
     fireEvent.click(screen.getByRole("button", { name: "Expand navigation" }));
     expect(screen.getByRole("button", { name: "New" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Account menu" }));

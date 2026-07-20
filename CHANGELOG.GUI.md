@@ -4,6 +4,12 @@ All notable changes to the Zo Drive browser experience are recorded here.
 
 ## Unreleased
 
+## v1.4.1 - 2026-07-20
+
+### Fixed
+
+- Restored visible hover and keyboard-focus labels for every collapsed sidebar icon.
+
 ## v1.4.0 - 2026-07-20
 
 ### Added
