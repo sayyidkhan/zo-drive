@@ -39,11 +39,11 @@ describe("DriveApp", () => {
 
       expect(screen.getByRole("heading", { name: "Manage files in your private Drive." })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Share files on your terms" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 1.7.1" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 1.7.2" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI changelog version 1.7.1" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
+      expect(screen.getByRole("link", { name: "GUI changelog version 1.7.2" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("GUI v1.7.1")).toBeInTheDocument();
+      expect(screen.getByText("GUI v1.7.2")).toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
 
       cleanup();
@@ -76,7 +76,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.7.1")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.7.2")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();
@@ -162,7 +162,7 @@ describe("DriveApp", () => {
       listDatabaseTables: vi.fn().mockResolvedValue([{ name: "tasks", schema: "CREATE TABLE tasks (id INTEGER PRIMARY KEY, title TEXT)" }]),
       listDatabaseRows: vi.fn().mockResolvedValue({ columns: ["id", "title"], rows: [{ id: 1, title: "Ship Database Engines" }], total: 1 }),
       queryDatabase: vi.fn().mockResolvedValue({ columns: ["title"], rows: [{ title: "Ship Database Engines" }], changes: 0, lastInsertRowid: null }),
-      listFunctions: vi.fn().mockResolvedValue([]),
+      listFunctions: vi.fn().mockResolvedValue([{ id: "fn-11111111-1111-4111-8111-111111111111", name: "greet", runtime: "javascript", source: "export default async function handler(input) { return input; }", visibility: "private", cron: null, enabled: true, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", lastRunAt: null, lastRunStatus: null }]),
       createFunction: vi.fn(),
       updateFunction: vi.fn(),
       deleteFunction: vi.fn(),
@@ -214,6 +214,11 @@ describe("DriveApp", () => {
     fireEvent.click(screen.getByRole("button", { name: "Zo Functions" }));
     expect(await screen.findByRole("heading", { name: "Zo Functions" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Run small jobs without another service." })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Public endpoint/ }));
+    expect(screen.getByText("/public/functions/fn-11111111-1111-4111-8111-111111111111/invoke", { exact: false })).toBeInTheDocument();
+    expect(screen.getByText("Save changes to activate this endpoint publicly.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Public function request body")).toHaveTextContent('"input": {');
+    expect(screen.getByText(/Send parameters inside/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Zo Databases" }));
     expect(await screen.findByRole("heading", { name: "Zo Databases" })).toBeInTheDocument();

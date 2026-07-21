@@ -4,6 +4,12 @@ All notable changes to the Zo Drive browser experience are recorded here.
 
 ## Unreleased
 
+## v1.7.2 - 2026-07-21
+
+### Changed
+
+- Show the exact public Function POST URL after creation, its pending activation state before saving, and the JSON request-body wrapper for function parameters.
+
 ## v1.7.1 - 2026-07-21
 
 ### Changed
