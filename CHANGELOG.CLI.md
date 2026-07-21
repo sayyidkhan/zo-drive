@@ -4,6 +4,11 @@ All notable changes to the `zo-drive` command-line tool are recorded here.
 
 ## Unreleased
 
+### Changed
+
+- `zo-drive logo` now prints the Pegasus-over-cloud artwork with the large Zo
+  Drive ASCII wordmark underneath, while normal help keeps the compact logo.
+
 ## v1.2.0 - 2026-07-20
 
 ### Added

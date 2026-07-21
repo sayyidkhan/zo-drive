@@ -5,7 +5,7 @@ import { pathToFileURL } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import { DriveApiError } from "@zo-drive/sdk";
 
-import { collectConfiguration, CONFIGURATION_GUIDE, CONFIGURATION_VERIFICATION_GUIDE, formatLatency, isMainModule, runCli, ZO_DRIVE_LOGO } from "./index.js";
+import { collectConfiguration, CONFIGURATION_GUIDE, CONFIGURATION_VERIFICATION_GUIDE, formatLatency, isMainModule, runCli, ZO_DRIVE_LOGO, ZO_DRIVE_PEGASUS_CLOUD_LOGO } from "./index.js";
 
 describe("zo-drive CLI", () => {
   it("lists files through the shared SDK as JSON", async () => {
@@ -188,7 +188,7 @@ describe("zo-drive CLI", () => {
     const code = await runCli(["--version"], { client: {}, write });
 
     expect(code).toBe(0);
-    expect(write).toHaveBeenCalledWith("zo-drive 1.2.0\n");
+    expect(write).toHaveBeenCalledWith("zo-drive 1.2.1\n");
   });
 
   it("moves files, sends rm targets to Trash, and checks whether files exist", async () => {
@@ -244,15 +244,16 @@ describe("zo-drive CLI", () => {
     expect(write).toHaveBeenCalledWith(`${JSON.stringify(object)}\n`);
   });
 
-  it("prints the Zo Drive logo without requiring configuration", async () => {
+  it("prints the Pegasus cloud logo without requiring configuration", async () => {
     const write = vi.fn();
 
     const code = await runCli(["logo"], { client: {}, write });
 
     expect(code).toBe(0);
-    expect(ZO_DRIVE_LOGO).toContain("\n");
-    expect(ZO_DRIVE_LOGO).toContain("_ __(*)*");
-    expect(write).toHaveBeenCalledWith(`${ZO_DRIVE_LOGO}\n`);
+    expect(ZO_DRIVE_PEGASUS_CLOUD_LOGO).toContain("\n");
+    expect(ZO_DRIVE_PEGASUS_CLOUD_LOGO).toContain("@@@@@@@@@@@@");
+    expect(ZO_DRIVE_PEGASUS_CLOUD_LOGO).toContain(ZO_DRIVE_LOGO);
+    expect(write).toHaveBeenCalledWith(`${ZO_DRIVE_PEGASUS_CLOUD_LOGO}\n`);
   });
 
   it("shows the logo and help aliases in CLI help", async () => {
