@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.20.1 - 2026-07-21
+
+### Fixed
+
+- Reworked shared-link cards so file details and actions stay clear and within
+  the phone viewport.
+
 ## v1.20.0 - 2026-07-21
 
 ### Added
