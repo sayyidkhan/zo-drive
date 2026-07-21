@@ -4,6 +4,13 @@ All notable changes to the Zo Drive browser experience are recorded here.
 
 ## Unreleased
 
+## v1.16.0 - 2026-07-21
+
+### Added
+
+- Added ZominAI settings with local-runtime verification, install guidance,
+  browser-local connection preferences, and browser-local removal.
+
 ## v1.15.0 - 2026-07-21
 
 ### Added
