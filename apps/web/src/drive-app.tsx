@@ -122,6 +122,14 @@ type ZominAiChatMessage = {
   role: "assistant" | "user";
 };
 
+type ZominAiChatSession = {
+  createdAt: string;
+  id: string;
+  messages: ZominAiChatMessage[];
+  title: string;
+  updatedAt: string;
+};
+
 type ZominAiPlatform = "linux" | "macos" | "windows";
 
 type ZominAiInstallGuide = {
@@ -228,10 +236,15 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.20.1";
+const GUI_VERSION = "1.21.0";
 const CLI_VERSION = "1.2.1";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.21.0",
+    date: "2026-07-21",
+    changes: ["Moved ZominAI into a right-side chat drawer with browser-local conversation history, new chats, and runtime-aware open and close behaviour."]
+  },
   {
     version: "v1.20.1",
     date: "2026-07-21",
@@ -826,6 +839,7 @@ function SettingsCard({ children, description, danger = false, icon, title }: { 
 }
 
 const zominAiStorageKey = "zo-drive:zominai:v1";
+const zominAiChatsStorageKey = "zo-drive:zominai:chats:v1";
 const defaultZominAiSettings: ZominAiSettings = {
   contextTokens: 4096,
   endpoint: "http://127.0.0.1:57183",
@@ -876,6 +890,34 @@ function readZominAiSettings(): ZominAiSettings {
     };
   } catch {
     return defaultZominAiSettings;
+  }
+}
+
+function createZominAiChatSession(): ZominAiChatSession {
+  const now = new Date().toISOString();
+  return {
+    createdAt: now,
+    id: typeof crypto?.randomUUID === "function" ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    messages: [],
+    title: "New chat",
+    updatedAt: now
+  };
+}
+
+function readZominAiChatSessions(): ZominAiChatSession[] {
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(zominAiChatsStorageKey) ?? "[]") as unknown;
+    if (!Array.isArray(stored)) return [createZominAiChatSession()];
+    const sessions = stored.flatMap((value): ZominAiChatSession[] => {
+      if (!value || typeof value !== "object") return [];
+      const session = value as Partial<ZominAiChatSession>;
+      if (typeof session.id !== "string" || typeof session.title !== "string" || typeof session.createdAt !== "string" || typeof session.updatedAt !== "string" || !Array.isArray(session.messages)) return [];
+      const messages = session.messages.flatMap((message): ZominAiChatMessage[] => message && typeof message === "object" && (message as { role?: unknown }).role !== "system" && ["assistant", "user"].includes((message as { role?: unknown }).role as string) && typeof (message as { content?: unknown }).content === "string" ? [{ role: (message as ZominAiChatMessage).role, content: (message as ZominAiChatMessage).content }] : []);
+      return [{ id: session.id, title: session.title.slice(0, 120), createdAt: session.createdAt, updatedAt: session.updatedAt, messages }];
+    });
+    return sessions.length > 0 ? sessions.slice(0, 50) : [createZominAiChatSession()];
+  } catch {
+    return [createZominAiChatSession()];
   }
 }
 
@@ -1021,6 +1063,52 @@ function ZominAiChat({ settings }: { settings: ZominAiSettings }) {
   </section>;
 }
 
+function ZominAiChatDrawer({ onClose, settings }: { onClose: () => void; settings: ZominAiSettings }) {
+  const [sessions, setSessions] = useState<ZominAiChatSession[]>(readZominAiChatSessions);
+  const [activeSessionId, setActiveSessionId] = useState(() => sessions[0]!.id);
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
+  const transcriptRef = useRef<HTMLDivElement>(null);
+  const activeSession = sessions.find((session) => session.id === activeSessionId) ?? sessions[0]!;
+
+  useEffect(() => {
+    window.localStorage.setItem(zominAiChatsStorageKey, JSON.stringify(sessions));
+  }, [sessions]);
+
+  useEffect(() => {
+    const transcript = transcriptRef.current;
+    if (transcript && typeof transcript.scrollTo === "function") transcript.scrollTo({ top: transcript.scrollHeight });
+  }, [activeSessionId, activeSession.messages, sending]);
+
+  function createChat() {
+    const session = createZominAiChatSession();
+    setSessions((current) => [session, ...current].slice(0, 50));
+    setActiveSessionId(session.id);
+    setDraft("");
+  }
+
+  async function send() {
+    const content = draft.trim();
+    if (!content || sending) return;
+    const nextMessages = [...activeSession.messages, { role: "user" as const, content }];
+    const updatedAt = new Date().toISOString();
+    setSessions((current) => current.map((session) => session.id === activeSession.id ? { ...session, messages: nextMessages, title: session.messages.length === 0 ? content.slice(0, 72) : session.title, updatedAt } : session));
+    setDraft("");
+    setSending(true);
+    try {
+      const reply = await sendZominAiMessage(settings, nextMessages);
+      setSessions((current) => current.map((session) => session.id === activeSession.id ? { ...session, messages: [...nextMessages, { role: "assistant", content: reply }], updatedAt: new Date().toISOString() } : session));
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "The local runtime could not be reached.";
+      setSessions((current) => current.map((session) => session.id === activeSession.id ? { ...session, messages: [...nextMessages, { role: "assistant", content: `I could not connect to ZominAI. ${detail}` }], updatedAt: new Date().toISOString() } : session));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return <aside aria-label="ZominAI chat" className="fixed inset-y-0 right-0 z-[70] flex w-full max-w-[30rem] flex-col border-l border-slate-200 bg-white pt-[4.5rem] shadow-2xl shadow-slate-950/20 sm:w-[27rem]"><header className="flex items-center gap-3 border-b border-slate-200 px-4 py-3"><span className="grid size-9 place-items-center rounded-xl bg-cyan-950 text-cyan-100"><Bot size={19} /></span><div className="min-w-0 flex-1"><p className="text-sm font-semibold text-slate-900">ZominAI</p><p className="truncate text-xs text-slate-500">Private local chat</p></div><button aria-label="Close ZominAI chat" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900" onClick={onClose}><X size={19} /></button></header><div className="flex min-h-0 flex-1"><nav aria-label="ZominAI chat history" className="flex w-32 shrink-0 flex-col border-r border-slate-200 bg-slate-50 p-2 sm:w-36"><button aria-label="New ZominAI chat" className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-cyan-700 px-2 py-2 text-xs font-semibold text-white hover:bg-cyan-800" onClick={createChat}><Plus size={15} /> New</button><div className="mt-3 min-h-0 flex-1 space-y-1 overflow-y-auto">{sessions.slice().sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)).map((session) => <button aria-current={session.id === activeSession.id ? "page" : undefined} className={`w-full truncate rounded-lg px-2 py-2 text-left text-xs leading-4 ${session.id === activeSession.id ? "bg-white font-semibold text-cyan-900 shadow-sm" : "text-slate-600 hover:bg-white"}`} key={session.id} onClick={() => { setActiveSessionId(session.id); setDraft(""); }}>{session.title}</button>)}</div></nav><section className="flex min-w-0 flex-1 flex-col"><div aria-label="ZominAI conversation" className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-slate-50/70 p-4" ref={transcriptRef}>{activeSession.messages.length === 0 ? <div className="grid h-full min-h-56 place-items-center text-center"><div className="max-w-52"><p className="text-sm font-semibold text-slate-900">Start a new chat</p><p className="mt-2 text-xs leading-5 text-slate-500">History is saved only in this browser.</p></div></div> : activeSession.messages.map((message, index) => <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`} key={`${message.role}-${index}`}><div className={`max-w-[88%] whitespace-pre-wrap rounded-2xl px-3 py-2.5 text-sm leading-6 ${message.role === "user" ? "rounded-br-md bg-cyan-800 text-white" : "rounded-bl-md border border-slate-200 bg-white text-slate-700"}`}>{message.content}</div></div>)}{sending && <div className="flex justify-start"><div className="inline-flex items-center gap-2 rounded-2xl rounded-bl-md border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-500"><LoaderCircle className="animate-spin" size={15} /> Thinking…</div></div>}</div><form className="border-t border-slate-200 bg-white p-3" onSubmit={(event) => { event.preventDefault(); void send(); }}><label className="sr-only" htmlFor="zominai-drawer-message">Message ZominAI</label><div className="flex items-end gap-2 rounded-xl border border-slate-300 p-1.5 focus-within:border-cyan-600 focus-within:ring-4 focus-within:ring-cyan-100"><textarea aria-label="Message ZominAI" className="min-h-10 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-slate-400" disabled={sending} id="zominai-drawer-message" onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder="Ask ZominAI…" rows={1} value={draft} /><button aria-label="Send message to ZominAI" className="grid size-9 place-items-center rounded-lg bg-cyan-700 text-white hover:bg-cyan-800 disabled:bg-slate-300" disabled={!draft.trim() || sending} type="submit"><Send size={17} /></button></div></form></section></div></aside>;
+}
+
 function ZominAiWorkspace({ initialPane = "chat" }: { initialPane?: ZominAiPane }) {
   const [activePane, setActivePane] = useState<ZominAiPane>(initialPane);
   const [installPlatform, setInstallPlatform] = useState<ZominAiPlatform>(detectZominAiPlatform);
@@ -1137,6 +1225,8 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
   const { currentPath, setCurrentPath, viewMode, setViewMode } = useDriveUi();
   const [section, setSection] = useState<DriveSection>(currentDriveSection);
   const [zominAiPane, setZominAiPane] = useState<ZominAiPane>("chat");
+  const [zominAiChatOpen, setZominAiChatOpen] = useState(false);
+  const [zominAiChatSettings, setZominAiChatSettings] = useState<ZominAiSettings>(readZominAiSettings);
   const [search, setSearch] = useState("");
   const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);
   const [storageBreakdownOpen, setStorageBreakdownOpen] = useState(false);
@@ -1441,6 +1531,26 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
     if (window.matchMedia && !window.matchMedia("(min-width: 768px)").matches) setSidebarOpen(false);
   }
 
+  async function toggleZominAiChat() {
+    if (zominAiChatOpen) {
+      setZominAiChatOpen(false);
+      return;
+    }
+    try {
+      const status = await getZominAiDownloadStatus();
+      if (status.state === "ready") {
+        setZominAiChatSettings(readZominAiSettings());
+        setZominAiChatOpen(true);
+        return;
+      }
+    } catch {
+      // An unavailable local status service means the runtime is not ready.
+    }
+    setZominAiPane("install");
+    setSection("zominai");
+    setCurrentPath("");
+  }
+
   function applyAdvancedSearch() {
     setAppliedAdvancedFilters(advancedFilters);
     setAdvancedSearchOpen(false);
@@ -1487,7 +1597,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
           <button aria-label="Advanced search" className={`shrink-0 rounded-lg p-2 transition ${advancedSearchActive ? "bg-blue-50 text-blue-700" : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"}`} onClick={() => { setAdvancedFilters(appliedAdvancedFilters); setAdvancedSearchOpen(true); }}><SlidersHorizontal size={21} /></button>
         </div>
         <div data-testid="header-actions" className="order-2 ml-auto flex shrink-0 items-center gap-0.5 text-sm font-medium text-slate-500 md:order-none md:ml-0 md:gap-1">
-          <button aria-label="ZominAI" className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-0.5 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 sm:size-11" onClick={() => { setZominAiPane("chat"); setSection("zominai"); setCurrentPath(""); }} title="Talk to ZominAI">
+          <button aria-label="ZominAI" aria-pressed={zominAiChatOpen} className={`grid size-10 shrink-0 place-items-center overflow-hidden rounded-xl border bg-slate-50 p-0.5 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 sm:size-11 ${zominAiChatOpen ? "border-cyan-500 ring-4 ring-cyan-100" : "border-slate-200"}`} onClick={() => void toggleZominAiChat()} title={zominAiChatOpen ? "Close ZominAI chat" : "Open ZominAI chat"}>
             <img className="size-full rounded-[0.65rem] object-cover" src={zominAiButtonUrl} alt="" />
           </button>
           <div className="relative">
@@ -1605,6 +1715,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
         </section>
       </div>
 
+      {zominAiChatOpen && <ZominAiChatDrawer onClose={() => setZominAiChatOpen(false)} settings={zominAiChatSettings} />}
       {preview && <PreviewDialog preview={preview} onClose={closePreview} />}
       {nativeEditor && <NativeEditor key={nativeEditor.object.key} content={nativeEditor.content} fileName={nativeEditor.object.name} onClose={() => setNativeEditor(null)} onListResponses={(id) => client.listFormResponses(id)} onPublish={publishNativeForm} onRename={renameNativeFile} onSave={saveNativeFile} onShare={(settings) => { setShareSettings(settings ?? null); setShareFile(nativeEditor.object); }} />}
       {advancedSearchOpen && <AdvancedSearchDialog filters={advancedFilters} itemName={search} onCancel={() => setAdvancedSearchOpen(false)} onFiltersChange={setAdvancedFilters} onItemNameChange={setSearch} onReset={resetAdvancedSearch} onSearch={applyAdvancedSearch} />}

@@ -2,6 +2,14 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.21.0 - 2026-07-21
+
+### Added
+
+- Moved ZominAI into a right-side chat drawer with browser-local history and
+  a New chat action. The header button opens or closes the drawer when the
+  local runtime is ready, and opens installation when it is not.
+
 ## v1.20.1 - 2026-07-21
 
 ### Fixed
