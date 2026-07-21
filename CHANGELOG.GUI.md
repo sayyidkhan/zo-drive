@@ -4,6 +4,13 @@ All notable changes to the Zo Drive browser experience are recorded here.
 
 ## Unreleased
 
+## v1.16.2 - 2026-07-21
+
+### Added
+
+- Link the ZominAI setup to PrismML, the Bonsai model and licence, and the
+  local runtime documentation; clarify that models and inference stay local.
+
 ## v1.16.1 - 2026-07-21
 
 ### Fixed
