@@ -6,6 +6,7 @@ import { ClassicLevel } from "classic-level";
 import { Connection as KuzuConnection, Database as KuzuDatabase } from "kuzu";
 import { createClient as createRedisClient } from "redis";
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdir, readFile, rm, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
@@ -87,6 +88,11 @@ export async function stopRuntime(engine: RuntimeEngineId, path: string): Promis
     const pid = Number((await readFile(redisPid(path), "utf8")).trim());
     if (Number.isSafeInteger(pid) && pid > 1) process.kill(pid, "SIGTERM");
   } catch {}
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    try { await stat(redisSocket(path)); await new Promise((resolve) => setTimeout(resolve, 50)); }
+    catch { break; }
+  }
+  await rm(redisSocket(path), { force: true });
   redisStarts.delete(path);
 }
 
@@ -224,7 +230,12 @@ async function ensureRedis(path: string): Promise<void> {
   const start = (async () => {
     await mkdir(path, { recursive: true, mode: 0o700 });
     try { await stat(redisSocket(path)); return; } catch {}
-    await execFileAsync("redis-server", ["--port", "0", "--unixsocket", redisSocket(path), "--unixsocketperm", "700", "--daemonize", "yes", "--dir", path, "--appendonly", "yes", "--pidfile", redisPid(path)]);
+    try {
+      const pid = Number((await readFile(redisPid(path), "utf8")).trim());
+      if (Number.isSafeInteger(pid) && pid > 1) process.kill(pid, "SIGTERM");
+    } catch {}
+    await rm(redisSocket(path), { force: true });
+    await execFileAsync("redis-server", ["--port", "0", "--unixsocket", redisSocket(path), "--unixsocketperm", "700", "--daemonize", "yes", "--dir", path, "--appendonly", "yes", "--pidfile", redisPid(path), "--logfile", join(path, "redis.log")]);
     for (let attempt = 0; attempt < 50; attempt += 1) {
       try { await stat(redisSocket(path)); return; } catch { await new Promise((resolve) => setTimeout(resolve, 100)); }
     }
@@ -234,7 +245,7 @@ async function ensureRedis(path: string): Promise<void> {
   try { await start; } catch (error) { redisStarts.delete(path); throw error; }
 }
 
-function redisSocket(path: string): string { return join(path, "redis.sock"); }
+function redisSocket(path: string): string { return `/dev/shm/zo-drive-redis-${createHash("sha256").update(path).digest("hex").slice(0, 24)}.sock`; }
 function redisPid(path: string): string { return join(path, "redis.pid"); }
 
 function closeKuzuResult(result: { close(): void } | Array<{ close(): void }>): void {

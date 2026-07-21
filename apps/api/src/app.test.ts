@@ -10,6 +10,7 @@ import { LocalApiKeyStore } from "./auth/local-api-key-store.js";
 import { SessionService } from "./auth/session.js";
 import { LocalShareStore } from "./sharing/local-share-store.js";
 import { LocalFormStore } from "./forms/local-form-store.js";
+import { LocalDatabaseStore } from "./databases/local-database-store.js";
 import { LocalDriveStorage } from "./storage/local-drive-storage.js";
 
 describe("Zo Drive API", () => {
@@ -237,6 +238,20 @@ describe("Zo Drive API", () => {
 
     expect((await app.request(`http://localhost/databases/${database.id}/execute`, { method: "POST", headers, body: JSON.stringify({ query: "SELECT 1" }) })).status).toBe(200);
     expect((await app.request(`http://localhost/databases/${database.id}/execute`, { method: "POST", headers, body: JSON.stringify({ query: "WITH changed AS (DELETE FROM records RETURNING *) SELECT * FROM changed" }) })).status).toBe(401);
+  });
+
+  it("runs Redis from a long persistent data-root path", async () => {
+    const root = await mkdtemp(join(tmpdir(), `zo-drive-${"long-path-".repeat(7)}`));
+    roots.push(root);
+    const databases = new LocalDatabaseStore(root, true);
+    try {
+      await databases.installEngine({ ownerUserId: "alice", engine: "redis" });
+      const database = await databases.create({ ownerUserId: "alice", name: "cache", engine: "redis" });
+      await expect(databases.execute({ ownerUserId: "alice", id: database.id, request: { command: "SET", args: ["ready", "yes"] } })).resolves.toMatchObject({ result: "OK" });
+      await expect(databases.execute({ ownerUserId: "alice", id: database.id, request: { command: "GET", args: ["ready"] } })).resolves.toMatchObject({ result: "yes" });
+    } finally {
+      await databases.removeByOwner("alice");
+    }
   });
 
   it("issues database-scoped keys for external backends and enforces their access", async () => {

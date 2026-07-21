@@ -4,6 +4,13 @@ All notable changes to the Zo Drive browser experience are recorded here.
 
 ## Unreleased
 
+## v1.10.1 - 2026-07-21
+
+### Fixed
+
+- Fixed Redis installation on long Zo data-root paths by using a short private
+  runtime socket while keeping database data persistent in Drive storage.
+
 ## v1.10.0 - 2026-07-21
 
 ### Added

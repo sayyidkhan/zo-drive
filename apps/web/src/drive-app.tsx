@@ -184,10 +184,15 @@ const appBasePath = normalizeAppBasePath(
 const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.10.0";
+const GUI_VERSION = "1.10.1";
 const CLI_VERSION = "1.2.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.10.1",
+    date: "21 July 2026",
+    changes: ["Fixed Redis installation on long Zo data-root paths by using a short private runtime socket while keeping database data persistent in Drive storage."]
+  },
   {
     version: "v1.10.0",
     date: "21 July 2026",
