@@ -2,6 +2,15 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.21.3 - 2026-07-22
+
+### Changed
+
+- Reworked the ZominAI drawer into a cleaner full-width chat. Conversation
+  history now opens only from its dedicated History control.
+- Kept the fixed Upload action aligned with the Drive workspace while the
+  ZominAI drawer is open on desktop.
+
 ## v1.21.2 - 2026-07-21
 
 ### Fixed

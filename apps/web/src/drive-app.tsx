@@ -25,6 +25,7 @@ import {
   FolderUp,
   Grid2X2,
   HardDrive,
+  History,
   Info,
   KeyRound,
   Italic,
@@ -242,10 +243,15 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.21.2";
+const GUI_VERSION = "1.21.3";
 const CLI_VERSION = "1.2.1";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.21.3",
+    date: "2026-07-22",
+    changes: ["Reworked the ZominAI drawer into a cleaner full-width chat with an on-demand History panel, and kept the Upload action aligned with the Drive workspace when chat is open."]
+  },
   {
     version: "v1.21.2",
     date: "2026-07-21",
@@ -1073,6 +1079,7 @@ function ZominAiChatDrawer({ isOpen, onClose, settings }: { isOpen: boolean; onC
   const [sessions, setSessions] = useState<ZominAiChatSession[]>(readZominAiChatSessions);
   const [activeSessionId, setActiveSessionId] = useState(() => sessions[0]!.id);
   const [draft, setDraft] = useState("");
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const transcriptRef = useRef<HTMLDivElement>(null);
   const activeSession = sessions.find((session) => session.id === activeSessionId) ?? sessions[0]!;
@@ -1112,7 +1119,27 @@ function ZominAiChatDrawer({ isOpen, onClose, settings }: { isOpen: boolean; onC
     }
   }
 
-  return <aside aria-label="ZominAI chat" aria-hidden={!isOpen} className={`fixed inset-y-0 right-0 z-[70] w-full max-w-[30rem] overflow-hidden border-l border-slate-200 bg-white pt-[4.5rem] shadow-2xl shadow-slate-950/20 transition-[transform,width,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none sm:w-[27rem] md:static md:z-auto md:h-auto md:max-w-none md:shrink-0 md:translate-x-0 md:border-l-0 md:bg-transparent md:pt-0 md:shadow-none ${isOpen ? "translate-x-0 md:w-[27rem] md:border-l md:border-slate-200 md:bg-white md:shadow-2xl md:shadow-slate-950/10" : "pointer-events-none translate-x-full md:w-0"}`}><div className={`flex h-full w-full flex-col bg-white transition-[transform,opacity] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none md:w-[27rem] ${isOpen ? "translate-x-0 opacity-100" : "translate-x-8 opacity-0"}`}><header className="flex items-center gap-3 border-b border-slate-200 px-4 py-3"><span className="grid size-9 place-items-center overflow-hidden rounded-xl bg-cyan-950 p-0.5"><img className="size-full rounded-[0.6rem] object-cover" src={zominAiButtonUrl} alt="ZominAI Pegasus" /></span><div className="min-w-0 flex-1"><p className="text-sm font-semibold text-slate-900">ZominAI</p><p className="truncate text-xs text-slate-500">Private local chat</p></div><button aria-label="Close ZominAI chat" className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900" onClick={onClose}><X size={19} /></button></header><div className="flex min-h-0 flex-1"><nav aria-label="ZominAI chat history" className="flex w-32 shrink-0 flex-col border-r border-slate-200 bg-slate-50 p-2 sm:w-36"><button aria-label="New ZominAI chat" className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-cyan-700 px-2 py-2 text-xs font-semibold text-white transition hover:bg-cyan-800" onClick={createChat}><Plus size={15} /> New</button><div className="mt-3 min-h-0 flex-1 space-y-1 overflow-y-auto">{sessions.slice().sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)).map((session) => <button aria-current={session.id === activeSession.id ? "page" : undefined} className={`w-full truncate rounded-lg px-2 py-2 text-left text-xs leading-4 ${session.id === activeSession.id ? "bg-white font-semibold text-cyan-900 shadow-sm" : "text-slate-600 hover:bg-white"}`} key={session.id} onClick={() => { setActiveSessionId(session.id); setDraft(""); }}>{session.title}</button>)}</div></nav><section className="flex min-w-0 flex-1 flex-col"><div aria-label="ZominAI conversation" className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-slate-50/70 p-4" ref={transcriptRef}>{activeSession.messages.length === 0 ? <div className="grid h-full min-h-56 place-items-center text-center"><div className="max-w-52"><img className="mx-auto size-12 rounded-2xl object-cover shadow-sm" src={zominAiButtonUrl} alt="ZominAI Pegasus" /><p className="mt-4 text-sm font-semibold text-slate-900">Start a new chat</p><p className="mt-2 text-xs leading-5 text-slate-500">History is saved only in this browser.</p></div></div> : activeSession.messages.map((message, index) => <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`} key={`${message.role}-${index}`}><div className={`max-w-[88%] whitespace-pre-wrap rounded-2xl px-3 py-2.5 text-sm leading-6 ${message.role === "user" ? "rounded-br-md bg-cyan-800 text-white" : "rounded-bl-md border border-slate-200 bg-white text-slate-700"}`}>{message.content}</div></div>)}{sending && <div className="flex justify-start"><div className="inline-flex items-center gap-2 rounded-2xl rounded-bl-md border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-500"><LoaderCircle className="animate-spin" size={15} /> Thinking…</div></div>}</div><form className="border-t border-slate-200 bg-white p-3" onSubmit={(event) => { event.preventDefault(); void send(); }}><label className="sr-only" htmlFor="zominai-drawer-message">Message ZominAI</label><div className="flex items-end gap-2 rounded-xl border border-slate-300 p-1.5 focus-within:border-cyan-600 focus-within:ring-4 focus-within:ring-cyan-100"><textarea aria-label="Message ZominAI" className="min-h-10 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-slate-400" disabled={sending} id="zominai-drawer-message" onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder="Ask ZominAI…" rows={1} value={draft} /><button aria-label="Send message to ZominAI" className="grid size-9 place-items-center rounded-lg bg-cyan-700 text-white hover:bg-cyan-800 disabled:bg-slate-300" disabled={!draft.trim() || sending} type="submit"><Send size={17} /></button></div></form></section></div></div></aside>;
+  return <aside aria-label="ZominAI chat" aria-hidden={!isOpen} className={`fixed inset-y-0 right-0 z-[70] w-full max-w-[32rem] overflow-hidden border-l border-slate-200 bg-white pt-[4.5rem] shadow-2xl shadow-slate-950/20 transition-[transform,width,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none sm:w-[30rem] md:static md:z-auto md:h-auto md:max-w-none md:shrink-0 md:translate-x-0 md:border-l-0 md:bg-transparent md:pt-0 md:shadow-none ${isOpen ? "translate-x-0 md:w-[30rem] md:border-l md:border-slate-200 md:bg-white md:shadow-2xl md:shadow-slate-950/10" : "pointer-events-none translate-x-full md:w-0"}`}>
+    <div className={`flex h-full w-full flex-col bg-white transition-[transform,opacity] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none md:w-[30rem] ${isOpen ? "translate-x-0 opacity-100" : "translate-x-8 opacity-0"}`}>
+      <header className="flex items-center gap-3 border-b border-slate-200 px-4 py-3">
+        <span className="grid size-9 place-items-center overflow-hidden rounded-xl bg-cyan-950 p-0.5"><img className="size-full rounded-[0.6rem] object-cover" src={zominAiButtonUrl} alt="ZominAI Pegasus" /></span>
+        <div className="min-w-0 flex-1"><p className="text-sm font-semibold text-slate-900">ZominAI</p><p className="truncate text-xs text-slate-500">Private local chat</p></div>
+        <button aria-label="New ZominAI chat" className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-700 px-2.5 py-2 text-xs font-semibold text-white transition hover:bg-cyan-800" onClick={createChat}><Plus size={15} /> <span className="hidden sm:inline">New chat</span></button>
+        <button aria-controls="zominai-chat-history" aria-expanded={historyOpen} aria-label="Toggle ZominAI chat history" className={`rounded-lg p-2 transition ${historyOpen ? "bg-cyan-50 text-cyan-800" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`} onClick={() => setHistoryOpen((open) => !open)} title="Chat history"><History size={18} /></button>
+        <button aria-label="Close ZominAI chat" className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900" onClick={onClose}><X size={19} /></button>
+      </header>
+      <div className="flex min-h-0 flex-1">
+        {historyOpen && <nav aria-label="ZominAI chat history" className="flex w-40 shrink-0 flex-col border-r border-slate-200 bg-slate-50 p-2" id="zominai-chat-history">
+          <p className="px-2 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">History</p>
+          <div className="mt-2 min-h-0 flex-1 space-y-1 overflow-y-auto">{sessions.slice().sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)).map((session) => <button aria-current={session.id === activeSession.id ? "page" : undefined} className={`w-full truncate rounded-lg px-2 py-2 text-left text-xs leading-4 ${session.id === activeSession.id ? "bg-white font-semibold text-cyan-900 shadow-sm" : "text-slate-600 hover:bg-white"}`} key={session.id} onClick={() => { setActiveSessionId(session.id); setDraft(""); }}>{session.title}</button>)}</div>
+        </nav>}
+        <section className="flex min-w-0 flex-1 flex-col">
+          <div aria-label="ZominAI conversation" className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-slate-50/70 p-4" ref={transcriptRef}>{activeSession.messages.length === 0 ? <div className="grid h-full min-h-56 place-items-center text-center"><div className="max-w-60"><img className="mx-auto size-12 rounded-2xl object-cover shadow-sm" src={zominAiButtonUrl} alt="ZominAI Pegasus" /><p className="mt-4 text-sm font-semibold text-slate-900">Start a new chat</p><p className="mt-2 text-xs leading-5 text-slate-500">Your chats stay only in this browser. Open history whenever you want to switch conversations.</p></div></div> : activeSession.messages.map((message, index) => <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`} key={`${message.role}-${index}`}><div className={`max-w-[88%] whitespace-pre-wrap rounded-2xl px-3 py-2.5 text-sm leading-6 ${message.role === "user" ? "rounded-br-md bg-cyan-800 text-white" : "rounded-bl-md border border-slate-200 bg-white text-slate-700"}`}>{message.content}</div></div>)}{sending && <div className="flex justify-start"><div className="inline-flex items-center gap-2 rounded-2xl rounded-bl-md border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-500"><LoaderCircle className="animate-spin" size={15} /> Thinking…</div></div>}</div>
+          <form className="border-t border-slate-200 bg-white p-3" onSubmit={(event) => { event.preventDefault(); void send(); }}><label className="sr-only" htmlFor="zominai-drawer-message">Message ZominAI</label><div className="flex items-end gap-2 rounded-xl border border-slate-300 p-1.5 focus-within:border-cyan-600 focus-within:ring-4 focus-within:ring-cyan-100"><textarea aria-label="Message ZominAI" className="min-h-10 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-slate-400" disabled={sending} id="zominai-drawer-message" onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder="Ask ZominAI…" rows={1} value={draft} /><button aria-label="Send message to ZominAI" className="grid size-9 place-items-center rounded-lg bg-cyan-700 text-white hover:bg-cyan-800 disabled:bg-slate-300" disabled={!draft.trim() || sending} type="submit"><Send size={17} /></button></div></form>
+        </section>
+      </div>
+    </div>
+  </aside>;
 }
 
 function ZominAiWorkspace({ initialPane = "chat" }: { initialPane?: ZominAiPane }) {
@@ -1737,7 +1764,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
         return updatedUsage;
       }} />}
       {uploadDialogOpen && <UploadDialog onClose={() => setUploadDialogOpen(false)} onChooseFiles={() => { setUploadDialogOpen(false); fileInput.current?.click(); }} onChooseFolder={() => { setUploadDialogOpen(false); folderInput.current?.click(); }} onDrop={(dataTransfer) => { setUploadDialogOpen(false); return uploadDroppedItems(dataTransfer); }} />}
-      {uploads.length === 0 && section !== "cluster-databases" && section !== "databases" && section !== "functions" && section !== "zominai" && <button aria-label="Open upload menu" className="fixed bottom-4 right-4 z-40 inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-900/25 transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200 sm:bottom-6 sm:right-6 sm:px-5" onClick={() => setUploadDialogOpen(true)}><Upload size={18} /> <span className="hidden sm:inline">Upload</span></button>}
+      {uploads.length === 0 && section !== "cluster-databases" && section !== "databases" && section !== "functions" && section !== "zominai" && <button aria-label="Open upload menu" className={`fixed bottom-4 right-4 z-40 inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-900/25 transition-[right,background-color] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200 motion-reduce:transition-none sm:bottom-6 sm:right-6 sm:px-5 ${zominAiChatOpen ? "md:right-[calc(30rem+1.5rem)]" : ""}`} onClick={() => setUploadDialogOpen(true)}><Upload size={18} /> <span className="hidden sm:inline">Upload</span></button>}
       {uploads.length > 0 && <UploadProgress uploads={uploads} />}
     </main>
   );

@@ -42,9 +42,9 @@ describe("DriveApp", () => {
 
       expect(screen.getByRole("heading", { name: "Manage files in your private Drive." })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Share files on your terms" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 1.21.2" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 1.21.3" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI changelog version 1.21.2" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
+      expect(screen.getByRole("link", { name: "GUI changelog version 1.21.3" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
       expect(screen.getByText((_, element) => element?.tagName === "H3" && element.textContent === "GUI v1.17.0")).toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
@@ -79,7 +79,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.21.2")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.21.3")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();
@@ -292,9 +292,15 @@ describe("DriveApp", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "ZominAI" }));
     const zominAiDrawer = await screen.findByRole("complementary", { name: "ZominAI chat" });
-    expect(zominAiDrawer).toHaveClass("md:static", "md:w-[27rem]", "duration-500");
+    expect(zominAiDrawer).toHaveClass("md:static", "md:w-[30rem]", "duration-500");
     expect(screen.getAllByAltText("ZominAI Pegasus")).toHaveLength(2);
     expect(screen.getByRole("button", { name: "New ZominAI chat" })).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "ZominAI chat history" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Toggle ZominAI chat history" })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByRole("button", { name: "Open upload menu" })).toHaveClass("md:right-[calc(30rem+1.5rem)]");
+    fireEvent.click(screen.getByRole("button", { name: "Toggle ZominAI chat history" }));
+    expect(screen.getByRole("navigation", { name: "ZominAI chat history" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Toggle ZominAI chat history" })).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByRole("textbox", { name: "Message ZominAI" })).toBeInTheDocument();
     fireEvent.change(screen.getByRole("textbox", { name: "Message ZominAI" }), { target: { value: "Hello ZominAI" } });
     fireEvent.click(screen.getByRole("button", { name: "Send message to ZominAI" }));
