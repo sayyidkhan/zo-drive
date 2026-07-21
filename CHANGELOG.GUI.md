@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.19.1 - 2026-07-21
+
+### Fixed
+
+- Placed advanced search settings beside the search field on phone and desktop
+  layouts.
+
 ## v1.19.0 - 2026-07-21
 
 ### Added

@@ -223,10 +223,15 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.19.0";
+const GUI_VERSION = "1.19.1";
 const CLI_VERSION = "1.2.1";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.19.1",
+    date: "2026-07-21",
+    changes: ["Placed the advanced search settings control beside the search field on phone and desktop layouts."]
+  },
   {
     version: "v1.19.0",
     date: "2026-07-21",
@@ -1371,21 +1376,23 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
           </span>
           <span className="hidden sm:inline">Zo Drive</span>
         </a>
-        <label className="order-3 relative min-w-0 basis-full md:order-none md:basis-auto md:flex-1">
-          <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={19} />
-          <input
-            aria-label="Search files"
-            className="w-full rounded-xl border border-transparent bg-slate-100 py-2.5 pl-11 pr-4 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100"
-            placeholder="Search in Drive"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-        </label>
+        <div data-testid="search-controls" className="order-3 flex min-w-0 basis-full items-center gap-1.5 md:order-none md:basis-auto md:flex-1">
+          <label className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={19} />
+            <input
+              aria-label="Search files"
+              className="w-full rounded-xl border border-transparent bg-slate-100 py-2.5 pl-11 pr-4 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100"
+              placeholder="Search in Drive"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </label>
+          <button aria-label="Advanced search" className={`shrink-0 rounded-lg p-2 transition ${advancedSearchActive ? "bg-blue-50 text-blue-700" : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"}`} onClick={() => { setAdvancedFilters(appliedAdvancedFilters); setAdvancedSearchOpen(true); }}><SlidersHorizontal size={21} /></button>
+        </div>
         <div data-testid="header-actions" className="order-2 ml-auto flex shrink-0 items-center gap-0.5 text-sm font-medium text-slate-500 md:order-none md:ml-0 md:gap-1">
           <button aria-label="ZominAI" className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-0.5 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 sm:size-11" onClick={() => { setSection("zominai"); setCurrentPath(""); }} title="ZominAI">
             <img className="size-full rounded-[0.65rem] object-cover" src={zominAiButtonUrl} alt="" />
           </button>
-          <button aria-label="Advanced search" className={`rounded-lg p-2 transition ${advancedSearchActive ? "bg-blue-50 text-blue-700" : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"}`} onClick={() => { setAdvancedFilters(appliedAdvancedFilters); setAdvancedSearchOpen(true); }}><SlidersHorizontal size={21} /></button>
           <div className="relative">
             <button title="Account menu" aria-label="Account menu" aria-expanded={accountMenuOpen} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800" onClick={() => setAccountMenuOpen((open) => !open)}><MoreHorizontal size={21} /></button>
             {accountMenuOpen && <div className="absolute right-0 top-11 z-20 w-52 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg">
