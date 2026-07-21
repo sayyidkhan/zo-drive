@@ -42,9 +42,9 @@ describe("DriveApp", () => {
 
       expect(screen.getByRole("heading", { name: "Manage files in your private Drive." })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Share files on your terms" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 1.21.0" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 1.21.2" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI changelog version 1.21.0" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
+      expect(screen.getByRole("link", { name: "GUI changelog version 1.21.2" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
       expect(screen.getByText((_, element) => element?.tagName === "H3" && element.textContent === "GUI v1.17.0")).toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
@@ -79,7 +79,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.21.0")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.21.2")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();
@@ -214,8 +214,8 @@ describe("DriveApp", () => {
       downloadClusterObject: vi.fn(),
       getClusterMountAccess: vi.fn().mockResolvedValue({ role: "editor" }),
       listClusterInvitations: vi.fn().mockResolvedValue([{ id: "22222222-2222-4222-8222-222222222222", folder: "Notes", role: "viewer", recipient: "Maya", createdAt: "2026-07-21T00:00:00.000Z", expiresAt: "2026-07-21T00:15:00.000Z" }]),
-      listClusterMounts: vi.fn().mockResolvedValue([]),
-      listClusterObjects: vi.fn().mockResolvedValue([]),
+      listClusterMounts: vi.fn().mockResolvedValue([{ id: "33333333-3333-4333-8333-333333333333", remoteUrl: "https://alice.example/drive", remotePeerId: "44444444-4444-4444-8444-444444444444", folder: "Team plans", role: "viewer", recipient: null, author: "alice", createdAt: "2026-07-21T00:00:00.000Z" }]),
+      listClusterObjects: vi.fn().mockResolvedValue([{ key: "remote-plan.pdf", name: "remote-plan.pdf", size: 42, contentType: "application/pdf", updatedAt: "2026-07-21T01:00:00.000Z", starred: false }]),
       listClusterPeers: vi.fn().mockResolvedValue([]),
       renameClusterObject: vi.fn(),
       updateClusterPeerRole: vi.fn(),
@@ -291,7 +291,9 @@ describe("DriveApp", () => {
       throw new Error("Unavailable local service");
     });
     fireEvent.click(screen.getByRole("button", { name: "ZominAI" }));
-    expect(await screen.findByRole("complementary", { name: "ZominAI chat" })).toBeInTheDocument();
+    const zominAiDrawer = await screen.findByRole("complementary", { name: "ZominAI chat" });
+    expect(zominAiDrawer).toHaveClass("md:static", "md:w-[27rem]", "duration-500");
+    expect(screen.getAllByAltText("ZominAI Pegasus")).toHaveLength(2);
     expect(screen.getByRole("button", { name: "New ZominAI chat" })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Message ZominAI" })).toBeInTheDocument();
     fireEvent.change(screen.getByRole("textbox", { name: "Message ZominAI" }), { target: { value: "Hello ZominAI" } });
@@ -364,6 +366,8 @@ describe("DriveApp", () => {
     expect(await screen.findByRole("heading", { name: "Create shared drives with people you trust." })).toBeInTheDocument();
     expect(screen.getByText("Recursive scope")).toBeInTheDocument();
     expect(screen.getByText("Shared with me")).toBeInTheDocument();
+    expect(await screen.findByText("Shared by alice")).toBeInTheDocument();
+    expect(screen.getByText("Read only")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Exposed folders" })).toBeInTheDocument();
     expect(screen.getByText("Pending pairing keys")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cancel key" })).toBeInTheDocument();
@@ -466,10 +470,17 @@ describe("DriveApp", () => {
     expect(await screen.findByRole("heading", { name: "Recent" })).toBeInTheDocument();
     expect(await screen.findByText("Last activity")).toBeInTheDocument();
     expect(screen.getByText("Notes")).toBeInTheDocument();
+    expect(await screen.findByText("remote-plan.pdf")).toBeInTheDocument();
+    expect(screen.getByText("Shared by alice")).toBeInTheDocument();
+    expect(screen.getByText("Read only")).toBeInTheDocument();
     expect(screen.getByTestId("recent-filters")).toHaveClass("grid", "grid-cols-2");
     expect(screen.getByRole("combobox", { name: "Recent file type" })).toHaveClass("w-full");
     expect(screen.getByRole("combobox", { name: "Recent modified date" })).toHaveClass("w-full");
     expect(screen.getByRole("combobox", { name: "Recent source" })).toHaveClass("w-full");
+    fireEvent.click(screen.getByRole("button", { name: "Shared with others" }));
+    expect(await screen.findByText("remote-plan.pdf")).toBeInTheDocument();
+    expect(screen.getByText("Shared by alice · Read only")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Recent" }));
     fireEvent.change(screen.getByLabelText("Recent file type"), { target: { value: "image" } });
     await waitFor(() => expect(client.list).toHaveBeenLastCalledWith(expect.objectContaining({ type: "image" })));
     fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));

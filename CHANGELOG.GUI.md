@@ -2,6 +2,22 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.21.2 - 2026-07-21
+
+### Fixed
+
+- Connected Shared Drive folders now refresh into Recent and Shared with me,
+  with the Drive owner and effective Read only or Read & write access shown on
+  each shared file.
+
+## v1.21.1 - 2026-07-21
+
+### Changed
+
+- Made the ZominAI panel a true desktop drawer that expands the layout and
+  moves Drive content left, with a motion-safe open and close transition.
+- Replaced generic robot imagery in ZominAI chat with the ZominAI Pegasus.
+
 ## v1.21.0 - 2026-07-21
 
 ### Added

@@ -57,7 +57,8 @@ describe("Zo Drive API", () => {
     const invite = await invitation.json() as { token: string };
     const accepted = await app.request("http://localhost/cluster/invitations/accept", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ inviteToken: invite.token }) });
     expect(accepted.status).toBe(201);
-    const peer = await accepted.json() as { peerId: string; peerKey: string };
+    const peer = await accepted.json() as { peerId: string; peerKey: string; author: string };
+    expect(peer.author).toBe("alice");
     const objects = await app.request(`http://localhost/cluster/peers/${peer.peerId}/objects`, { headers: { authorization: `Bearer ${peer.peerKey}` } });
     await expect(objects.json()).resolves.toMatchObject({ objects: [expect.objectContaining({ key: "inside.txt" })] });
     const peerHeaders = { authorization: `Bearer ${peer.peerKey}`, "content-type": "text/plain", "x-zo-drive-file-name": encodeURIComponent("collab.txt") };
@@ -122,7 +123,8 @@ describe("Zo Drive API", () => {
     const { token } = await invitation.json() as { token: string };
     const mounted = await local.request("http://local/clusters/mounts", { method: "POST", headers: { "content-type": "application/json", "x-test-user-id": "bob" }, body: JSON.stringify({ remoteUrl: "http://remote", inviteToken: token }) });
     expect(mounted.status).toBe(201);
-    const mount = await mounted.json() as { id: string };
+    const mount = await mounted.json() as { id: string; author: string };
+    expect(mount.author).toBe("alice");
     const uploaded = await local.request(`http://local/clusters/mounts/${mount.id}/objects`, { method: "POST", headers: { "content-type": "text/plain", "x-test-user-id": "bob", "x-zo-drive-file-name": encodeURIComponent("from-bob.txt") }, body: "private peer write" });
     expect(uploaded.status).toBe(201);
     await expect(uploaded.json()).resolves.toMatchObject({ key: "from-bob.txt" });

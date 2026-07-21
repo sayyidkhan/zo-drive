@@ -6,7 +6,7 @@ export type ClusterRole = "viewer" | "editor";
 
 type Invitation = { id: string; ownerUserId: string; folder: string; role: ClusterRole; recipient: string | null; secretHash: string; createdAt: string; expiresAt: string; claimedAt: string | null };
 type Peer = { id: string; ownerUserId: string; folder: string; role: ClusterRole; recipient: string | null; secretHash: string; createdAt: string };
-type Mount = { id: string; ownerUserId: string; remoteUrl: string; remotePeerId: string; remotePeerKey: string; folder: string; role: ClusterRole; recipient: string | null; createdAt: string };
+type Mount = { id: string; ownerUserId: string; remoteUrl: string; remotePeerId: string; remotePeerKey: string; folder: string; role: ClusterRole; recipient: string | null; author: string | null; createdAt: string };
 type Data = { invitations: Invitation[]; peers: Peer[]; mounts: Mount[] };
 
 export type ClusterMount = Omit<Mount, "ownerUserId" | "remotePeerKey">;
@@ -40,7 +40,7 @@ export class LocalClusterStore {
       const peerKey = `zcs_${randomBytes(32).toString("base64url")}`;
       const peer: Peer = { id: randomUUID(), ownerUserId: invitation.ownerUserId, folder: invitation.folder, role: invitation.role ?? "editor", recipient: invitation.recipient ?? null, secretHash: hash(peerKey), createdAt: new Date().toISOString() };
       data.peers.push(peer); await this.write(data);
-      return { peerId: peer.id, peerKey, folder: peer.folder, role: peer.role, recipient: peer.recipient };
+      return { peerId: peer.id, peerKey, folder: peer.folder, role: peer.role, recipient: peer.recipient, author: invitation.ownerUserId };
     });
   }
 
@@ -49,9 +49,9 @@ export class LocalClusterStore {
     return peer ? { ownerUserId: peer.ownerUserId, folder: peer.folder, role: peer.role ?? "editor" } : null;
   }
 
-  async addMount({ ownerUserId, remoteUrl, remotePeerId, remotePeerKey, folder, role, recipient }: Omit<Mount, "id" | "createdAt">): Promise<ClusterMount> {
+  async addMount({ ownerUserId, remoteUrl, remotePeerId, remotePeerKey, folder, role, recipient, author }: Omit<Mount, "id" | "createdAt">): Promise<ClusterMount> {
     return this.withWriteLock(async () => {
-      const mount: Mount = { id: randomUUID(), ownerUserId, remoteUrl, remotePeerId, remotePeerKey, folder, role, recipient, createdAt: new Date().toISOString() };
+      const mount: Mount = { id: randomUUID(), ownerUserId, remoteUrl, remotePeerId, remotePeerKey, folder, role, recipient, author, createdAt: new Date().toISOString() };
       const data = await this.read(); data.mounts.push(mount); await this.write(data); return publicMount(mount);
     });
   }
@@ -140,6 +140,6 @@ export class LocalClusterStore {
 
 function hash(value: string) { return createHash("sha256").update(value).digest("hex"); }
 function sameHash(left: string, right: string) { const a = Buffer.from(left); const b = Buffer.from(right); return a.length === b.length && timingSafeEqual(a, b); }
-function publicMount({ ownerUserId: _ownerUserId, remotePeerKey: _remotePeerKey, role = "editor", recipient = null, ...mount }: Mount): ClusterMount { return { ...mount, role, recipient }; }
+function publicMount({ ownerUserId: _ownerUserId, remotePeerKey: _remotePeerKey, role = "editor", recipient = null, author = null, ...mount }: Mount): ClusterMount { return { ...mount, role, recipient, author }; }
 function publicPendingInvitation({ ownerUserId: _ownerUserId, secretHash: _secretHash, claimedAt: _claimedAt, ...invitation }: Invitation): ClusterPendingInvitation { return invitation; }
 function publicPeer({ ownerUserId: _ownerUserId, secretHash: _secretHash, role = "editor", recipient = null, ...peer }: Peer): ClusterPeer { return { ...peer, role, recipient }; }

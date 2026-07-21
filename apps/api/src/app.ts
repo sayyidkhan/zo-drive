@@ -503,8 +503,8 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     if (!remoteUrl) return context.json({ error: { code: "INVALID_REQUEST", message: "Cluster peers must use an HTTP(S) URL" } }, 400);
     const response = await fetch(`${remoteUrl}/cluster/invitations/accept`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ inviteToken: parsed.data.inviteToken }) });
     if (!response.ok) return context.json({ error: { code: "PAIRING_FAILED", message: "The remote Zo Drive rejected this invitation" } }, 400);
-    const remote = await response.json() as { peerId: string; peerKey: string; folder: string; role?: "viewer" | "editor"; recipient?: string | null };
-    return context.json(await clusters.addMount({ ownerUserId: userId, remoteUrl, remotePeerId: remote.peerId, remotePeerKey: remote.peerKey, folder: remote.folder, role: remote.role ?? "editor", recipient: remote.recipient ?? null }), 201);
+    const remote = await response.json() as { peerId: string; peerKey: string; folder: string; role?: "viewer" | "editor"; recipient?: string | null; author?: string | null };
+    return context.json(await clusters.addMount({ ownerUserId: userId, remoteUrl, remotePeerId: remote.peerId, remotePeerKey: remote.peerKey, folder: remote.folder, role: remote.role ?? "editor", recipient: remote.recipient ?? null, author: remote.author ?? null }), 201);
   });
 
   app.get("/clusters/peers", async (context) => {

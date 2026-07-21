@@ -4,7 +4,6 @@ import {
   ArrowLeft,
   ArrowUpRight,
   Bold,
-  Bot,
   Check,
   Cloud,
   Clock3,
@@ -91,6 +90,13 @@ type RecentFilters = {
   modified: AdvancedFilters["modified"];
   source: "any" | "uploaded" | "zo-native";
   type: AdvancedFileType | "any";
+};
+
+type SharedDriveFile = DriveObject & {
+  mountAuthor: string | null;
+  mountFolder: string;
+  mountId: string;
+  mountRole: ClusterRole;
 };
 
 type ZominAiPane = "chat" | "install" | "settings" | "uninstall" | "verify";
@@ -236,14 +242,14 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.21.0";
+const GUI_VERSION = "1.21.2";
 const CLI_VERSION = "1.2.1";
 
 const GUI_CHANGELOG = [
   {
-    version: "v1.21.0",
+    version: "v1.21.2",
     date: "2026-07-21",
-    changes: ["Moved ZominAI into a right-side chat drawer with browser-local conversation history, new chats, and runtime-aware open and close behaviour."]
+    changes: ["Moved ZominAI into a right-side chat drawer with browser-local conversation history, new chats, and runtime-aware open and close behaviour.", "Connected Shared Drive folders now refresh into Recent and Shared with me, with the owner and effective Read only or Read & write access shown on each shared file."]
   },
   {
     version: "v1.20.1",
@@ -635,7 +641,7 @@ function LandingPage() {
               <div className="mt-7 space-y-3">
                 {[['Product/Launch', '4 files', 'bg-amber-100 text-amber-700'], ['Design/Assets', '18 files', 'bg-violet-100 text-violet-700'], ['Reports/2026', '7 files', 'bg-emerald-100 text-emerald-700']].map(([name, count, tone]) => <div className="flex items-center gap-3 rounded-xl border border-slate-100 p-3.5" key={name}><span className={`grid size-10 place-items-center rounded-xl ${tone}`}><Folder size={19} /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-800">{name}</span><span className="text-xs text-slate-400">{count}</span></span><MoreHorizontal size={18} className="text-slate-300" /></div>)}
               </div>
-              <div className="mt-5"><div className="mb-3 flex items-center justify-between"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Zo Drive SaaS Killer Features</p><span className="text-[10px] font-medium text-slate-400">Built in</span></div><div className="grid grid-cols-2 gap-3"><div className="rounded-xl bg-slate-950 p-4 text-white"><Code2 size={18} className="text-cyan-300" /><p className="mt-4 text-sm font-semibold">Zo Paste</p><p className="mt-1 text-xs leading-5 text-slate-400">Share code securely.</p></div><div className="rounded-xl bg-blue-50 p-4 text-blue-950"><Send size={18} className="text-blue-600" /><p className="mt-4 text-sm font-semibold">Zo Transfer</p><p className="mt-1 text-xs leading-5 text-blue-700/70">Deliver files your way.</p></div><a aria-label="Open Zo Functions" className="rounded-xl bg-violet-50 p-4 text-violet-950 transition hover:bg-violet-100" href={`${driveAppUrl()}&section=functions`}><Terminal size={18} className="text-violet-600" /><p className="mt-4 text-sm font-semibold">Zo Functions</p><p className="mt-1 text-xs leading-5 text-violet-800/70">Run code and schedule your automations.</p></a><a aria-label="Open Zo Databases" className="rounded-xl bg-emerald-50 p-4 text-emerald-950 transition hover:bg-emerald-100" href={`${driveAppUrl()}&section=databases&databaseView=catalog`}><Database size={18} className="text-emerald-600" /><p className="mt-4 text-sm font-semibold">Zo Databases</p><p className="mt-1 text-xs leading-5 text-emerald-800/70">Private databases, built into your Drive.</p></a><a aria-label="Open Zo Shared Drives" className="rounded-xl bg-cyan-50 p-4 text-cyan-950 transition hover:bg-cyan-100" href={`${driveAppUrl()}&section=cluster-databases`}><Network size={18} className="text-cyan-700" /><p className="mt-4 text-sm font-semibold">Zo Shared Drives</p><p className="mt-1 text-xs leading-5 text-cyan-800/70">Share selected folders on your terms.</p></a><a aria-label="Open ZominAI" className="rounded-xl bg-amber-50 p-4 text-amber-950 transition hover:bg-amber-100" href={`${driveAppUrl()}&section=zominai`}><Bot size={18} className="text-amber-700" /><p className="mt-4 text-sm font-semibold">ZominAI</p><p className="mt-1 text-xs leading-5 text-amber-800/70">Private local AI on your device.</p></a></div></div>
+              <div className="mt-5"><div className="mb-3 flex items-center justify-between"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Zo Drive SaaS Killer Features</p><span className="text-[10px] font-medium text-slate-400">Built in</span></div><div className="grid grid-cols-2 gap-3"><div className="rounded-xl bg-slate-950 p-4 text-white"><Code2 size={18} className="text-cyan-300" /><p className="mt-4 text-sm font-semibold">Zo Paste</p><p className="mt-1 text-xs leading-5 text-slate-400">Share code securely.</p></div><div className="rounded-xl bg-blue-50 p-4 text-blue-950"><Send size={18} className="text-blue-600" /><p className="mt-4 text-sm font-semibold">Zo Transfer</p><p className="mt-1 text-xs leading-5 text-blue-700/70">Deliver files your way.</p></div><a aria-label="Open Zo Functions" className="rounded-xl bg-violet-50 p-4 text-violet-950 transition hover:bg-violet-100" href={`${driveAppUrl()}&section=functions`}><Terminal size={18} className="text-violet-600" /><p className="mt-4 text-sm font-semibold">Zo Functions</p><p className="mt-1 text-xs leading-5 text-violet-800/70">Run code and schedule your automations.</p></a><a aria-label="Open Zo Databases" className="rounded-xl bg-emerald-50 p-4 text-emerald-950 transition hover:bg-emerald-100" href={`${driveAppUrl()}&section=databases&databaseView=catalog`}><Database size={18} className="text-emerald-600" /><p className="mt-4 text-sm font-semibold">Zo Databases</p><p className="mt-1 text-xs leading-5 text-emerald-800/70">Private databases, built into your Drive.</p></a><a aria-label="Open Zo Shared Drives" className="rounded-xl bg-cyan-50 p-4 text-cyan-950 transition hover:bg-cyan-100" href={`${driveAppUrl()}&section=cluster-databases`}><Network size={18} className="text-cyan-700" /><p className="mt-4 text-sm font-semibold">Zo Shared Drives</p><p className="mt-1 text-xs leading-5 text-cyan-800/70">Share selected folders on your terms.</p></a><a aria-label="Open ZominAI" className="rounded-xl bg-amber-50 p-4 text-amber-950 transition hover:bg-amber-100" href={`${driveAppUrl()}&section=zominai`}><img className="size-[18px] rounded object-cover" src={zominAiButtonUrl} alt="" /><p className="mt-4 text-sm font-semibold">ZominAI</p><p className="mt-1 text-xs leading-5 text-amber-800/70">Private local AI on your device.</p></a></div></div>
             </div>
           </div>
         </div>
@@ -1058,12 +1064,12 @@ function ZominAiChat({ settings }: { settings: ZominAiSettings }) {
 
   return <section className="flex min-h-[36rem] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
     <header className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 px-5 py-5 sm:px-6"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-700">Private local chat</p><h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">Start a private conversation.</h2><p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">Messages go only to the local Bonsai runtime on this device. Nothing is saved to Zo Drive, and ZominAI cannot read Drive files unless you paste content here.</p></div><span className="rounded-full border border-cyan-100 bg-cyan-50 px-3 py-1.5 font-mono text-xs font-semibold text-cyan-800">{settings.endpoint}</span></header>
-    <div aria-label="ZominAI conversation" className="flex-1 space-y-4 overflow-y-auto bg-slate-50/70 p-5 sm:p-6" ref={transcriptRef}>{messages.length === 0 ? <div className="grid min-h-64 place-items-center"><div className="max-w-md text-center"><span className="mx-auto grid size-12 place-items-center rounded-2xl bg-cyan-950 text-cyan-100"><Bot size={24} /></span><p className="mt-4 text-base font-semibold text-slate-900">Start a private conversation.</p><p className="mt-2 text-sm leading-6 text-slate-500">Ask anything. The chat stays in this open browser tab and is cleared when you refresh or leave.</p></div></div> : messages.map((message, index) => <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`} key={`${message.role}-${index}`}><div className={`max-w-[88%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm ${message.role === "user" ? "rounded-br-md bg-cyan-800 text-white" : "rounded-bl-md border border-slate-200 bg-white text-slate-700"}`}>{message.content}</div></div>)}{sending && <div className="flex justify-start"><div className="inline-flex items-center gap-2 rounded-2xl rounded-bl-md border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500 shadow-sm"><LoaderCircle className="animate-spin" size={16} /> ZominAI is thinking…</div></div>}</div>
+    <div aria-label="ZominAI conversation" className="flex-1 space-y-4 overflow-y-auto bg-slate-50/70 p-5 sm:p-6" ref={transcriptRef}>{messages.length === 0 ? <div className="grid min-h-64 place-items-center"><div className="max-w-md text-center"><span className="mx-auto grid size-12 place-items-center overflow-hidden rounded-2xl bg-cyan-950 p-1"><img className="size-full rounded-xl object-cover" src={zominAiButtonUrl} alt="ZominAI Pegasus" /></span><p className="mt-4 text-base font-semibold text-slate-900">Start a private conversation.</p><p className="mt-2 text-sm leading-6 text-slate-500">Ask anything. The chat stays in this open browser tab and is cleared when you refresh or leave.</p></div></div> : messages.map((message, index) => <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`} key={`${message.role}-${index}`}><div className={`max-w-[88%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm ${message.role === "user" ? "rounded-br-md bg-cyan-800 text-white" : "rounded-bl-md border border-slate-200 bg-white text-slate-700"}`}>{message.content}</div></div>)}{sending && <div className="flex justify-start"><div className="inline-flex items-center gap-2 rounded-2xl rounded-bl-md border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500 shadow-sm"><LoaderCircle className="animate-spin" size={16} /> ZominAI is thinking…</div></div>}</div>
     <form className="border-t border-slate-200 bg-white p-4 sm:p-5" onSubmit={(event) => { event.preventDefault(); void send(); }}><label className="sr-only" htmlFor="zominai-message">Message ZominAI</label><div className="flex items-end gap-3 rounded-2xl border border-slate-300 bg-white p-2 focus-within:border-cyan-600 focus-within:ring-4 focus-within:ring-cyan-100"><textarea id="zominai-message" aria-label="Message ZominAI" className="min-h-12 flex-1 resize-none bg-transparent px-3 py-2 text-sm leading-6 text-slate-800 outline-none placeholder:text-slate-400" disabled={sending} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder="Ask ZominAI anything…" rows={1} value={draft} /><button aria-label="Send message to ZominAI" className="grid size-10 shrink-0 place-items-center rounded-xl bg-cyan-700 text-white transition hover:bg-cyan-800 disabled:bg-slate-300" disabled={!draft.trim() || sending} type="submit"><Send size={18} /></button></div><div className="mt-2 flex items-center justify-between gap-3 px-2 text-xs text-slate-400"><span>Enter to send · Shift+Enter for a new line</span>{messages.length > 0 && <button className="font-medium text-slate-500 hover:text-slate-800" onClick={() => setMessages([])} type="button">Clear chat</button>}</div></form>
   </section>;
 }
 
-function ZominAiChatDrawer({ onClose, settings }: { onClose: () => void; settings: ZominAiSettings }) {
+function ZominAiChatDrawer({ isOpen, onClose, settings }: { isOpen: boolean; onClose: () => void; settings: ZominAiSettings }) {
   const [sessions, setSessions] = useState<ZominAiChatSession[]>(readZominAiChatSessions);
   const [activeSessionId, setActiveSessionId] = useState(() => sessions[0]!.id);
   const [draft, setDraft] = useState("");
@@ -1106,7 +1112,7 @@ function ZominAiChatDrawer({ onClose, settings }: { onClose: () => void; setting
     }
   }
 
-  return <aside aria-label="ZominAI chat" className="fixed inset-y-0 right-0 z-[70] flex w-full max-w-[30rem] flex-col border-l border-slate-200 bg-white pt-[4.5rem] shadow-2xl shadow-slate-950/20 sm:w-[27rem]"><header className="flex items-center gap-3 border-b border-slate-200 px-4 py-3"><span className="grid size-9 place-items-center rounded-xl bg-cyan-950 text-cyan-100"><Bot size={19} /></span><div className="min-w-0 flex-1"><p className="text-sm font-semibold text-slate-900">ZominAI</p><p className="truncate text-xs text-slate-500">Private local chat</p></div><button aria-label="Close ZominAI chat" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900" onClick={onClose}><X size={19} /></button></header><div className="flex min-h-0 flex-1"><nav aria-label="ZominAI chat history" className="flex w-32 shrink-0 flex-col border-r border-slate-200 bg-slate-50 p-2 sm:w-36"><button aria-label="New ZominAI chat" className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-cyan-700 px-2 py-2 text-xs font-semibold text-white hover:bg-cyan-800" onClick={createChat}><Plus size={15} /> New</button><div className="mt-3 min-h-0 flex-1 space-y-1 overflow-y-auto">{sessions.slice().sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)).map((session) => <button aria-current={session.id === activeSession.id ? "page" : undefined} className={`w-full truncate rounded-lg px-2 py-2 text-left text-xs leading-4 ${session.id === activeSession.id ? "bg-white font-semibold text-cyan-900 shadow-sm" : "text-slate-600 hover:bg-white"}`} key={session.id} onClick={() => { setActiveSessionId(session.id); setDraft(""); }}>{session.title}</button>)}</div></nav><section className="flex min-w-0 flex-1 flex-col"><div aria-label="ZominAI conversation" className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-slate-50/70 p-4" ref={transcriptRef}>{activeSession.messages.length === 0 ? <div className="grid h-full min-h-56 place-items-center text-center"><div className="max-w-52"><p className="text-sm font-semibold text-slate-900">Start a new chat</p><p className="mt-2 text-xs leading-5 text-slate-500">History is saved only in this browser.</p></div></div> : activeSession.messages.map((message, index) => <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`} key={`${message.role}-${index}`}><div className={`max-w-[88%] whitespace-pre-wrap rounded-2xl px-3 py-2.5 text-sm leading-6 ${message.role === "user" ? "rounded-br-md bg-cyan-800 text-white" : "rounded-bl-md border border-slate-200 bg-white text-slate-700"}`}>{message.content}</div></div>)}{sending && <div className="flex justify-start"><div className="inline-flex items-center gap-2 rounded-2xl rounded-bl-md border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-500"><LoaderCircle className="animate-spin" size={15} /> Thinking…</div></div>}</div><form className="border-t border-slate-200 bg-white p-3" onSubmit={(event) => { event.preventDefault(); void send(); }}><label className="sr-only" htmlFor="zominai-drawer-message">Message ZominAI</label><div className="flex items-end gap-2 rounded-xl border border-slate-300 p-1.5 focus-within:border-cyan-600 focus-within:ring-4 focus-within:ring-cyan-100"><textarea aria-label="Message ZominAI" className="min-h-10 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-slate-400" disabled={sending} id="zominai-drawer-message" onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder="Ask ZominAI…" rows={1} value={draft} /><button aria-label="Send message to ZominAI" className="grid size-9 place-items-center rounded-lg bg-cyan-700 text-white hover:bg-cyan-800 disabled:bg-slate-300" disabled={!draft.trim() || sending} type="submit"><Send size={17} /></button></div></form></section></div></aside>;
+  return <aside aria-label="ZominAI chat" aria-hidden={!isOpen} className={`fixed inset-y-0 right-0 z-[70] w-full max-w-[30rem] overflow-hidden border-l border-slate-200 bg-white pt-[4.5rem] shadow-2xl shadow-slate-950/20 transition-[transform,width,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none sm:w-[27rem] md:static md:z-auto md:h-auto md:max-w-none md:shrink-0 md:translate-x-0 md:border-l-0 md:bg-transparent md:pt-0 md:shadow-none ${isOpen ? "translate-x-0 md:w-[27rem] md:border-l md:border-slate-200 md:bg-white md:shadow-2xl md:shadow-slate-950/10" : "pointer-events-none translate-x-full md:w-0"}`}><div className={`flex h-full w-full flex-col bg-white transition-[transform,opacity] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none md:w-[27rem] ${isOpen ? "translate-x-0 opacity-100" : "translate-x-8 opacity-0"}`}><header className="flex items-center gap-3 border-b border-slate-200 px-4 py-3"><span className="grid size-9 place-items-center overflow-hidden rounded-xl bg-cyan-950 p-0.5"><img className="size-full rounded-[0.6rem] object-cover" src={zominAiButtonUrl} alt="ZominAI Pegasus" /></span><div className="min-w-0 flex-1"><p className="text-sm font-semibold text-slate-900">ZominAI</p><p className="truncate text-xs text-slate-500">Private local chat</p></div><button aria-label="Close ZominAI chat" className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900" onClick={onClose}><X size={19} /></button></header><div className="flex min-h-0 flex-1"><nav aria-label="ZominAI chat history" className="flex w-32 shrink-0 flex-col border-r border-slate-200 bg-slate-50 p-2 sm:w-36"><button aria-label="New ZominAI chat" className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-cyan-700 px-2 py-2 text-xs font-semibold text-white transition hover:bg-cyan-800" onClick={createChat}><Plus size={15} /> New</button><div className="mt-3 min-h-0 flex-1 space-y-1 overflow-y-auto">{sessions.slice().sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)).map((session) => <button aria-current={session.id === activeSession.id ? "page" : undefined} className={`w-full truncate rounded-lg px-2 py-2 text-left text-xs leading-4 ${session.id === activeSession.id ? "bg-white font-semibold text-cyan-900 shadow-sm" : "text-slate-600 hover:bg-white"}`} key={session.id} onClick={() => { setActiveSessionId(session.id); setDraft(""); }}>{session.title}</button>)}</div></nav><section className="flex min-w-0 flex-1 flex-col"><div aria-label="ZominAI conversation" className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-slate-50/70 p-4" ref={transcriptRef}>{activeSession.messages.length === 0 ? <div className="grid h-full min-h-56 place-items-center text-center"><div className="max-w-52"><img className="mx-auto size-12 rounded-2xl object-cover shadow-sm" src={zominAiButtonUrl} alt="ZominAI Pegasus" /><p className="mt-4 text-sm font-semibold text-slate-900">Start a new chat</p><p className="mt-2 text-xs leading-5 text-slate-500">History is saved only in this browser.</p></div></div> : activeSession.messages.map((message, index) => <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`} key={`${message.role}-${index}`}><div className={`max-w-[88%] whitespace-pre-wrap rounded-2xl px-3 py-2.5 text-sm leading-6 ${message.role === "user" ? "rounded-br-md bg-cyan-800 text-white" : "rounded-bl-md border border-slate-200 bg-white text-slate-700"}`}>{message.content}</div></div>)}{sending && <div className="flex justify-start"><div className="inline-flex items-center gap-2 rounded-2xl rounded-bl-md border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-500"><LoaderCircle className="animate-spin" size={15} /> Thinking…</div></div>}</div><form className="border-t border-slate-200 bg-white p-3" onSubmit={(event) => { event.preventDefault(); void send(); }}><label className="sr-only" htmlFor="zominai-drawer-message">Message ZominAI</label><div className="flex items-end gap-2 rounded-xl border border-slate-300 p-1.5 focus-within:border-cyan-600 focus-within:ring-4 focus-within:ring-cyan-100"><textarea aria-label="Message ZominAI" className="min-h-10 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-slate-400" disabled={sending} id="zominai-drawer-message" onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder="Ask ZominAI…" rows={1} value={draft} /><button aria-label="Send message to ZominAI" className="grid size-9 place-items-center rounded-lg bg-cyan-700 text-white hover:bg-cyan-800 disabled:bg-slate-300" disabled={!draft.trim() || sending} type="submit"><Send size={17} /></button></div></form></section></div></div></aside>;
 }
 
 function ZominAiWorkspace({ initialPane = "chat" }: { initialPane?: ZominAiPane }) {
@@ -1183,7 +1189,7 @@ function ZominAiWorkspace({ initialPane = "chat" }: { initialPane?: ZominAiPane 
   }
 
   const panes: Array<{ description: string; icon: React.ReactNode; id: ZominAiPane; label: string }> = [
-    { id: "chat", label: "Talk to ZominAI", description: "Private chat with your local model", icon: <Bot size={18} /> },
+    { id: "chat", label: "Talk to ZominAI", description: "Private chat with your local model", icon: <img className="size-[18px] rounded object-cover" src={zominAiButtonUrl} alt="" /> },
     { id: "verify", label: "Verify install", description: "Check this browser and local runtime", icon: <ShieldCheck size={18} /> },
     { id: "install", label: "Install ZominAI", description: "Set up Bonsai on this device", icon: <Download size={18} /> },
     { id: "settings", label: "ZominAI settings", description: "Local runtime and model preferences", icon: <Settings2 size={18} /> },
@@ -1192,7 +1198,7 @@ function ZominAiWorkspace({ initialPane = "chat" }: { initialPane?: ZominAiPane 
   const selectedInstallGuide = zominAiInstallGuides[installPlatform];
 
   return <div className="space-y-5">
-    <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 via-cyan-950 to-slate-900 px-7 py-8 text-white shadow-sm md:px-9"><div className="absolute -right-20 -top-24 size-72 rounded-full bg-cyan-300/15 blur-3xl" /><div className="relative max-w-4xl"><span className="inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-cyan-200/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100"><Bot size={14} /> Local Bonsai runtime</span><h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">Run ZominAI beside your Drive.</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">ZominAI stays on the device running the local model. The model weights and every inference stay on that device; Zo Drive stores only this browser’s local connection preferences, never model files, prompts, or Drive content.</p><nav aria-label="ZominAI resources" className="mt-6 grid gap-2 sm:grid-cols-3"><a className="rounded-xl border border-cyan-100/20 bg-white/10 p-3 text-sm font-semibold text-cyan-50 transition hover:border-cyan-100/50 hover:bg-white/15" href="https://prismml.com/" rel="noreferrer" target="_blank">PrismML overview <ExternalLink className="ml-1 inline" size={14} /></a><a className="rounded-xl border border-cyan-100/20 bg-white/10 p-3 text-sm font-semibold text-cyan-50 transition hover:border-cyan-100/50 hover:bg-white/15" href="https://huggingface.co/prism-ml/Bonsai-27B-gguf" rel="noreferrer" target="_blank">Bonsai model &amp; licence <ExternalLink className="ml-1 inline" size={14} /></a><a className="rounded-xl border border-cyan-100/20 bg-white/10 p-3 text-sm font-semibold text-cyan-50 transition hover:border-cyan-100/50 hover:bg-white/15" href="https://github.com/ggml-org/llama.cpp/blob/master/docs/install.md" rel="noreferrer" target="_blank">Runtime installation docs <ExternalLink className="ml-1 inline" size={14} /></a></nav></div></section>
+    <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 via-cyan-950 to-slate-900 px-7 py-8 text-white shadow-sm md:px-9"><div className="absolute -right-20 -top-24 size-72 rounded-full bg-cyan-300/15 blur-3xl" /><div className="relative max-w-4xl"><span className="inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-cyan-200/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100"><img className="size-4 rounded object-cover" src={zominAiButtonUrl} alt="" /> Local Bonsai runtime</span><h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">Run ZominAI beside your Drive.</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">ZominAI stays on the device running the local model. The model weights and every inference stay on that device; Zo Drive stores only this browser’s local connection preferences, never model files, prompts, or Drive content.</p><nav aria-label="ZominAI resources" className="mt-6 grid gap-2 sm:grid-cols-3"><a className="rounded-xl border border-cyan-100/20 bg-white/10 p-3 text-sm font-semibold text-cyan-50 transition hover:border-cyan-100/50 hover:bg-white/15" href="https://prismml.com/" rel="noreferrer" target="_blank">PrismML overview <ExternalLink className="ml-1 inline" size={14} /></a><a className="rounded-xl border border-cyan-100/20 bg-white/10 p-3 text-sm font-semibold text-cyan-50 transition hover:border-cyan-100/50 hover:bg-white/15" href="https://huggingface.co/prism-ml/Bonsai-27B-gguf" rel="noreferrer" target="_blank">Bonsai model &amp; licence <ExternalLink className="ml-1 inline" size={14} /></a><a className="rounded-xl border border-cyan-100/20 bg-white/10 p-3 text-sm font-semibold text-cyan-50 transition hover:border-cyan-100/50 hover:bg-white/15" href="https://github.com/ggml-org/llama.cpp/blob/master/docs/install.md" rel="noreferrer" target="_blank">Runtime installation docs <ExternalLink className="ml-1 inline" size={14} /></a></nav></div></section>
     <div className="grid gap-5 xl:grid-cols-[17rem_minmax(0,1fr)]"><aside className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-sm"><p className="px-3 pb-2 pt-3 text-xs font-bold uppercase tracking-[0.16em] text-slate-400">ZominAI</p>{panes.map((pane) => <button aria-label={`ZominAI menu: ${pane.label}`} className={`mb-1 flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left transition ${activePane === pane.id ? "bg-cyan-950 text-white shadow-sm" : "text-slate-700 hover:bg-slate-50"}`} key={pane.id} onClick={() => { setActivePane(pane.id); setConfirmUninstall(false); }}><span className={`mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg ${activePane === pane.id ? "bg-white/15 text-cyan-100" : "bg-slate-100 text-slate-500"}`}>{pane.icon}</span><span><span className="block text-sm font-semibold">{pane.label}</span><span className={`mt-0.5 block text-xs leading-5 ${activePane === pane.id ? "text-cyan-100" : "text-slate-400"}`}>{pane.description}</span></span></button>)}</aside>
       <div className="min-w-0">
         {activePane === "chat" && <ZominAiChat settings={settings} />}
@@ -1305,7 +1311,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
   const clusterMountsQuery = useQuery({ queryKey: ["cluster-mounts-discovery"], queryFn: () => client.listClusterMounts!(), enabled: clusterDiscoverySupported && (section === "home" || section === "shared") });
   const clusterSharedQuery = useQuery({
     queryKey: ["cluster-shared-objects", (clusterMountsQuery.data ?? []).map((mount) => mount.id).join(",")],
-    queryFn: async () => (await Promise.all((clusterMountsQuery.data ?? []).map(async (mount) => (await client.listClusterObjects!(mount.id)).map((object) => ({ ...object, mountId: mount.id, mountFolder: mount.folder }))))).flat(),
+    queryFn: async () => (await Promise.all((clusterMountsQuery.data ?? []).map(async (mount) => (await client.listClusterObjects!(mount.id)).map((object) => ({ ...object, mountAuthor: mount.author, mountFolder: mount.folder, mountId: mount.id, mountRole: mount.role }))))).flat(),
     enabled: clusterDiscoverySupported && Boolean(clusterMountsQuery.data?.length) && (section === "home" || section === "shared")
   });
   const starredQuery = useQuery({ queryKey: ["stars"], queryFn: () => client.listStarred(), enabled: section === "starred" });
@@ -1318,6 +1324,8 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
       queryClient.invalidateQueries({ queryKey: ["folders"] }),
       queryClient.invalidateQueries({ queryKey: ["stars"] }),
       queryClient.invalidateQueries({ queryKey: ["trash"] }),
+      queryClient.invalidateQueries({ queryKey: ["cluster-mounts-discovery"] }),
+      queryClient.invalidateQueries({ queryKey: ["cluster-shared-objects"] }),
       queryClient.invalidateQueries({ queryKey: ["usage"] })
     ]);
   };
@@ -1347,7 +1355,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
   const objects = filesQuery.data ?? [];
   const files = advancedSearchActive ? objects : visibleFiles(objects, currentPath);
   const recentFiles = objects.filter((file) => recentFilters.source === "any" || (recentFilters.source === "zo-native" ? isZoNativeFile(file) : !isZoNativeFile(file))).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
-  const clusterSharedFiles = (clusterSharedQuery.data ?? []).filter((file) => recentFilters.source === "any" || (recentFilters.source === "zo-native" ? isZoNativeFile(file) : !isZoNativeFile(file))).filter((file) => recentFilters.type === "any" || matchesContentTypeCategory(file.contentType, recentFilters.type)).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  const clusterSharedFiles = (clusterSharedQuery.data ?? []).filter((file) => recentFilters.source === "any" || (recentFilters.source === "zo-native" ? isZoNativeFile(file) : !isZoNativeFile(file))).filter((file) => recentFilters.type === "any" || matchesContentTypeCategory(file.contentType, recentFilters.type)).filter((file) => (!recentDateRange?.after || file.updatedAt >= recentDateRange.after) && (!recentDateRange?.before || file.updatedAt <= recentDateRange.before)).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
   const starredFiles = (starredQuery.data ?? []).filter((file) => !search || file.name.toLowerCase().includes(search.toLowerCase()));
   const trashItems = (trashQuery.data ?? []).filter((item) => matchesTrashSearch(item, search, appliedAdvancedFilters));
   const displayedFiles = section === "home" ? recentFiles : section === "starred" ? starredFiles : files;
@@ -1656,7 +1664,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
           {sidebarOpen && <UsageCard usage={usageQuery.data} onOpenBreakdown={() => setStorageBreakdownOpen(true)} />}
         </aside>
 
-        <section className="min-w-0 max-w-full flex-1 overflow-x-hidden p-4 sm:p-6 md:p-9">
+        <section className="min-w-0 max-w-full flex-1 overflow-x-hidden p-4 transition-[padding] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none sm:p-6 md:p-9">
           <div className="mb-7 flex flex-wrap items-center justify-between gap-4">
             <div>
               {section === "my-drive" && currentPath && <FolderNavigation currentPath={currentPath} onNavigate={setCurrentPath} />}
@@ -1699,7 +1707,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
           ) : (section === "my-drive" ? folders.length === 0 && files.length === 0 : section === "home" ? displayedFiles.length === 0 && clusterSharedFiles.length === 0 : displayedFiles.length === 0) ? (
             <EmptyState title={search ? "No matching files" : section === "home" ? "No recent files" : section === "starred" ? "No starred files" : "Your drive is ready for its first file"} description={section === "home" ? "Recent uploads, changes, and Zo-native files will appear here." : section === "starred" && !search ? "Use the star next to any file to keep it here." : undefined} action={section === "starred" ? "Go to My Drive" : "Upload files"} onAction={() => section === "starred" ? setSection("my-drive") : fileInput.current?.click()} />
           ) : section === "home" ? (
-            <div className="space-y-6">{clusterSharedFiles.length > 0 && <ClusterIncomingEntries files={clusterSharedFiles} mounts={clusterMountsQuery.data ?? []} onOpen={() => setSection("cluster-databases")} recent />}{recentFiles.length > 0 && <RecentEntries files={recentFiles} onPreview={openPreview} onDelete={(key) => deleteMutation.mutate(key)} onToggleStar={(file) => starMutation.mutate({ key: file.key, starred: file.starred })} onShare={(file) => { setShareSettings(null); setShareFile(file); }} />}</div>
+            <div className="space-y-6"><RecentEntries files={[...recentFiles, ...clusterSharedFiles].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))} onOpenShared={() => { setSection("cluster-databases"); setCurrentPath(""); }} onPreview={openPreview} onDelete={(key) => deleteMutation.mutate(key)} onToggleStar={(file) => starMutation.mutate({ key: file.key, starred: file.starred })} onShare={(file) => { setShareSettings(null); setShareFile(file); }} /></div>
           ) : (
             <DriveEntries
               files={displayedFiles}
@@ -1713,9 +1721,8 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
             />
           )}
         </section>
+        <ZominAiChatDrawer isOpen={zominAiChatOpen} onClose={() => setZominAiChatOpen(false)} settings={zominAiChatSettings} />
       </div>
-
-      {zominAiChatOpen && <ZominAiChatDrawer onClose={() => setZominAiChatOpen(false)} settings={zominAiChatSettings} />}
       {preview && <PreviewDialog preview={preview} onClose={closePreview} />}
       {nativeEditor && <NativeEditor key={nativeEditor.object.key} content={nativeEditor.content} fileName={nativeEditor.object.name} onClose={() => setNativeEditor(null)} onListResponses={(id) => client.listFormResponses(id)} onPublish={publishNativeForm} onRename={renameNativeFile} onSave={saveNativeFile} onShare={(settings) => { setShareSettings(settings ?? null); setShareFile(nativeEditor.object); }} />}
       {advancedSearchOpen && <AdvancedSearchDialog filters={advancedFilters} itemName={search} onCancel={() => setAdvancedSearchOpen(false)} onFiltersChange={setAdvancedFilters} onItemNameChange={setSearch} onReset={resetAdvancedSearch} onSearch={applyAdvancedSearch} />}
@@ -1878,6 +1885,14 @@ function ClusterDatabases({ client }: { client: DriveClient }) {
     queryFn: () => client.getClusterMountAccess!(openMount!),
     enabled: supported && Boolean(openMount),
   });
+  const refreshSharedDriveEntries = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["cluster-mounts"] }),
+      queryClient.invalidateQueries({ queryKey: ["cluster-mounts-discovery"] }),
+      queryClient.invalidateQueries({ queryKey: ["cluster-objects", openMount] }),
+      queryClient.invalidateQueries({ queryKey: ["cluster-shared-objects"] }),
+    ]);
+  };
   const invitationMutation = useMutation({
     mutationFn: () =>
       Promise.all(
@@ -1911,7 +1926,7 @@ function ClusterDatabases({ client }: { client: DriveClient }) {
       }),
     onSuccess: async () => {
       setInviteToken("");
-      await queryClient.invalidateQueries({ queryKey: ["cluster-mounts"] });
+      await refreshSharedDriveEntries();
       toast.success("Cluster folder connected");
     },
     onError: (error) =>
@@ -1921,11 +1936,7 @@ function ClusterDatabases({ client }: { client: DriveClient }) {
           : "Could not connect the cluster folder",
       ),
   });
-  const refreshObjects = async () => {
-    await queryClient.invalidateQueries({
-      queryKey: ["cluster-objects", openMount],
-    });
-  };
+  const refreshObjects = refreshSharedDriveEntries;
   const folderMutation = useMutation({
     mutationFn: () =>
       client.createClusterFolder!({
@@ -1991,7 +2002,7 @@ function ClusterDatabases({ client }: { client: DriveClient }) {
     mutationFn: (id: string) => client.deleteClusterMount!(id),
     onSuccess: async (_result, id) => {
       if (openMount === id) setOpenMount(null);
-      await queryClient.invalidateQueries({ queryKey: ["cluster-mounts"] });
+      await refreshSharedDriveEntries();
       toast.success("Cluster folder disconnected");
     },
     onError: (error) =>
@@ -2433,7 +2444,8 @@ function ClusterDatabases({ client }: { client: DriveClient }) {
                     <span className="block truncate text-xs text-slate-500">
                       {mount.remoteUrl}
                     </span>
-                    <span className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${mount.role === "editor" ? "bg-cyan-100 text-cyan-800" : "bg-slate-200 text-slate-600"}`}>{mount.role}</span>
+                    <span className="mt-1 block text-xs text-slate-500">Shared by {sharedDriveAuthor(mount.author)}</span>
+                    <span className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${mount.role === "editor" ? "bg-cyan-100 text-cyan-800" : "bg-slate-200 text-slate-600"}`}>{sharedDriveRoleLabel(mount.role)}</span>
                   </span>
                 </button>
                 <button
@@ -3535,8 +3547,9 @@ function RecentFiltersBar({ filters, onChange }: { filters: RecentFilters; onCha
   );
 }
 
-function RecentEntries({ files, onPreview, onDelete, onToggleStar, onShare }: {
-  files: DriveObject[];
+function RecentEntries({ files, onOpenShared, onPreview, onDelete, onToggleStar, onShare }: {
+  files: Array<DriveObject | SharedDriveFile>;
+  onOpenShared: () => void;
   onPreview: (file: DriveObject) => void;
   onDelete: (key: string) => void;
   onToggleStar: (file: DriveObject) => void;
@@ -3545,19 +3558,21 @@ function RecentEntries({ files, onPreview, onDelete, onToggleStar, onShare }: {
   const groups = groupRecentFiles(files);
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-      <div className="hidden grid-cols-[minmax(15rem,1fr)_12rem_7rem_10rem_7rem] gap-4 border-b border-slate-100 bg-slate-50 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-400 lg:grid"><span>Name</span><span>Last activity</span><span>File size</span><span>Location</span><span /></div>
+      <div className="hidden grid-cols-[minmax(13rem,1fr)_11rem_7rem_9rem_11rem_7rem] gap-4 border-b border-slate-100 bg-slate-50 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-400 lg:grid"><span>Name</span><span>Last activity</span><span>File size</span><span>Location</span><span>Access</span><span /></div>
       {groups.map(([label, items]) => (
         <section key={label}>
           <h2 className="border-b border-slate-100 bg-white px-5 py-3 text-sm font-semibold text-slate-600">{label}</h2>
-          {items.map((file) => (
-            <article key={file.key} className="group grid gap-3 border-b border-slate-100 px-5 py-3 last:border-b-0 hover:bg-slate-50 lg:grid-cols-[minmax(15rem,1fr)_12rem_7rem_10rem_7rem] lg:items-center lg:gap-4">
-              <button className="flex min-w-0 items-center gap-3 text-left" onClick={() => void onPreview(file)}><span className="rounded-lg bg-slate-100 p-2 text-slate-500">{fileIcon(file.contentType)}</span><span className="min-w-0 truncate text-sm font-medium text-slate-800">{file.name}</span></button>
+          {items.map((file) => {
+            const sharedFile = isSharedDriveFile(file);
+            return <article key={sharedFile ? `${file.mountId}:${file.key}` : file.key} className="group grid gap-3 border-b border-slate-100 px-5 py-3 last:border-b-0 hover:bg-slate-50 lg:grid-cols-[minmax(13rem,1fr)_11rem_7rem_9rem_11rem_7rem] lg:items-center lg:gap-4">
+              <button className="flex min-w-0 items-center gap-3 text-left" onClick={() => sharedFile ? onOpenShared() : void onPreview(file)}><span className={`rounded-lg p-2 ${sharedFile ? "bg-cyan-50 text-cyan-700" : "bg-slate-100 text-slate-500"}`}>{sharedFile ? <Network size={18} /> : fileIcon(file.contentType)}</span><span className="min-w-0"><span className="block truncate text-sm font-medium text-slate-800">{file.name}</span>{sharedFile && <span className="mt-0.5 block truncate text-xs text-cyan-800">Shared by {sharedDriveAuthor(file.mountAuthor)}</span>}</span></button>
               <span className="text-xs text-slate-500">{formatRecentActivity(file.updatedAt)}</span>
               <span className="text-xs text-slate-500">{formatBytes(file.size)}</span>
-              <span className="truncate text-xs text-slate-500" title={recentFileLocation(file.key)}>{recentFileLocation(file.key)}</span>
-              <div className="flex items-center justify-end gap-1"><button aria-label={`${file.starred ? "Remove" : "Add"} ${file.name} ${file.starred ? "from" : "to"} Starred`} className={`rounded-md p-2 transition hover:bg-amber-50 hover:text-amber-500 ${file.starred ? "text-amber-400" : "text-slate-400 opacity-100 md:opacity-0 md:group-hover:opacity-100"}`} onClick={() => onToggleStar(file)}><Star size={17} fill={file.starred ? "currentColor" : "none"} /></button><button aria-label={`Share ${file.name}`} className="rounded-md p-2 text-slate-400 opacity-100 transition hover:bg-blue-50 hover:text-blue-600 md:opacity-0 md:group-hover:opacity-100" onClick={() => onShare(file)}><Share2 size={17} /></button><button aria-label={`Move ${file.name} to Trash`} className="rounded-md p-2 text-slate-400 opacity-100 transition hover:bg-red-50 hover:text-red-600 md:opacity-0 md:group-hover:opacity-100" onClick={() => onDelete(file.key)}><Trash2 size={17} /></button></div>
-            </article>
-          ))}
+              <span className="truncate text-xs text-slate-500" title={sharedFile ? `${file.mountFolder} / ${file.key}` : recentFileLocation(file.key)}>{sharedFile ? file.mountFolder : recentFileLocation(file.key)}</span>
+              <span className="text-xs text-slate-500">{sharedFile ? sharedDriveRoleLabel(file.mountRole) : "Private"}</span>
+              {sharedFile ? <span className="text-right text-xs font-semibold text-cyan-800">Shared Drive</span> : <div className="flex items-center justify-end gap-1"><button aria-label={`${file.starred ? "Remove" : "Add"} ${file.name} ${file.starred ? "from" : "to"} Starred`} className={`rounded-md p-2 transition hover:bg-amber-50 hover:text-amber-500 ${file.starred ? "text-amber-400" : "text-slate-400 opacity-100 md:opacity-0 md:group-hover:opacity-100"}`} onClick={() => onToggleStar(file)}><Star size={17} fill={file.starred ? "currentColor" : "none"} /></button><button aria-label={`Share ${file.name}`} className="rounded-md p-2 text-slate-400 opacity-100 transition hover:bg-blue-50 hover:text-blue-600 md:opacity-0 md:group-hover:opacity-100" onClick={() => onShare(file)}><Share2 size={17} /></button><button aria-label={`Move ${file.name} to Trash`} className="rounded-md p-2 text-slate-400 opacity-100 transition hover:bg-red-50 hover:text-red-600 md:opacity-0 md:group-hover:opacity-100" onClick={() => onDelete(file.key)}><Trash2 size={17} /></button></div>}
+            </article>;
+          })}
         </section>
       ))}
     </div>
@@ -3638,9 +3653,9 @@ function SharedLinks({ shares, onCopy, onChangePasscode, onPreview, onRevoke }: 
   return <section aria-label="Links shared by you" className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><header className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-5"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Share links</p><h2 className="mt-1 text-base font-semibold text-slate-900">Links shared by you</h2></div><span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">{shares.length} active</span></header><div className="divide-y divide-slate-100">{shares.map((share) => <article key={share.id} className="min-w-0 p-4 sm:flex sm:items-center sm:gap-4 sm:px-5"><div className="flex min-w-0 items-center gap-3 sm:flex-1"><span className="grid size-11 shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-600"><Share2 size={20} /></span><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-800" title={share.name}>{share.name}</p><p className="mt-1 text-xs leading-5 text-slate-500">{share.access === "public" ? "Anyone with the link" : "Passcode protected"} · {share.expiresAt ? `Expires ${new Date(share.expiresAt).toLocaleString()}` : "No expiry"}</p></div></div><div aria-label={`Actions for ${share.name}`} className="mt-4 grid grid-cols-[auto_auto_1fr] items-center gap-2 border-t border-slate-100 pt-3 sm:mt-0 sm:flex sm:shrink-0 sm:border-0 sm:pt-0"><button className="grid size-10 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-blue-700" onClick={() => onPreview(share)} aria-label={`View ${share.name}`} title="Preview"><Eye size={18} /></button><button className="grid size-10 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-blue-700" onClick={() => onCopy(share)} aria-label={`Copy link for ${share.name}`} title="Copy link"><Copy size={17} /></button><button className="col-start-3 justify-self-end rounded-lg px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50" onClick={() => onRevoke(share.id)}>Revoke</button>{share.access === "passcode" && <button className="col-span-3 inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 sm:col-auto" onClick={() => onChangePasscode(share)}>Change passcode</button>}</div></article>)}</div></section>;
 }
 
-function ClusterIncomingEntries({ files, mounts, onOpen, recent = false }: { files: Array<DriveObject & { mountId: string; mountFolder: string }>; mounts: ClusterMount[]; onOpen: () => void; recent?: boolean }) {
+function ClusterIncomingEntries({ files, mounts, onOpen }: { files: SharedDriveFile[]; mounts: ClusterMount[]; onOpen: () => void }) {
   if (mounts.length === 0) return null;
-  return <section className="overflow-hidden rounded-xl border border-cyan-200 bg-cyan-50/40"><header className="flex flex-wrap items-center justify-between gap-3 border-b border-cyan-100 px-5 py-4"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-800">{recent ? "Recent from shared folders" : "Shared with me"}</p><h2 className="mt-1 text-lg font-semibold text-slate-900">{mounts.length} connected folder{mounts.length === 1 ? "" : "s"}</h2></div><button className="rounded-lg bg-cyan-700 px-3 py-2 text-sm font-semibold text-white hover:bg-cyan-800" onClick={onOpen}>Open Cluster Storage</button></header>{files.length > 0 ? <div className="divide-y divide-cyan-100">{files.slice(0, recent ? 8 : 20).map((file) => <div className="flex items-center gap-3 px-5 py-3" key={`${file.mountId}:${file.key}`}><Network size={17} className="text-cyan-700" /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-800">{file.name}</span><span className="block truncate text-xs text-slate-500">{file.mountFolder} / {file.key}</span></span><span className="text-xs text-slate-500">{formatDate(file.updatedAt)}</span></div>)}</div> : <p className="px-5 py-4 text-sm text-slate-500">The connected folder is ready. Its files will appear here when the remote Zo adds or changes them.</p>}</section>;
+  return <section className="overflow-hidden rounded-xl border border-cyan-200 bg-cyan-50/40"><header className="flex flex-wrap items-center justify-between gap-3 border-b border-cyan-100 px-5 py-4"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-800">Shared with me</p><h2 className="mt-1 text-lg font-semibold text-slate-900">{mounts.length} connected folder{mounts.length === 1 ? "" : "s"}</h2></div><button className="rounded-lg bg-cyan-700 px-3 py-2 text-sm font-semibold text-white hover:bg-cyan-800" onClick={onOpen}>Open Shared Drives</button></header>{files.length > 0 ? <div className="divide-y divide-cyan-100">{files.slice(0, 20).map((file) => <div className="flex flex-wrap items-center gap-3 px-5 py-3" key={`${file.mountId}:${file.key}`}><Network size={17} className="text-cyan-700" /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-800">{file.name}</span><span className="block truncate text-xs text-slate-500">{file.mountFolder} / {file.key}</span><span className="mt-1 block text-xs text-cyan-800">Shared by {sharedDriveAuthor(file.mountAuthor)} · {sharedDriveRoleLabel(file.mountRole)}</span></span><span className="text-xs text-slate-500">{formatDate(file.updatedAt)}</span></div>)}</div> : <p className="px-5 py-4 text-sm text-slate-500">The connected folder is ready. Its files will appear here when the remote Zo adds or changes them.</p>}</section>;
 }
 
 function SharedFilePage({ client, shareId }: { client: SharedClient; shareId: string }) {
@@ -4320,6 +4335,18 @@ function isZoNativeFile(file: DriveObject): boolean {
   return Boolean(file.nativeType) || file.contentType.startsWith("application/vnd.zo.");
 }
 
+function isSharedDriveFile(file: DriveObject | SharedDriveFile): file is SharedDriveFile {
+  return "mountId" in file;
+}
+
+function sharedDriveAuthor(author: string | null): string {
+  return author || "the folder owner";
+}
+
+function sharedDriveRoleLabel(role: ClusterRole): string {
+  return role === "editor" ? "Read & write" : "Read only";
+}
+
 function recentFileLocation(key: string): string {
   const separator = key.lastIndexOf("/");
   return separator < 0 ? "My Drive" : key.slice(0, separator);
@@ -4333,7 +4360,7 @@ function formatRecentActivity(updatedAt: string): string {
   return `Modified ${date.toLocaleDateString([], { month: "short", day: "numeric" })}`;
 }
 
-function groupRecentFiles(files: DriveObject[]): Array<[string, DriveObject[]]> {
+function groupRecentFiles(files: Array<DriveObject | SharedDriveFile>): Array<[string, Array<DriveObject | SharedDriveFile>]> {
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const weekStart = new Date(todayStart);
@@ -4341,7 +4368,7 @@ function groupRecentFiles(files: DriveObject[]): Array<[string, DriveObject[]]> 
   const lastWeekStart = new Date(todayStart);
   lastWeekStart.setDate(todayStart.getDate() - 14);
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const groups = new Map<string, DriveObject[]>();
+  const groups = new Map<string, Array<DriveObject | SharedDriveFile>>();
   for (const file of files) {
     const updatedAt = new Date(file.updatedAt);
     const label = updatedAt >= todayStart ? "Today" : updatedAt >= weekStart ? "Earlier this week" : updatedAt >= lastWeekStart ? "Last week" : updatedAt >= monthStart ? "Earlier this month" : updatedAt.toLocaleDateString([], { month: "long", year: "numeric" });
