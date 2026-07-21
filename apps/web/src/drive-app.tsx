@@ -184,10 +184,15 @@ const appBasePath = normalizeAppBasePath(
 const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.12.1";
+const GUI_VERSION = "1.12.2";
 const CLI_VERSION = "1.2.1";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.12.2",
+    date: "21 July 2026",
+    changes: ["Expanded Redis record previews to show each key's type and value."]
+  },
   {
     version: "v1.12.1",
     date: "21 July 2026",
@@ -1579,10 +1584,6 @@ function databaseRecordRequest(engine: DatabaseEngineId): Record<string, unknown
 }
 
 function databaseRecordsFromResult(engine: DatabaseEngineId, result: unknown): DatabaseRows {
-  if (engine === "redis" && Array.isArray(result)) {
-    const keys = Array.isArray(result[1]) ? result[1].filter((key): key is string => typeof key === "string") : [];
-    return { columns: ["key"], rows: keys.map((key) => ({ key })), total: keys.length };
-  }
   if (engine === "leveldb" && result && typeof result === "object" && Array.isArray((result as { entries?: unknown }).entries)) {
     const rows = (result as { entries: unknown[] }).entries.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object" && !Array.isArray(entry));
     return { columns: ["key", "value"], rows, total: rows.length };
@@ -1597,6 +1598,31 @@ function databaseRecordsFromResult(engine: DatabaseEngineId, result: unknown): D
     return { columns, rows, total: rows.length };
   }
   return { columns: ["result"], rows: [{ result }], total: 1 };
+}
+
+function redisValueRequest(key: string, type: string): Record<string, unknown> | null {
+  if (type === "string") return { command: "GET", args: [key] };
+  if (type === "hash") return { command: "HGETALL", args: [key] };
+  if (type === "list") return { command: "LRANGE", args: [key, "0", "-1"] };
+  if (type === "set") return { command: "SMEMBERS", args: [key] };
+  if (type === "zset") return { command: "ZRANGE", args: [key, "0", "-1", "WITHSCORES"] };
+  if (type === "stream") return { command: "XRANGE", args: [key, "-", "+"] };
+  return null;
+}
+
+async function browseDatabaseRecords(client: DriveClient, database: DriveDatabase, request: Record<string, unknown>): Promise<DatabaseRows> {
+  const response = await client.executeDatabase!({ id: database.id, request });
+  if (database.engine !== "redis") return databaseRecordsFromResult(database.engine, response.result);
+  const keys = Array.isArray(response.result) && Array.isArray(response.result[1]) ? response.result[1].filter((key): key is string => typeof key === "string") : [];
+  const rows = await Promise.all(keys.map(async (key) => {
+    const typeResponse = await client.executeDatabase!({ id: database.id, request: { command: "TYPE", args: [key] } });
+    const type = typeof typeResponse.result === "string" ? typeResponse.result : "unknown";
+    const valueRequest = redisValueRequest(key, type);
+    if (!valueRequest) return { key, type, value: "Use the native runner to inspect this Redis value." };
+    const valueResponse = await client.executeDatabase!({ id: database.id, request: valueRequest });
+    return { key, type, value: valueResponse.result };
+  }));
+  return { columns: ["key", "type", "value"], rows, total: rows.length };
 }
 
 function DatabaseRunner({ client, database }: { client: DriveClient; database: DriveDatabase }) {
@@ -1634,8 +1660,7 @@ function DatabaseRunner({ client, database }: { client: DriveClient; database: D
   const browseMutation = useMutation({
     mutationFn: async () => {
       if (!recordRequest) throw new Error("Use a read query in the workspace to view this engine's records");
-      const response = await client.executeDatabase!({ id: database.id, request: recordRequest });
-      return databaseRecordsFromResult(database.engine, response.result);
+      return browseDatabaseRecords(client, database, recordRequest);
     },
     onSuccess: (records) => {
       setRecordPreview(records);
@@ -1644,7 +1669,7 @@ function DatabaseRunner({ client, database }: { client: DriveClient; database: D
     onError: (error) => toast.error(error instanceof Error ? error.message : "Could not load records")
   });
 
-  return <section className="bg-slate-950 text-slate-100"><header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-5 py-4 sm:px-6"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-300">{config.label} · {database.engine}</p><p className="mt-1 max-w-2xl text-sm leading-6 text-slate-300">{config.description}</p></div><div className="flex flex-wrap gap-2">{recordRequest && <button className="rounded-lg border border-cyan-300/35 px-3 py-2 text-sm font-semibold text-cyan-100 hover:bg-cyan-300/10 disabled:text-slate-500" disabled={browseMutation.isPending || executeMutation.isPending} onClick={() => browseMutation.mutate()} type="button">{browseMutation.isPending ? "Loading records…" : "View records"}</button>}<button className="rounded-lg bg-cyan-300 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-200 disabled:bg-slate-600 disabled:text-slate-300" disabled={executeMutation.isPending || browseMutation.isPending} onClick={() => executeMutation.mutate()} type="button">{executeMutation.isPending ? "Running…" : "Run request"}</button></div></header>{recordPreview && <div className="border-b border-white/10 bg-slate-900 p-5 sm:p-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-300">Records</p><p className="mt-1 text-sm text-slate-300">{database.engine === "redis" ? "Keys in this Redis database. Use Read a key below to inspect a value." : "Loaded from this private database."}</p></div><button className="text-xs font-semibold text-slate-300 hover:text-white" onClick={() => setRecordPreview(null)} type="button">Hide records</button></div><div className="mt-4"><DatabaseTableGrid data={recordPreview} isLoading={false} tableName="records" total={recordPreview.total} dark /></div></div>}<div className="p-5 sm:p-6"><div className="flex flex-wrap gap-2">{config.examples.map((example) => <button className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:border-cyan-300/50 hover:bg-white/10 hover:text-cyan-100" key={example.label} onClick={() => setRequestText(formatDatabaseRequest(example.request))} type="button">{example.label}</button>)}</div><label className="mt-4 block text-sm font-semibold text-slate-200">Native request JSON<textarea aria-label={`${config.label} request`} className="mt-2 min-h-72 w-full resize-y rounded-xl border border-white/10 bg-slate-900 p-4 font-mono text-sm leading-6 text-slate-100 outline-none focus:border-cyan-300 focus:ring-4 focus:ring-cyan-300/15" spellCheck={false} value={requestText} onChange={(event) => setRequestText(event.target.value)} /></label></div>{result && <div className="border-t border-white/10 bg-slate-900 p-5 sm:p-6"><div className="flex items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-300">Live result</p><p className="mt-1 text-sm text-slate-300">Returned from {result.engine} in this private database.</p></div><button aria-label="Copy database result" className="rounded-lg border border-white/15 p-2 text-slate-300 hover:bg-white/10 hover:text-white" onClick={() => void copyText(JSON.stringify(result.result, null, 2), "Database result copied")}><Copy size={16} /></button></div><pre aria-label="Database request result" className="mt-4 max-h-[32rem] overflow-auto rounded-xl border border-white/10 bg-slate-950 p-4 text-xs leading-6 text-slate-100"><code>{JSON.stringify(result.result, null, 2)}</code></pre></div>}</section>;
+  return <section className="bg-slate-950 text-slate-100"><header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-5 py-4 sm:px-6"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-300">{config.label} · {database.engine}</p><p className="mt-1 max-w-2xl text-sm leading-6 text-slate-300">{config.description}</p></div><div className="flex flex-wrap gap-2">{recordRequest && <button className="rounded-lg border border-cyan-300/35 px-3 py-2 text-sm font-semibold text-cyan-100 hover:bg-cyan-300/10 disabled:text-slate-500" disabled={browseMutation.isPending || executeMutation.isPending} onClick={() => browseMutation.mutate()} type="button">{browseMutation.isPending ? "Loading records…" : "View records"}</button>}<button className="rounded-lg bg-cyan-300 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-200 disabled:bg-slate-600 disabled:text-slate-300" disabled={executeMutation.isPending || browseMutation.isPending} onClick={() => executeMutation.mutate()} type="button">{executeMutation.isPending ? "Running…" : "Run request"}</button></div></header>{recordPreview && <div className="border-b border-white/10 bg-slate-900 p-5 sm:p-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-300">Records</p><p className="mt-1 text-sm text-slate-300">{database.engine === "redis" ? "Keys, types, and values in this Redis database." : "Loaded from this private database."}</p></div><button className="text-xs font-semibold text-slate-300 hover:text-white" onClick={() => setRecordPreview(null)} type="button">Hide records</button></div><div className="mt-4"><DatabaseTableGrid data={recordPreview} isLoading={false} tableName="records" total={recordPreview.total} dark /></div></div>}<div className="p-5 sm:p-6"><div className="flex flex-wrap gap-2">{config.examples.map((example) => <button className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:border-cyan-300/50 hover:bg-white/10 hover:text-cyan-100" key={example.label} onClick={() => setRequestText(formatDatabaseRequest(example.request))} type="button">{example.label}</button>)}</div><label className="mt-4 block text-sm font-semibold text-slate-200">Native request JSON<textarea aria-label={`${config.label} request`} className="mt-2 min-h-72 w-full resize-y rounded-xl border border-white/10 bg-slate-900 p-4 font-mono text-sm leading-6 text-slate-100 outline-none focus:border-cyan-300 focus:ring-4 focus:ring-cyan-300/15" spellCheck={false} value={requestText} onChange={(event) => setRequestText(event.target.value)} /></label></div>{result && <div className="border-t border-white/10 bg-slate-900 p-5 sm:p-6"><div className="flex items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-300">Live result</p><p className="mt-1 text-sm text-slate-300">Returned from {result.engine} in this private database.</p></div><button aria-label="Copy database result" className="rounded-lg border border-white/15 p-2 text-slate-300 hover:bg-white/10 hover:text-white" onClick={() => void copyText(JSON.stringify(result.result, null, 2), "Database result copied")}><Copy size={16} /></button></div><pre aria-label="Database request result" className="mt-4 max-h-[32rem] overflow-auto rounded-xl border border-white/10 bg-slate-950 p-4 text-xs leading-6 text-slate-100"><code>{JSON.stringify(result.result, null, 2)}</code></pre></div>}</section>;
 }
 
 function DatabaseCatalog({ databaseCount, engineStates, installingEngine, updatingEngine, onCreateDatabase, onInstallEngine, onUpdateEngine, onViewDatabases }: { databaseCount: number; engineStates: DatabaseEngine[]; installingEngine: DatabaseEngineId | null | undefined; updatingEngine: DatabaseEngineId | null | undefined; onCreateDatabase: (engine: DatabaseEngineId) => void; onInstallEngine: (engine: DatabaseEngineId) => void; onUpdateEngine: (engine: DatabaseEngineId) => void; onViewDatabases: () => void }) {

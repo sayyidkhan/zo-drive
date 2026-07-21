@@ -4,6 +4,12 @@ All notable changes to the Zo Drive browser experience are recorded here.
 
 ## Unreleased
 
+## v1.12.2 - 2026-07-21
+
+### Fixed
+
+- Show the Redis key type and value in the in-Drive record preview.
+
 ## v1.12.1 - 2026-07-21
 
 ### Fixed
