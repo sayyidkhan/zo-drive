@@ -42,9 +42,9 @@ describe("DriveApp", () => {
 
       expect(screen.getByRole("heading", { name: "Manage files in your private Drive." })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Share files on your terms" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 1.21.6" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 1.22.0" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI changelog version 1.21.6" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
+      expect(screen.getByRole("link", { name: "GUI changelog version 1.22.0" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
       expect(screen.getByText((_, element) => element?.tagName === "H3" && element.textContent === "GUI v1.17.0")).toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
@@ -79,7 +79,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.21.6")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.22.0")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();
@@ -295,7 +295,8 @@ describe("DriveApp", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "ZominAI" }));
     const zominAiDrawer = await screen.findByRole("complementary", { name: "ZominAI chat" });
-    expect(zominAiDrawer).toHaveClass("md:static", "md:w-[30rem]", "duration-500");
+    expect(zominAiDrawer).toHaveClass("md:relative", "md:w-[var(--zominai-drawer-width)]", "duration-500");
+    expect(screen.getByRole("button", { name: "Resize ZominAI chat" })).toBeInTheDocument();
     expect(screen.getAllByAltText("ZominAI Pegasus")).toHaveLength(2);
     expect(screen.getByRole("button", { name: "New ZominAI chat" })).toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "ZominAI chat history" })).not.toBeInTheDocument();
@@ -331,6 +332,7 @@ describe("DriveApp", () => {
     expect(screen.getByRole("link", { name: /Bonsai model & licence/ })).toHaveAttribute("href", "https://huggingface.co/prism-ml/Bonsai-27B-gguf");
     expect(screen.getByRole("link", { name: /Runtime installation docs/ })).toHaveAttribute("href", "https://github.com/ggml-org/llama.cpp/blob/master/docs/install.md");
     expect(screen.getByRole("button", { name: "ZominAI menu: Verify install" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "ZominAI menu: Talk to ZominAI" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "ZominAI menu: Install ZominAI" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "ZominAI menu: ZominAI settings" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "ZominAI menu: Uninstall ZominAI" })).toBeInTheDocument();

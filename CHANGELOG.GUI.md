@@ -2,6 +2,16 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.22.0 - 2026-07-22
+
+### Changed
+
+- Removed the duplicate full-page **Talk to ZominAI** screen. ZominAI chat now
+  opens from its drawer, while the full workspace focuses on setup and runtime
+  management.
+- Made the desktop ZominAI drawer resizable from its left edge. The chosen
+  width is remembered in the browser.
+
 ## v1.21.6 - 2026-07-22
 
 ### Fixed
