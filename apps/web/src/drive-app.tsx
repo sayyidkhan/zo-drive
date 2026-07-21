@@ -93,7 +93,7 @@ type RecentFilters = {
   type: AdvancedFileType | "any";
 };
 
-type ZominAiPane = "install" | "settings" | "uninstall" | "verify";
+type ZominAiPane = "chat" | "install" | "settings" | "uninstall" | "verify";
 
 type ZominAiSettings = {
   contextTokens: number;
@@ -115,6 +115,11 @@ type ZominAiDownloadStatus = {
   progress: number;
   state: "downloading" | "ready" | "stopped";
   updatedAt: string;
+};
+
+type ZominAiChatMessage = {
+  content: string;
+  role: "assistant" | "user";
 };
 
 type ZominAiPlatform = "linux" | "macos" | "windows";
@@ -223,10 +228,15 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.19.1";
+const GUI_VERSION = "1.19.2";
 const CLI_VERSION = "1.2.1";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.19.2",
+    date: "2026-07-21",
+    changes: ["Made each Recent filter fill half of the filter bar for a balanced phone layout."]
+  },
   {
     version: "v1.19.1",
     date: "2026-07-21",
@@ -871,6 +881,40 @@ function localRuntimeModelsUrl(endpoint: string): string | null {
   }
 }
 
+function localRuntimeChatUrl(endpoint: string): string | null {
+  try {
+    const url = new URL(endpoint);
+    if (!localRuntimeModelsUrl(endpoint)) return null;
+    url.pathname = `${url.pathname.replace(/\/$/, "")}/v1/chat/completions`.replace(/\/v1\/v1\//, "/v1/");
+    url.search = "";
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+async function sendZominAiMessage(settings: ZominAiSettings, messages: ZominAiChatMessage[]): Promise<string> {
+  const url = localRuntimeChatUrl(settings.endpoint);
+  if (!url) throw new Error("Use a localhost or 127.0.0.1 runtime address.");
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: settings.model,
+      messages: [
+        { role: "system", content: "You are ZominAI, a helpful private local assistant. Do not claim access to Zo Drive files unless the user has explicitly pasted their contents into this conversation." },
+        ...messages
+      ],
+      stream: false
+    })
+  });
+  if (!response.ok) throw new Error(`ZominAI could not reply (HTTP ${response.status}). Check that the local Bonsai runtime is ready.`);
+  const body = await response.json() as { choices?: Array<{ message?: { content?: unknown } }> };
+  const content = body.choices?.[0]?.message?.content;
+  if (typeof content !== "string" || !content.trim()) throw new Error("The local runtime returned an empty response.");
+  return content.trim();
+}
+
 async function getZominAiDownloadStatus(signal?: AbortSignal): Promise<ZominAiDownloadStatus> {
   const response = await fetch(zominAiStatusUrl, { headers: { Accept: "application/json" }, signal });
   if (!response.ok) throw new Error(`Status service returned ${response.status}`);
@@ -929,8 +973,43 @@ async function verifyZominAiInstall(settings: ZominAiSettings): Promise<ZominAiV
   return { checkedAt: new Date().toISOString(), runtime, storage, webGpu };
 }
 
-function ZominAiWorkspace() {
-  const [activePane, setActivePane] = useState<ZominAiPane>("verify");
+function ZominAiChat({ settings }: { settings: ZominAiSettings }) {
+  const [draft, setDraft] = useState("");
+  const [messages, setMessages] = useState<ZominAiChatMessage[]>([]);
+  const [sending, setSending] = useState(false);
+  const transcriptRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    transcriptRef.current?.scrollTo({ top: transcriptRef.current.scrollHeight });
+  }, [messages, sending]);
+
+  async function send() {
+    const content = draft.trim();
+    if (!content || sending) return;
+    const nextMessages = [...messages, { role: "user" as const, content }];
+    setMessages(nextMessages);
+    setDraft("");
+    setSending(true);
+    try {
+      const reply = await sendZominAiMessage(settings, nextMessages);
+      setMessages((current) => [...current, { role: "assistant", content: reply }]);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "The local runtime could not be reached.";
+      setMessages((current) => [...current, { role: "assistant", content: `I could not connect to ZominAI. ${detail}` }]);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return <section className="flex min-h-[36rem] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <header className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 px-5 py-5 sm:px-6"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-700">Private local chat</p><h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">Talk to ZominAI</h2><p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">Messages go only to the local Bonsai runtime on this device. Nothing is saved to Zo Drive, and ZominAI cannot read Drive files unless you paste content here.</p></div><span className="rounded-full border border-cyan-100 bg-cyan-50 px-3 py-1.5 font-mono text-xs font-semibold text-cyan-800">{settings.endpoint}</span></header>
+    <div aria-label="ZominAI conversation" className="flex-1 space-y-4 overflow-y-auto bg-slate-50/70 p-5 sm:p-6" ref={transcriptRef}>{messages.length === 0 ? <div className="grid min-h-64 place-items-center"><div className="max-w-md text-center"><span className="mx-auto grid size-12 place-items-center rounded-2xl bg-cyan-950 text-cyan-100"><Bot size={24} /></span><p className="mt-4 text-base font-semibold text-slate-900">Start a private conversation.</p><p className="mt-2 text-sm leading-6 text-slate-500">Ask anything. The chat stays in this open browser tab and is cleared when you refresh or leave.</p></div></div> : messages.map((message, index) => <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`} key={`${message.role}-${index}`}><div className={`max-w-[88%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm ${message.role === "user" ? "rounded-br-md bg-cyan-800 text-white" : "rounded-bl-md border border-slate-200 bg-white text-slate-700"}`}>{message.content}</div></div>)}{sending && <div className="flex justify-start"><div className="inline-flex items-center gap-2 rounded-2xl rounded-bl-md border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500 shadow-sm"><LoaderCircle className="animate-spin" size={16} /> ZominAI is thinking…</div></div>}</div>
+    <form className="border-t border-slate-200 bg-white p-4 sm:p-5" onSubmit={(event) => { event.preventDefault(); void send(); }}><label className="sr-only" htmlFor="zominai-message">Message ZominAI</label><div className="flex items-end gap-3 rounded-2xl border border-slate-300 bg-white p-2 focus-within:border-cyan-600 focus-within:ring-4 focus-within:ring-cyan-100"><textarea id="zominai-message" aria-label="Message ZominAI" className="min-h-12 flex-1 resize-none bg-transparent px-3 py-2 text-sm leading-6 text-slate-800 outline-none placeholder:text-slate-400" disabled={sending} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder="Ask ZominAI anything…" rows={1} value={draft} /><button aria-label="Send message to ZominAI" className="grid size-10 shrink-0 place-items-center rounded-xl bg-cyan-700 text-white transition hover:bg-cyan-800 disabled:bg-slate-300" disabled={!draft.trim() || sending} type="submit"><Send size={18} /></button></div><div className="mt-2 flex items-center justify-between gap-3 px-2 text-xs text-slate-400"><span>Enter to send · Shift+Enter for a new line</span>{messages.length > 0 && <button className="font-medium text-slate-500 hover:text-slate-800" onClick={() => setMessages([])} type="button">Clear chat</button>}</div></form>
+  </section>;
+}
+
+function ZominAiWorkspace({ initialPane = "chat" }: { initialPane?: ZominAiPane }) {
+  const [activePane, setActivePane] = useState<ZominAiPane>(initialPane);
   const [installPlatform, setInstallPlatform] = useState<ZominAiPlatform>(detectZominAiPlatform);
   const [settings, setSettings] = useState<ZominAiSettings>(readZominAiSettings);
   const [verification, setVerification] = useState<ZominAiVerification | null>(null);
@@ -939,6 +1018,8 @@ function ZominAiWorkspace() {
   const [verifying, setVerifying] = useState(false);
   const [confirmUninstall, setConfirmUninstall] = useState(false);
   const [uninstalled, setUninstalled] = useState(false);
+
+  useEffect(() => setActivePane(initialPane), [initialPane]);
 
   useEffect(() => {
     if (uninstalled) {
@@ -1001,6 +1082,7 @@ function ZominAiWorkspace() {
   }
 
   const panes: Array<{ description: string; icon: React.ReactNode; id: ZominAiPane; label: string }> = [
+    { id: "chat", label: "Talk to ZominAI", description: "Private chat with your local model", icon: <Bot size={18} /> },
     { id: "verify", label: "Verify install", description: "Check this browser and local runtime", icon: <ShieldCheck size={18} /> },
     { id: "install", label: "Install ZominAI", description: "Set up Bonsai on this device", icon: <Download size={18} /> },
     { id: "settings", label: "ZominAI settings", description: "Local runtime and model preferences", icon: <Settings2 size={18} /> },
@@ -1012,6 +1094,7 @@ function ZominAiWorkspace() {
     <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 via-cyan-950 to-slate-900 px-7 py-8 text-white shadow-sm md:px-9"><div className="absolute -right-20 -top-24 size-72 rounded-full bg-cyan-300/15 blur-3xl" /><div className="relative max-w-4xl"><span className="inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-cyan-200/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100"><Bot size={14} /> Local Bonsai runtime</span><h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">Run ZominAI beside your Drive.</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">ZominAI stays on the device running the local model. The model weights and every inference stay on that device; Zo Drive stores only this browser’s local connection preferences, never model files, prompts, or Drive content.</p><nav aria-label="ZominAI resources" className="mt-6 grid gap-2 sm:grid-cols-3"><a className="rounded-xl border border-cyan-100/20 bg-white/10 p-3 text-sm font-semibold text-cyan-50 transition hover:border-cyan-100/50 hover:bg-white/15" href="https://prismml.com/" rel="noreferrer" target="_blank">PrismML overview <ExternalLink className="ml-1 inline" size={14} /></a><a className="rounded-xl border border-cyan-100/20 bg-white/10 p-3 text-sm font-semibold text-cyan-50 transition hover:border-cyan-100/50 hover:bg-white/15" href="https://huggingface.co/prism-ml/Bonsai-27B-gguf" rel="noreferrer" target="_blank">Bonsai model &amp; licence <ExternalLink className="ml-1 inline" size={14} /></a><a className="rounded-xl border border-cyan-100/20 bg-white/10 p-3 text-sm font-semibold text-cyan-50 transition hover:border-cyan-100/50 hover:bg-white/15" href="https://github.com/ggml-org/llama.cpp/blob/master/docs/install.md" rel="noreferrer" target="_blank">Runtime installation docs <ExternalLink className="ml-1 inline" size={14} /></a></nav></div></section>
     <div className="grid gap-5 xl:grid-cols-[17rem_minmax(0,1fr)]"><aside className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-sm"><p className="px-3 pb-2 pt-3 text-xs font-bold uppercase tracking-[0.16em] text-slate-400">ZominAI</p>{panes.map((pane) => <button aria-label={`ZominAI menu: ${pane.label}`} className={`mb-1 flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left transition ${activePane === pane.id ? "bg-cyan-950 text-white shadow-sm" : "text-slate-700 hover:bg-slate-50"}`} key={pane.id} onClick={() => { setActivePane(pane.id); setConfirmUninstall(false); }}><span className={`mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg ${activePane === pane.id ? "bg-white/15 text-cyan-100" : "bg-slate-100 text-slate-500"}`}>{pane.icon}</span><span><span className="block text-sm font-semibold">{pane.label}</span><span className={`mt-0.5 block text-xs leading-5 ${activePane === pane.id ? "text-cyan-100" : "text-slate-400"}`}>{pane.description}</span></span></button>)}</aside>
       <div className="min-w-0">
+        {activePane === "chat" && <ZominAiChat settings={settings} />}
         {activePane === "verify" && <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-700">Readiness check</p><h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">Verify this device before downloading.</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">This checks browser WebGPU, estimated local storage, and the configured localhost runtime. It does not inspect or upload files from this Drive.</p></div><button aria-label="Verify ZominAI install" className="inline-flex items-center gap-2 rounded-lg bg-cyan-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-cyan-800 disabled:bg-slate-300" disabled={verifying} onClick={() => void verify()}>{verifying ? <LoaderCircle className="animate-spin" size={17} /> : <ShieldCheck size={17} />}{verifying ? "Checking…" : "Verify install"}</button></div>{verification ? <div className="mt-6 grid gap-3"><ZominAiCheck label="WebGPU" result={verification.webGpu} /><ZominAiCheck label="Browser storage" result={verification.storage} /><ZominAiCheck label="Local runtime" result={verification.runtime} /><p className="pt-1 text-xs text-slate-400">Last checked {new Date(verification.checkedAt).toLocaleString()}.</p></div> : <div className="mt-6 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">No verification has run in this browser yet.</div>}</section>}
         {activePane === "install" && <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-700">Local installation</p><h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">Install Bonsai where you use it.</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">ZominAI runs on your own device, not on the Zo server. The local runtime listens only at <span className="font-mono text-slate-700">127.0.0.1:57183</span>; the first run downloads about 3.8 GB locally.</p><div className="mt-6 flex flex-wrap gap-2" role="group" aria-label="ZominAI platform"><PlatformChoice active={installPlatform === "macos"} label="macOS" onClick={() => setInstallPlatform("macos")} /><PlatformChoice active={installPlatform === "linux"} label="Linux" onClick={() => setInstallPlatform("linux")} /><PlatformChoice active={installPlatform === "windows"} label="Windows" onClick={() => setInstallPlatform("windows")} /></div><div className="mt-5 rounded-xl border border-cyan-100 bg-cyan-50/60 p-4"><p className="text-sm font-semibold text-slate-900">{selectedInstallGuide.label} setup</p><p className="mt-1 text-sm leading-6 text-slate-600">{selectedInstallGuide.prerequisite}</p><p className="mt-2 text-sm leading-6 text-cyan-900">{selectedInstallGuide.support}</p></div>{installPlatform === "macos" ? <ZominAiDownloadProgress status={downloadStatus} unavailable={downloadStatusUnavailable} /> : <div className="mt-6 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-500">Persistent download tracking is bundled with the supported macOS installer. Linux and Windows need the ZominAI Local Agent before this tracker can be enabled; use Verify install after the model starts.</div>}<div className="mt-6 rounded-xl bg-slate-950 p-4"><pre className="overflow-x-auto text-xs leading-6 text-cyan-100"><code>{selectedInstallGuide.command}</code></pre></div><p className="mt-3 text-xs leading-5 text-slate-500">Run the command in any terminal after <span className="font-mono">llama-server</span> is installed on your command path. If you build it yourself, run the generated binary from its build folder or add that folder to your command path. The model is cached locally at <span className="font-mono text-slate-700">{selectedInstallGuide.modelLocation}</span>.</p><div className="mt-5 flex flex-wrap gap-3"><button className="inline-flex items-center gap-2 rounded-lg bg-cyan-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-cyan-800" onClick={() => void copyInstallCommand(selectedInstallGuide.command)}><Copy size={17} /> Copy {selectedInstallGuide.label} setup</button><a className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="https://huggingface.co/prism-ml/Bonsai-27B-gguf" rel="noreferrer" target="_blank">Open Bonsai download <ExternalLink size={16} /></a><button className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-cyan-800 hover:bg-cyan-50" onClick={() => setActivePane("verify")}>Verify after setup <ArrowUpRight size={16} /></button></div></section>}
         {activePane === "settings" && <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-700">Connection settings</p><h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">ZominAI settings</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">These values stay in this browser only. The endpoint must be local to protect Drive data from accidental remote inference routing.</p><div className="mt-6 grid gap-5 md:grid-cols-2"><label className="block text-sm font-semibold text-slate-700">Local runtime address<input aria-label="ZominAI runtime address" className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-mono text-sm outline-none focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100" value={settings.endpoint} onChange={(event) => { setUninstalled(false); setSettings((current) => ({ ...current, endpoint: event.target.value })); }} /></label><label className="block text-sm font-semibold text-slate-700">Model file<input aria-label="ZominAI model file" className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-mono text-sm outline-none focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100" value={settings.model} onChange={(event) => { setUninstalled(false); setSettings((current) => ({ ...current, model: event.target.value })); }} /></label><label className="block text-sm font-semibold text-slate-700">Context window<input aria-label="ZominAI context window" className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100" max={32768} min={1024} step={1024} type="number" value={settings.contextTokens} onChange={(event) => { setUninstalled(false); setSettings((current) => ({ ...current, contextTokens: Number(event.target.value) || 1024 })); }} /></label></div><div className="mt-6 flex flex-wrap items-center gap-3"><button className="inline-flex items-center gap-2 rounded-lg bg-cyan-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-cyan-800" onClick={() => void verify()}><Cpu size={17} /> Save and verify</button><p className="text-xs text-slate-400">Saved automatically in this browser.</p></div></section>}
@@ -3307,17 +3390,17 @@ function DriveEntries({ files, folders, viewMode, onOpenFolder, onPreview, onDel
 
 function RecentFiltersBar({ filters, onChange }: { filters: RecentFilters; onChange: (filters: RecentFilters) => void }) {
   return (
-    <div className="mb-6 flex flex-wrap gap-2" aria-label="Recent filters">
+    <div data-testid="recent-filters" className="mb-6 grid grid-cols-2 gap-2" aria-label="Recent filters">
       <label className="sr-only" htmlFor="recent-type">Type</label>
-      <select id="recent-type" aria-label="Recent file type" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm outline-none hover:border-blue-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-100" value={filters.type} onChange={(event) => onChange({ ...filters, type: event.target.value as RecentFilters["type"] })}>
+      <select id="recent-type" aria-label="Recent file type" className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm outline-none hover:border-blue-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-100" value={filters.type} onChange={(event) => onChange({ ...filters, type: event.target.value as RecentFilters["type"] })}>
         <option value="any">All types</option><option value="document">Documents</option><option value="spreadsheet">Spreadsheets</option><option value="presentation">Presentations</option><option value="form">Forms</option><option value="image">Images</option><option value="video">Videos</option><option value="audio">Audio</option><option value="pdf">PDFs</option><option value="other">Other files</option>
       </select>
       <label className="sr-only" htmlFor="recent-modified">Modified</label>
-      <select id="recent-modified" aria-label="Recent modified date" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm outline-none hover:border-blue-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-100" value={filters.modified} onChange={(event) => onChange({ ...filters, modified: event.target.value as RecentFilters["modified"] })}>
+      <select id="recent-modified" aria-label="Recent modified date" className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm outline-none hover:border-blue-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-100" value={filters.modified} onChange={(event) => onChange({ ...filters, modified: event.target.value as RecentFilters["modified"] })}>
         <option value="any">Any time</option><option value="today">Modified today</option><option value="week">Past week</option><option value="month">Past month</option><option value="year">Past year</option>
       </select>
       <label className="sr-only" htmlFor="recent-source">Source</label>
-      <select id="recent-source" aria-label="Recent source" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm outline-none hover:border-blue-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-100" value={filters.source} onChange={(event) => onChange({ ...filters, source: event.target.value as RecentFilters["source"] })}>
+      <select id="recent-source" aria-label="Recent source" className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm outline-none hover:border-blue-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-100" value={filters.source} onChange={(event) => onChange({ ...filters, source: event.target.value as RecentFilters["source"] })}>
         <option value="any">All sources</option><option value="uploaded">Uploaded files</option><option value="zo-native">Zo-native files</option>
       </select>
       {(filters.type !== "any" || filters.modified !== "any" || filters.source !== "any") && <button className="rounded-lg px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50" onClick={() => onChange(defaultRecentFilters)}>Clear filters</button>}

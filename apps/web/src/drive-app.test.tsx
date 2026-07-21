@@ -40,9 +40,9 @@ describe("DriveApp", () => {
 
       expect(screen.getByRole("heading", { name: "Manage files in your private Drive." })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Share files on your terms" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 1.19.1" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 1.19.2" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI changelog version 1.19.1" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
+      expect(screen.getByRole("link", { name: "GUI changelog version 1.19.2" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
       expect(screen.getByText((_, element) => element?.tagName === "H3" && element.textContent === "GUI v1.17.0")).toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
@@ -77,7 +77,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.19.1")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.19.2")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();
@@ -437,6 +437,10 @@ describe("DriveApp", () => {
     expect(await screen.findByRole("heading", { name: "Recent" })).toBeInTheDocument();
     expect(await screen.findByText("Last activity")).toBeInTheDocument();
     expect(screen.getByText("Notes")).toBeInTheDocument();
+    expect(screen.getByTestId("recent-filters")).toHaveClass("grid", "grid-cols-2");
+    expect(screen.getByRole("combobox", { name: "Recent file type" })).toHaveClass("w-full");
+    expect(screen.getByRole("combobox", { name: "Recent modified date" })).toHaveClass("w-full");
+    expect(screen.getByRole("combobox", { name: "Recent source" })).toHaveClass("w-full");
     fireEvent.change(screen.getByLabelText("Recent file type"), { target: { value: "image" } });
     await waitFor(() => expect(client.list).toHaveBeenLastCalledWith(expect.objectContaining({ type: "image" })));
     fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));

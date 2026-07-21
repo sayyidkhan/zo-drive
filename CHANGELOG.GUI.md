@@ -2,6 +2,12 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.19.2 - 2026-07-21
+
+### Fixed
+
+- Made each Recent filter use half of the available filter bar width.
+
 ## v1.19.1 - 2026-07-21
 
 ### Fixed
