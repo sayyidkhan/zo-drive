@@ -132,6 +132,34 @@ export class ZoDriveClient {
     return listObjectsResponseSchema.parse(await response.json()).objects;
   }
 
+  async uploadClusterObject({ id, file, fileName, path }: { id: string; file: Blob; fileName: string; path?: string }): Promise<DriveObject> {
+    const headers = this.uploadHeaders(file, fileName, path);
+    const response = await this.request(`/clusters/mounts/${encodeURIComponent(id)}/objects`, { body: file, headers, method: "POST" });
+    return driveObjectSchema.parse(await response.json());
+  }
+
+  async createClusterFolder({ id, path }: { id: string; path: string }): Promise<DriveFolder> {
+    const response = await this.request(`/clusters/mounts/${encodeURIComponent(id)}/folders`, { body: JSON.stringify({ path }), headers: { "content-type": "application/json" }, method: "POST" });
+    return driveFolderSchema.parse(await response.json());
+  }
+
+  async renameClusterObject({ id, key, name }: { id: string; key: string; name: string }): Promise<DriveObject> {
+    const response = await this.request(`/clusters/mounts/${encodeURIComponent(id)}/objects/${encodeDriveKey(key)}`, { body: JSON.stringify({ name }), headers: { "content-type": "application/json" }, method: "PATCH" });
+    return driveObjectSchema.parse(await response.json());
+  }
+
+  async downloadClusterObject({ id, key }: { id: string; key: string }): Promise<Response> {
+    return this.request(`/clusters/mounts/${encodeURIComponent(id)}/objects/${encodeDriveKey(key)}`, { method: "GET" });
+  }
+
+  async deleteClusterObject({ id, key }: { id: string; key: string }): Promise<void> {
+    await this.request(`/clusters/mounts/${encodeURIComponent(id)}/objects/${encodeDriveKey(key)}`, { method: "DELETE" });
+  }
+
+  async deleteClusterMount(id: string): Promise<void> {
+    await this.request(`/clusters/mounts/${encodeURIComponent(id)}`, { method: "DELETE" });
+  }
+
   async getHealth(): Promise<Health> {
     const response = await this.request("/health", { method: "GET" });
     return healthSchema.parse(await response.json());

@@ -273,6 +273,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
       await databaseApiKeys.renameOwner({ fromUserId: userId, toUserId: nextUserId });
       await functions.renameOwner({ fromUserId: userId, toUserId: nextUserId });
       await apiKeys?.renameOwner({ fromUserId: userId, toUserId: nextUserId });
+      await clusters.renameOwner({ fromUserId: userId, toUserId: nextUserId });
       const user = await auth.store.renameUser(userId, nextUserId);
       if (!user) return context.json({ error: { code: "PROFILE_UPDATE_FAILED", message: "Could not update the username" } }, 409);
       context.header("set-cookie", auth.sessions.cookieHeader(auth.sessions.create(user.id), auth.secureCookies));
@@ -305,6 +306,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
       await databaseApiKeys.removeByOwner(userId);
       await functions.removeByOwner(userId);
       await apiKeys?.removeByOwner(userId);
+      await clusters.removeByOwner(userId);
       await auth.store.removeUser(userId);
       context.header("set-cookie", auth.sessions.clearCookieHeader(auth.secureCookies));
       return context.body(null, 204);
@@ -501,9 +503,65 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     if (!userId) return unauthorized(context);
     const mount = await clusters.findMount({ ownerUserId: userId, id: context.req.param("id") });
     if (!mount) return context.json({ error: { code: "NOT_FOUND", message: "Cluster mount not found" } }, 404);
-    const response = await fetch(`${mount.remoteUrl}/cluster/peers/${mount.remotePeerId}/objects`, { headers: { authorization: `Bearer ${mount.remotePeerKey}` } });
+    const response = await forwardClusterRequest(mount, "/objects");
     if (!response.ok) return context.json({ error: { code: "REMOTE_UNAVAILABLE", message: "Could not read this cluster mount" } }, 502);
     return context.json(await response.json());
+  });
+
+  app.post("/clusters/mounts/:id/objects", async (context) => {
+    const userId = await requireClusterOwner(context.req.raw, resolveActiveUser, auth);
+    if (!userId) return unauthorized(context);
+    const mount = await clusters.findMount({ ownerUserId: userId, id: context.req.param("id") });
+    if (!mount) return context.json({ error: { code: "NOT_FOUND", message: "Cluster mount not found" } }, 404);
+    const response = await forwardClusterRequest(mount, "/objects", context.req.raw);
+    return clusterProxyResponse(response);
+  });
+
+  app.post("/clusters/mounts/:id/folders", async (context) => {
+    const userId = await requireClusterOwner(context.req.raw, resolveActiveUser, auth);
+    if (!userId) return unauthorized(context);
+    const mount = await clusters.findMount({ ownerUserId: userId, id: context.req.param("id") });
+    if (!mount) return context.json({ error: { code: "NOT_FOUND", message: "Cluster mount not found" } }, 404);
+    return clusterProxyResponse(await forwardClusterRequest(mount, "/folders", context.req.raw));
+  });
+
+  app.get("/clusters/mounts/:id/objects/*", async (context) => {
+    const userId = await requireClusterOwner(context.req.raw, resolveActiveUser, auth);
+    if (!userId) return unauthorized(context);
+    const id = context.req.param("id");
+    const mount = await clusters.findMount({ ownerUserId: userId, id });
+    if (!mount) return context.json({ error: { code: "NOT_FOUND", message: "Cluster mount not found" } }, 404);
+    const key = clusterObjectKeyFromPath(context.req.path, `/clusters/mounts/${id}/objects/`);
+    return clusterProxyResponse(await forwardClusterRequest(mount, `/objects/${encodeURIComponent(key)}`));
+  });
+
+  app.patch("/clusters/mounts/:id/objects/*", async (context) => {
+    const userId = await requireClusterOwner(context.req.raw, resolveActiveUser, auth);
+    if (!userId) return unauthorized(context);
+    const id = context.req.param("id");
+    const mount = await clusters.findMount({ ownerUserId: userId, id });
+    if (!mount) return context.json({ error: { code: "NOT_FOUND", message: "Cluster mount not found" } }, 404);
+    const key = clusterObjectKeyFromPath(context.req.path, `/clusters/mounts/${id}/objects/`);
+    return clusterProxyResponse(await forwardClusterRequest(mount, `/objects/${encodeURIComponent(key)}`, context.req.raw));
+  });
+
+  app.delete("/clusters/mounts/:id/objects/*", async (context) => {
+    const userId = await requireClusterOwner(context.req.raw, resolveActiveUser, auth);
+    if (!userId) return unauthorized(context);
+    const id = context.req.param("id");
+    const mount = await clusters.findMount({ ownerUserId: userId, id });
+    if (!mount) return context.json({ error: { code: "NOT_FOUND", message: "Cluster mount not found" } }, 404);
+    const key = clusterObjectKeyFromPath(context.req.path, `/clusters/mounts/${id}/objects/`);
+    return clusterProxyResponse(await forwardClusterRequest(mount, `/objects/${encodeURIComponent(key)}`, context.req.raw));
+  });
+
+  app.delete("/clusters/mounts/:id", async (context) => {
+    const userId = await requireClusterOwner(context.req.raw, resolveActiveUser, auth);
+    if (!userId) return unauthorized(context);
+    const mount = await clusters.removeMount({ ownerUserId: userId, id: context.req.param("id") });
+    if (!mount) return context.json({ error: { code: "NOT_FOUND", message: "Cluster mount not found" } }, 404);
+    await forwardClusterRequest(mount, "/disconnect", new Request("http://cluster.local", { method: "DELETE" })).catch(() => null);
+    return context.body(null, 204);
   });
 
   app.get("/cluster/peers/:id/objects", async (context) => {
@@ -513,6 +571,63 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     const objects = await storage.list({ userId: peer.ownerUserId, prefix: peer.folder });
     const prefix = `${peer.folder}/`;
     return context.json({ objects: objects.map((object) => ({ ...object, key: object.key.startsWith(prefix) ? object.key.slice(prefix.length) : object.key })) });
+  });
+
+  app.post("/cluster/peers/:id/objects", async (context) => {
+    const peer = await requireClusterPeer(context, clusters);
+    if (!peer) return unauthorized(context);
+    const fileName = decodeUploadHeader(context.req.header("x-zo-drive-file-name"));
+    const path = decodeUploadHeader(context.req.header("x-zo-drive-path"));
+    if (!fileName || fileName.length > 1_024 || path.length > 1_024 || !context.req.raw.body) return context.json({ error: { code: "INVALID_REQUEST", message: "A valid file and relative folder are required" } }, 400);
+    const relativeKey = path ? `${path.replace(/\/$/, "")}/${fileName}` : fileName;
+    const object = await storage.write({ userId: peer.ownerUserId, key: clusterScopedKey(peer.folder, relativeKey), contentType: context.req.header("content-type"), content: Readable.fromWeb(context.req.raw.body as import("node:stream/web").ReadableStream) });
+    return context.json(clusterObjectForPeer(peer.folder, object), 201);
+  });
+
+  app.post("/cluster/peers/:id/folders", async (context) => {
+    const peer = await requireClusterPeer(context, clusters);
+    if (!peer) return unauthorized(context);
+    const parsed = createFolderSchema.safeParse(await context.req.json().catch(() => null));
+    if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "A valid relative folder path is required" } }, 400);
+    const folder = await storage.createFolder({ userId: peer.ownerUserId, key: clusterScopedKey(peer.folder, parsed.data.path) });
+    return context.json({ ...folder, key: clusterRelativeKey(peer.folder, folder.key) }, 201);
+  });
+
+  app.get("/cluster/peers/:id/objects/*", async (context) => {
+    const peer = await requireClusterPeer(context, clusters);
+    if (!peer) return unauthorized(context);
+    const key = clusterScopedKey(peer.folder, clusterObjectKeyFromPath(context.req.path, `/cluster/peers/${context.req.param("id")}/objects/`));
+    const object = await storage.read({ userId: peer.ownerUserId, key });
+    return new Response(Readable.toWeb(storage.createReadStream(object.filePath)) as ReadableStream, { headers: { "content-disposition": `inline; filename*=UTF-8''${encodeURIComponent(object.name)}`, "content-length": object.size.toString(), "content-type": object.contentType, "last-modified": object.updatedAt } });
+  });
+
+  app.patch("/cluster/peers/:id/objects/*", async (context) => {
+    const peer = await requireClusterPeer(context, clusters);
+    if (!peer) return unauthorized(context);
+    const parsed = updateFileSchema.safeParse(await context.req.json().catch(() => null));
+    if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Enter a valid file name or relative destination" } }, 400);
+    const key = clusterScopedKey(peer.folder, clusterObjectKeyFromPath(context.req.path, `/cluster/peers/${context.req.param("id")}/objects/`));
+    const object = parsed.data.copyTo
+      ? await storage.copyFile({ userId: peer.ownerUserId, key, destination: clusterScopedKey(peer.folder, parsed.data.copyTo), overwrite: parsed.data.overwrite })
+      : parsed.data.destination
+        ? await storage.moveFile({ userId: peer.ownerUserId, key, destination: clusterScopedKey(peer.folder, parsed.data.destination) })
+        : await storage.renameFile({ userId: peer.ownerUserId, key, name: parsed.data.name! });
+    return context.json(clusterObjectForPeer(peer.folder, object));
+  });
+
+  app.delete("/cluster/peers/:id/objects/*", async (context) => {
+    const peer = await requireClusterPeer(context, clusters);
+    if (!peer) return unauthorized(context);
+    const key = clusterScopedKey(peer.folder, clusterObjectKeyFromPath(context.req.path, `/cluster/peers/${context.req.param("id")}/objects/`));
+    await storage.trash({ userId: peer.ownerUserId, key });
+    await forms?.removeByKey({ ownerUserId: peer.ownerUserId, key });
+    return context.body(null, 204);
+  });
+
+  app.delete("/cluster/peers/:id/disconnect", async (context) => {
+    const key = context.req.header("authorization")?.match(/^Bearer (zcs_[A-Za-z0-9_-]+)$/)?.[1];
+    if (!key || !(await clusters.removePeer({ id: context.req.param("id"), key }))) return unauthorized(context);
+    return context.body(null, 204);
   });
 
   app.get("/folders", async (context) => {
@@ -1007,6 +1122,58 @@ function normaliseRemoteUrl(value: string): string | null {
     url.search = ""; url.hash = "";
     return url.toString().replace(/\/$/, "");
   } catch { return null; }
+}
+
+async function requireClusterPeer(context: Context, clusters: LocalClusterStore) {
+  const key = context.req.header("authorization")?.match(/^Bearer (zcs_[A-Za-z0-9_-]+)$/)?.[1];
+  const id = context.req.param("id");
+  return key && id ? clusters.authorizePeer({ id, key }) : null;
+}
+
+function clusterScopedKey(folder: string, relativeKey: string): string {
+  const safeFolder = clusterSafeRelativeKey(folder);
+  const safeRelativeKey = clusterSafeRelativeKey(relativeKey);
+  return `${safeFolder}/${safeRelativeKey}`;
+}
+
+function clusterRelativeKey(folder: string, key: string): string {
+  const prefix = `${clusterSafeRelativeKey(folder)}/`;
+  if (!key.startsWith(prefix)) throw new UnsafeDrivePathError("Cluster path is outside the shared folder");
+  return key.slice(prefix.length);
+}
+
+function clusterSafeRelativeKey(value: string): string {
+  if (typeof value !== "string" || value.trim() === "" || value.startsWith("/") || value.includes("\\") || value.includes("\0")) throw new UnsafeDrivePathError("Cluster path must be a safe relative path");
+  const segments = value.split("/");
+  if (segments.some((segment) => segment === "" || segment === "." || segment === "..")) throw new UnsafeDrivePathError("Cluster path contains unsafe segments");
+  return segments.join("/");
+}
+
+function clusterObjectKeyFromPath(path: string, prefix: string): string {
+  if (!path.startsWith(prefix)) throw new UnsafeDrivePathError("Invalid cluster object path");
+  return decodeURIComponent(path.slice(prefix.length));
+}
+
+function clusterObjectForPeer(folder: string, object: { key: string }) {
+  return { ...object, key: clusterRelativeKey(folder, object.key) };
+}
+
+async function forwardClusterRequest(mount: { remoteUrl: string; remotePeerId: string; remotePeerKey: string }, path: string, request?: Request): Promise<Response> {
+  const headers = new Headers({ authorization: `Bearer ${mount.remotePeerKey}` });
+  for (const name of ["content-type", "x-zo-drive-file-name", "x-zo-drive-path"]) {
+    const value = request?.headers.get(name);
+    if (value) headers.set(name, value);
+  }
+  const init: RequestInit = { method: request?.method ?? "GET", headers };
+  if (request?.body) {
+    init.body = request.body;
+    (init as RequestInit & { duplex: "half" }).duplex = "half";
+  }
+  return fetch(`${mount.remoteUrl}/cluster/peers/${encodeURIComponent(mount.remotePeerId)}${path}`, init);
+}
+
+function clusterProxyResponse(response: Response): Response {
+  return new Response(response.body, { headers: response.headers, status: response.status, statusText: response.statusText });
 }
 
 function unauthorized(context: Context) {

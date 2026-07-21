@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createApp } from "./app.js";
 import { InvalidApiKeyRateLimiter } from "./auth/invalid-api-key-rate-limiter.js";
@@ -17,6 +17,7 @@ describe("Zo Drive API", () => {
   const roots: string[] = [];
 
   afterEach(async () => {
+    vi.unstubAllGlobals();
     await Promise.all(roots.splice(0).map((root) => rm(root, { force: true, recursive: true })));
   });
 
@@ -46,10 +47,10 @@ describe("Zo Drive API", () => {
     await expect(response.json()).resolves.toMatchObject({ error: { code: "UNAUTHORIZED" } });
   });
 
-  it("pairs a one-time cluster invitation and exposes only its folder", async () => {
+  it("pairs a one-time cluster invitation and restricts every peer operation to its folder", async () => {
     const app = await createTestApp();
     const headers = { "content-type": "application/json", "x-test-user-id": "alice" };
-    await app.request("http://localhost/objects", { method: "POST", headers: { ...headers, "x-zo-drive-file-name": encodeURIComponent("inside.txt") }, body: "inside" });
+    await app.request("http://localhost/objects", { method: "POST", headers: { ...headers, "x-zo-drive-file-name": encodeURIComponent("inside.txt"), "x-zo-drive-path": encodeURIComponent("Shared") }, body: "inside" });
     await app.request("http://localhost/objects", { method: "POST", headers: { ...headers, "x-zo-drive-file-name": encodeURIComponent("outside.txt") }, body: "outside" });
     const invitation = await app.request("http://localhost/clusters/invitations", { method: "POST", headers, body: JSON.stringify({ folder: "Shared" }) });
     expect(invitation.status).toBe(201);
@@ -58,8 +59,38 @@ describe("Zo Drive API", () => {
     expect(accepted.status).toBe(201);
     const peer = await accepted.json() as { peerId: string; peerKey: string };
     const objects = await app.request(`http://localhost/cluster/peers/${peer.peerId}/objects`, { headers: { authorization: `Bearer ${peer.peerKey}` } });
-    await expect(objects.json()).resolves.toEqual({ objects: [] });
+    await expect(objects.json()).resolves.toMatchObject({ objects: [expect.objectContaining({ key: "inside.txt" })] });
+    const peerHeaders = { authorization: `Bearer ${peer.peerKey}`, "content-type": "text/plain", "x-zo-drive-file-name": encodeURIComponent("collab.txt") };
+    const created = await app.request(`http://localhost/cluster/peers/${peer.peerId}/objects`, { method: "POST", headers: peerHeaders, body: "collaboration" });
+    expect(created.status).toBe(201);
+    await expect(created.json()).resolves.toMatchObject({ key: "collab.txt", name: "collab.txt" });
+    const escaped = await app.request(`http://localhost/cluster/peers/${peer.peerId}/objects`, { method: "POST", headers: { ...peerHeaders, "x-zo-drive-file-name": encodeURIComponent("../escaped.txt") }, body: "nope" });
+    expect(escaped.status).toBe(400);
+    const downloaded = await app.request(`http://localhost/cluster/peers/${peer.peerId}/objects/${encodeURIComponent("collab.txt")}`, { headers: { authorization: `Bearer ${peer.peerKey}` } });
+    await expect(downloaded.text()).resolves.toBe("collaboration");
+    const renamed = await app.request(`http://localhost/cluster/peers/${peer.peerId}/objects/${encodeURIComponent("collab.txt")}`, { method: "PATCH", headers: { authorization: `Bearer ${peer.peerKey}`, "content-type": "application/json" }, body: JSON.stringify({ name: "renamed.txt" }) });
+    await expect(renamed.json()).resolves.toMatchObject({ key: "renamed.txt" });
+    expect((await app.request(`http://localhost/cluster/peers/${peer.peerId}/objects/${encodeURIComponent("renamed.txt")}`, { method: "DELETE", headers: { authorization: `Bearer ${peer.peerKey}` } })).status).toBe(204);
+    const afterDelete = await app.request(`http://localhost/cluster/peers/${peer.peerId}/objects`, { headers: { authorization: `Bearer ${peer.peerKey}` } });
+    await expect(afterDelete.json()).resolves.toMatchObject({ objects: [expect.objectContaining({ key: "inside.txt" })] });
     expect((await app.request("http://localhost/cluster/invitations/accept", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ inviteToken: invite.token }) })).status).toBe(410);
+  });
+
+  it("proxies mounted folder writes without exposing the peer credential to the browser", async () => {
+    const remote = await createTestApp();
+    const local = await createTestApp();
+    vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => remote.request(input.toString(), init));
+    const remoteHeaders = { "content-type": "application/json", "x-test-user-id": "alice" };
+    const invitation = await remote.request("http://remote/clusters/invitations", { method: "POST", headers: remoteHeaders, body: JSON.stringify({ folder: "Shared" }) });
+    const { token } = await invitation.json() as { token: string };
+    const mounted = await local.request("http://local/clusters/mounts", { method: "POST", headers: { "content-type": "application/json", "x-test-user-id": "bob" }, body: JSON.stringify({ remoteUrl: "http://remote", inviteToken: token }) });
+    expect(mounted.status).toBe(201);
+    const mount = await mounted.json() as { id: string };
+    const uploaded = await local.request(`http://local/clusters/mounts/${mount.id}/objects`, { method: "POST", headers: { "content-type": "text/plain", "x-test-user-id": "bob", "x-zo-drive-file-name": encodeURIComponent("from-bob.txt") }, body: "private peer write" });
+    expect(uploaded.status).toBe(201);
+    await expect(uploaded.json()).resolves.toMatchObject({ key: "from-bob.txt" });
+    const remoteObjects = await remote.request("http://remote/objects?prefix=Shared", { headers: { "x-test-user-id": "alice" } });
+    await expect(remoteObjects.json()).resolves.toMatchObject({ objects: [expect.objectContaining({ key: "Shared/from-bob.txt" })] });
   });
 
   it("stores, runs, and publicly invokes owner-scoped functions", async () => {

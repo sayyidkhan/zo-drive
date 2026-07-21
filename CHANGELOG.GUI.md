@@ -4,6 +4,16 @@ All notable changes to the Zo Drive browser experience are recorded here.
 
 ## Unreleased
 
+## v1.11.0 - 2026-07-21
+
+### Added
+
+- Completed Zo Cluster Storage with one-time folder pairing, server-held
+  peer credentials, recursive two-way file operations, and explicit
+  disconnect/revocation.
+- Show mounted folder activity in Recent and received cluster folders under
+  Shared with me.
+
 ## v1.10.1 - 2026-07-21
 
 ### Fixed
