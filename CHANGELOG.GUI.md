@@ -4,6 +4,13 @@ All notable changes to the Zo Drive browser experience are recorded here.
 
 ## Unreleased
 
+## v1.17.0 - 2026-07-21
+
+### Added
+
+- Show persistent local ZominAI model download progress and explain that the
+  Mac runtime continues when the browser page is closed.
+
 ## v1.16.2 - 2026-07-21
 
 ### Added
