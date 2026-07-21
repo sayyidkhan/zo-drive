@@ -4,6 +4,13 @@ All notable changes to the Zo Drive browser experience are recorded here.
 
 ## Unreleased
 
+## v1.14.0 - 2026-07-21
+
+### Added
+
+- Open each database in its own full-width workspace, with a back action to
+  the database overview.
+
 ## v1.13.0 - 2026-07-21
 
 ### Added
