@@ -228,12 +228,13 @@ export class LocalDatabaseStore {
     const stored = await this.read(ownerUserId);
     const index = stored.databases.findIndex((database) => database.id === id);
     if (index === -1) return false;
-    const [database] = stored.databases.splice(index, 1);
+    const database = stored.databases[index];
     if (!database) return false;
-    await this.write(ownerUserId, stored);
     const filePath = this.databasePath(ownerUserId, database);
     await stopRuntime(database.engine, filePath);
     await Promise.all([rm(filePath, { force: true, recursive: true }), rm(`${filePath}-wal`, { force: true }), rm(`${filePath}-shm`, { force: true })]);
+    stored.databases.splice(index, 1);
+    await this.write(ownerUserId, stored);
     return true;
   }
 

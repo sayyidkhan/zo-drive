@@ -4,6 +4,15 @@ All notable changes to the Zo Drive browser experience are recorded here.
 
 ## Unreleased
 
+## v1.12.1 - 2026-07-21
+
+### Fixed
+
+- Added an explicit in-app confirmation for permanent database deletion and
+  made native-engine records directly viewable in the workspace.
+- Keep a database registered until its runtime files have been stopped and
+  removed successfully.
+
 ## v1.12.0 - 2026-07-21
 
 ### Added

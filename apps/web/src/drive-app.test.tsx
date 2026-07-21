@@ -39,11 +39,11 @@ describe("DriveApp", () => {
 
       expect(screen.getByRole("heading", { name: "Manage files in your private Drive." })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Share files on your terms" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 1.12.0" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 1.12.1" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI changelog version 1.12.0" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
+      expect(screen.getByRole("link", { name: "GUI changelog version 1.12.1" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText((_, element) => element?.tagName === "H3" && element.textContent === "GUI v1.12.0")).toBeInTheDocument();
+      expect(screen.getByText((_, element) => element?.tagName === "H3" && element.textContent === "GUI v1.12.1")).toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
 
       cleanup();
@@ -76,7 +76,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.12.0")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.12.1")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();
@@ -403,6 +403,7 @@ describe("DriveApp", () => {
 
     client.listDatabases.mockResolvedValue([{ id: "db-22222222-2222-4222-8222-222222222222", name: "cache", engine: "redis", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", sizeBytes: 1024 }]);
     client.listDatabaseEngines.mockResolvedValue([{ engine: "redis", name: "Redis", packageName: "redis", availableVersion: "7.0.15", installedVersion: "7.0.15", protocol: "redis", installed: true, installedAt: "2026-01-01T00:00:00.000Z", updatedAt: null, updateAvailable: false, workspaceAvailable: true }]);
+    client.executeDatabase.mockImplementation(({ request }: { request: Record<string, unknown> }) => Promise.resolve({ engine: "redis", result: request.command === "SCAN" ? ["0", ["customer:1"]] : "PONG" }));
     window.history.pushState({}, "", "?section=databases&database=db-22222222-2222-4222-8222-222222222222&databasePanel=run");
     cleanup();
     render(<DriveApp client={client} authClient={authClient} />);
@@ -412,8 +413,16 @@ describe("DriveApp", () => {
     fireEvent.click(screen.getByRole("button", { name: "Run request" }));
     await waitFor(() => expect(client.executeDatabase).toHaveBeenCalledWith({ id: "db-22222222-2222-4222-8222-222222222222", request: { command: "PING", args: [] } }));
     expect(await screen.findByLabelText("Database request result")).toHaveTextContent('"PONG"');
+    fireEvent.click(screen.getByRole("button", { name: "View records" }));
+    await waitFor(() => expect(client.executeDatabase).toHaveBeenCalledWith({ id: "db-22222222-2222-4222-8222-222222222222", request: { command: "SCAN", args: ["0", "COUNT", "100"] } }));
+    expect(await screen.findByText("customer:1")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Backend access" }));
     expect(await screen.findByRole("heading", { name: "Connect from your backend" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Native workspace" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete database" }));
+    expect(screen.getByText("Permanently delete cache?")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Delete permanently" }));
+    await waitFor(() => expect(client.deleteDatabase).toHaveBeenCalledWith("db-22222222-2222-4222-8222-222222222222"));
   }, 15_000);
 
   it("keeps an upload progress bar visible until the upload finishes", async () => {

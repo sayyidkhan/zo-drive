@@ -280,6 +280,8 @@ describe("Zo Drive API", () => {
       const database = await databases.create({ ownerUserId: "alice", name: "cache", engine: "redis" });
       await expect(databases.execute({ ownerUserId: "alice", id: database.id, request: { command: "SET", args: ["ready", "yes"] } })).resolves.toMatchObject({ result: "OK" });
       await expect(databases.execute({ ownerUserId: "alice", id: database.id, request: { command: "GET", args: ["ready"] } })).resolves.toMatchObject({ result: "yes" });
+      await expect(databases.remove({ ownerUserId: "alice", id: database.id })).resolves.toBe(true);
+      await expect(databases.list("alice")).resolves.toEqual([]);
     } finally {
       await databases.removeByOwner("alice");
     }
