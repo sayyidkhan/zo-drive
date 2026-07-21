@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.21.6 - 2026-07-22
+
+### Fixed
+
+- Kept Upload directly beside the list and grid controls in the dashboard
+  whenever ZominAI chat is open.
+
 ## v1.21.5 - 2026-07-22
 
 ### Fixed
