@@ -2,6 +2,18 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.20.0 - 2026-07-21
+
+### Added
+
+- Added a private Talk to ZominAI workspace that connects only to the user's
+  local Bonsai runtime. Conversations stay in the open browser tab and Drive
+  files are not automatically sent or exposed.
+
+### Fixed
+
+- Kept file-list rows within the phone viewport while retaining file actions.
+
 ## v1.19.2 - 2026-07-21
 
 ### Fixed

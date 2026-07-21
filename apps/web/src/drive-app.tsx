@@ -228,10 +228,15 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.19.2";
+const GUI_VERSION = "1.20.0";
 const CLI_VERSION = "1.2.1";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.20.0",
+    date: "2026-07-21",
+    changes: ["Added a private Talk to ZominAI workspace that sends messages only to the configured local Bonsai runtime and keeps chat history in the open browser tab."]
+  },
   {
     version: "v1.19.2",
     date: "2026-07-21",
@@ -612,7 +617,7 @@ function LandingPage() {
               <div className="mt-7 space-y-3">
                 {[['Product/Launch', '4 files', 'bg-amber-100 text-amber-700'], ['Design/Assets', '18 files', 'bg-violet-100 text-violet-700'], ['Reports/2026', '7 files', 'bg-emerald-100 text-emerald-700']].map(([name, count, tone]) => <div className="flex items-center gap-3 rounded-xl border border-slate-100 p-3.5" key={name}><span className={`grid size-10 place-items-center rounded-xl ${tone}`}><Folder size={19} /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-800">{name}</span><span className="text-xs text-slate-400">{count}</span></span><MoreHorizontal size={18} className="text-slate-300" /></div>)}
               </div>
-              <div className="mt-5"><div className="mb-3 flex items-center justify-between"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Zo Drive SaaS Killer Features</p><span className="text-[10px] font-medium text-slate-400">Built in</span></div><div className="grid grid-cols-2 gap-3"><div className="rounded-xl bg-slate-950 p-4 text-white"><Code2 size={18} className="text-cyan-300" /><p className="mt-4 text-sm font-semibold">Zo Paste</p><p className="mt-1 text-xs leading-5 text-slate-400">Share code securely.</p></div><div className="rounded-xl bg-blue-50 p-4 text-blue-950"><Send size={18} className="text-blue-600" /><p className="mt-4 text-sm font-semibold">Zo Transfer</p><p className="mt-1 text-xs leading-5 text-blue-700/70">Deliver files your way.</p></div><a aria-label="Open Zo Functions" className="rounded-xl bg-violet-50 p-4 text-violet-950 transition hover:bg-violet-100" href={`${driveAppUrl()}&section=functions`}><Terminal size={18} className="text-violet-600" /><p className="mt-4 text-sm font-semibold">Zo Functions</p><p className="mt-1 text-xs leading-5 text-violet-800/70">Run code and schedule your automations.</p></a><a aria-label="Open Zo Databases" className="rounded-xl bg-emerald-50 p-4 text-emerald-950 transition hover:bg-emerald-100" href={`${driveAppUrl()}&section=databases&databaseView=catalog`}><Database size={18} className="text-emerald-600" /><p className="mt-4 text-sm font-semibold">Zo Databases</p><p className="mt-1 text-xs leading-5 text-emerald-800/70">Private databases, built into your Drive.</p></a></div></div>
+              <div className="mt-5"><div className="mb-3 flex items-center justify-between"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Zo Drive SaaS Killer Features</p><span className="text-[10px] font-medium text-slate-400">Built in</span></div><div className="grid grid-cols-2 gap-3"><div className="rounded-xl bg-slate-950 p-4 text-white"><Code2 size={18} className="text-cyan-300" /><p className="mt-4 text-sm font-semibold">Zo Paste</p><p className="mt-1 text-xs leading-5 text-slate-400">Share code securely.</p></div><div className="rounded-xl bg-blue-50 p-4 text-blue-950"><Send size={18} className="text-blue-600" /><p className="mt-4 text-sm font-semibold">Zo Transfer</p><p className="mt-1 text-xs leading-5 text-blue-700/70">Deliver files your way.</p></div><a aria-label="Open Zo Functions" className="rounded-xl bg-violet-50 p-4 text-violet-950 transition hover:bg-violet-100" href={`${driveAppUrl()}&section=functions`}><Terminal size={18} className="text-violet-600" /><p className="mt-4 text-sm font-semibold">Zo Functions</p><p className="mt-1 text-xs leading-5 text-violet-800/70">Run code and schedule your automations.</p></a><a aria-label="Open Zo Databases" className="rounded-xl bg-emerald-50 p-4 text-emerald-950 transition hover:bg-emerald-100" href={`${driveAppUrl()}&section=databases&databaseView=catalog`}><Database size={18} className="text-emerald-600" /><p className="mt-4 text-sm font-semibold">Zo Databases</p><p className="mt-1 text-xs leading-5 text-emerald-800/70">Private databases, built into your Drive.</p></a><a aria-label="Open Zo Shared Drives" className="rounded-xl bg-cyan-50 p-4 text-cyan-950 transition hover:bg-cyan-100" href={`${driveAppUrl()}&section=cluster-databases`}><Network size={18} className="text-cyan-700" /><p className="mt-4 text-sm font-semibold">Zo Shared Drives</p><p className="mt-1 text-xs leading-5 text-cyan-800/70">Share selected folders on your terms.</p></a><a aria-label="Open ZominAI" className="rounded-xl bg-amber-50 p-4 text-amber-950 transition hover:bg-amber-100" href={`${driveAppUrl()}&section=zominai`}><Bot size={18} className="text-amber-700" /><p className="mt-4 text-sm font-semibold">ZominAI</p><p className="mt-1 text-xs leading-5 text-amber-800/70">Private local AI on your device.</p></a></div></div>
             </div>
           </div>
         </div>
@@ -980,7 +985,10 @@ function ZominAiChat({ settings }: { settings: ZominAiSettings }) {
   const transcriptRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    transcriptRef.current?.scrollTo({ top: transcriptRef.current.scrollHeight });
+    const transcript = transcriptRef.current;
+    if (transcript && typeof transcript.scrollTo === "function") {
+      transcript.scrollTo({ top: transcript.scrollHeight });
+    }
   }, [messages, sending]);
 
   async function send() {
@@ -1002,7 +1010,7 @@ function ZominAiChat({ settings }: { settings: ZominAiSettings }) {
   }
 
   return <section className="flex min-h-[36rem] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-    <header className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 px-5 py-5 sm:px-6"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-700">Private local chat</p><h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">Talk to ZominAI</h2><p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">Messages go only to the local Bonsai runtime on this device. Nothing is saved to Zo Drive, and ZominAI cannot read Drive files unless you paste content here.</p></div><span className="rounded-full border border-cyan-100 bg-cyan-50 px-3 py-1.5 font-mono text-xs font-semibold text-cyan-800">{settings.endpoint}</span></header>
+    <header className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 px-5 py-5 sm:px-6"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-700">Private local chat</p><h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">Start a private conversation.</h2><p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">Messages go only to the local Bonsai runtime on this device. Nothing is saved to Zo Drive, and ZominAI cannot read Drive files unless you paste content here.</p></div><span className="rounded-full border border-cyan-100 bg-cyan-50 px-3 py-1.5 font-mono text-xs font-semibold text-cyan-800">{settings.endpoint}</span></header>
     <div aria-label="ZominAI conversation" className="flex-1 space-y-4 overflow-y-auto bg-slate-50/70 p-5 sm:p-6" ref={transcriptRef}>{messages.length === 0 ? <div className="grid min-h-64 place-items-center"><div className="max-w-md text-center"><span className="mx-auto grid size-12 place-items-center rounded-2xl bg-cyan-950 text-cyan-100"><Bot size={24} /></span><p className="mt-4 text-base font-semibold text-slate-900">Start a private conversation.</p><p className="mt-2 text-sm leading-6 text-slate-500">Ask anything. The chat stays in this open browser tab and is cleared when you refresh or leave.</p></div></div> : messages.map((message, index) => <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`} key={`${message.role}-${index}`}><div className={`max-w-[88%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm ${message.role === "user" ? "rounded-br-md bg-cyan-800 text-white" : "rounded-bl-md border border-slate-200 bg-white text-slate-700"}`}>{message.content}</div></div>)}{sending && <div className="flex justify-start"><div className="inline-flex items-center gap-2 rounded-2xl rounded-bl-md border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500 shadow-sm"><LoaderCircle className="animate-spin" size={16} /> ZominAI is thinking…</div></div>}</div>
     <form className="border-t border-slate-200 bg-white p-4 sm:p-5" onSubmit={(event) => { event.preventDefault(); void send(); }}><label className="sr-only" htmlFor="zominai-message">Message ZominAI</label><div className="flex items-end gap-3 rounded-2xl border border-slate-300 bg-white p-2 focus-within:border-cyan-600 focus-within:ring-4 focus-within:ring-cyan-100"><textarea id="zominai-message" aria-label="Message ZominAI" className="min-h-12 flex-1 resize-none bg-transparent px-3 py-2 text-sm leading-6 text-slate-800 outline-none placeholder:text-slate-400" disabled={sending} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder="Ask ZominAI anything…" rows={1} value={draft} /><button aria-label="Send message to ZominAI" className="grid size-10 shrink-0 place-items-center rounded-xl bg-cyan-700 text-white transition hover:bg-cyan-800 disabled:bg-slate-300" disabled={!draft.trim() || sending} type="submit"><Send size={18} /></button></div><div className="mt-2 flex items-center justify-between gap-3 px-2 text-xs text-slate-400"><span>Enter to send · Shift+Enter for a new line</span>{messages.length > 0 && <button className="font-medium text-slate-500 hover:text-slate-800" onClick={() => setMessages([])} type="button">Clear chat</button>}</div></form>
   </section>;
@@ -1123,6 +1131,7 @@ function ZominAiDownloadProgress({ status, unavailable }: { status: ZominAiDownl
 function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: { authClient: AuthClient; client: DriveClient; user: DriveUser; onAccountDeleted: () => void; onSignOut: () => void }) {
   const { currentPath, setCurrentPath, viewMode, setViewMode } = useDriveUi();
   const [section, setSection] = useState<DriveSection>(currentDriveSection);
+  const [zominAiPane, setZominAiPane] = useState<ZominAiPane>("chat");
   const [search, setSearch] = useState("");
   const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);
   const [storageBreakdownOpen, setStorageBreakdownOpen] = useState(false);
@@ -1473,7 +1482,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
           <button aria-label="Advanced search" className={`shrink-0 rounded-lg p-2 transition ${advancedSearchActive ? "bg-blue-50 text-blue-700" : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"}`} onClick={() => { setAdvancedFilters(appliedAdvancedFilters); setAdvancedSearchOpen(true); }}><SlidersHorizontal size={21} /></button>
         </div>
         <div data-testid="header-actions" className="order-2 ml-auto flex shrink-0 items-center gap-0.5 text-sm font-medium text-slate-500 md:order-none md:ml-0 md:gap-1">
-          <button aria-label="ZominAI" className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-0.5 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 sm:size-11" onClick={() => { setSection("zominai"); setCurrentPath(""); }} title="ZominAI">
+          <button aria-label="ZominAI" className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-0.5 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 sm:size-11" onClick={() => { setZominAiPane("chat"); setSection("zominai"); setCurrentPath(""); }} title="Talk to ZominAI">
             <img className="size-full rounded-[0.65rem] object-cover" src={zominAiButtonUrl} alt="" />
           </button>
           <div className="relative">
@@ -1484,14 +1493,14 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
               <a className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" href={docsUrl("gui")}><ScrollText size={17} /> Documentation</a>
               <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={() => { setAccountMenuOpen(false); setSection("api-keys"); setCurrentPath(""); }}><KeyRound size={17} /> API Keys</button>
               <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={() => { setAccountMenuOpen(false); setSection("profile"); setCurrentPath(""); }}><UserRound size={17} /> Profile & controls</button>
-              <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={() => { setAccountMenuOpen(false); setSection("zominai"); setCurrentPath(""); }}><Bot size={17} /> ZominAI settings</button>
+              <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={() => { setAccountMenuOpen(false); setZominAiPane("settings"); setSection("zominai"); setCurrentPath(""); }}><Settings2 size={17} /> ZominAI settings</button>
             </div>}
           </div>
           <button title="Sign out" aria-label="Sign out" className="rounded-lg p-2 text-slate-500 transition hover:bg-rose-50 hover:text-rose-700" onClick={() => { setAccountMenuOpen(false); onSignOut(); }}><LogOut size={21} /></button>
         </div>
       </header>
 
-      <div className="flex min-h-[calc(100dvh-4.5rem)]">
+      <div className="flex min-h-[calc(100dvh-4.5rem)] min-w-0 max-w-full">
         {sidebarOpen && <button aria-label="Close navigation" className="fixed inset-0 z-30 bg-slate-950/25 md:hidden" onClick={() => setSidebarOpen(false)} />}
         <aside id="drive-navigation" className={`${sidebarOpen ? "w-72 translate-x-0 overflow-y-auto px-3" : "w-16 -translate-x-full overflow-visible px-1.5 md:translate-x-0"} fixed inset-y-0 left-0 z-40 shrink-0 border-r border-slate-200 bg-white py-5 shadow-xl transition-[width,padding,transform] duration-200 md:static md:z-auto md:shadow-none ${sidebarOpen ? "md:w-64" : "md:w-16"}`}>
           <div className={`flex gap-2 ${sidebarOpen ? "items-center" : "flex-col items-center"}`}>
@@ -1532,17 +1541,17 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
           {sidebarOpen && <UsageCard usage={usageQuery.data} onOpenBreakdown={() => setStorageBreakdownOpen(true)} />}
         </aside>
 
-        <section className="min-w-0 flex-1 p-4 sm:p-6 md:p-9">
+        <section className="min-w-0 max-w-full flex-1 overflow-x-hidden p-4 sm:p-6 md:p-9">
           <div className="mb-7 flex flex-wrap items-center justify-between gap-4">
             <div>
               {section === "my-drive" && currentPath && <FolderNavigation currentPath={currentPath} onNavigate={setCurrentPath} />}
-              <h1 className={`${section === "my-drive" && currentPath ? "mt-3" : ""} text-2xl font-semibold tracking-tight text-slate-900`}>{search || advancedSearchActive ? "Search results" : section === "api-keys" ? "API Keys" : section === "cluster-databases" ? "Zo Shared Drives" : section === "databases" ? "Zo Databases" : section === "functions" ? "Zo Functions" : section === "profile" ? "Profile & controls" : section === "zominai" ? "ZominAI settings" : section === "home" ? "Recent" : section === "pastes" ? "Zo Paste" : section === "transfer" ? "Zo Transfer" : section === "shared" ? "Shared with others" : section === "starred" ? "Starred" : section === "trash" ? "Trash" : currentPath ? currentPath.split("/").at(-1) : "Files"}</h1>
+              <h1 className={`${section === "my-drive" && currentPath ? "mt-3" : ""} text-2xl font-semibold tracking-tight text-slate-900`}>{search || advancedSearchActive ? "Search results" : section === "api-keys" ? "API Keys" : section === "cluster-databases" ? "Zo Shared Drives" : section === "databases" ? "Zo Databases" : section === "functions" ? "Zo Functions" : section === "profile" ? "Profile & controls" : section === "zominai" ? zominAiPane === "chat" ? "Talk to ZominAI" : "ZominAI settings" : section === "home" ? "Recent" : section === "pastes" ? "Zo Paste" : section === "transfer" ? "Zo Transfer" : section === "shared" ? "Shared with others" : section === "starred" ? "Starred" : section === "trash" ? "Trash" : currentPath ? currentPath.split("/").at(-1) : "Files"}</h1>
               {section === "api-keys" && <p className="mt-1 text-sm text-slate-500">Provision and revoke scoped access for local computers and automations.</p>}
               {section === "cluster-databases" && <p className="mt-1 text-sm text-slate-500">Choose exactly which Drive folders each trusted person can access.</p>}
               {section === "databases" && <p className="mt-1 text-sm text-slate-500">Choose a lightweight open-source database, then keep its data private in your Drive.</p>}
               {section === "functions" && <p className="mt-1 text-sm text-slate-500">Store, run, and schedule small JavaScript or Python functions.</p>}
               {section === "profile" && <p className="mt-1 text-sm text-slate-500">Manage the owner account for this private drive.</p>}
-              {section === "zominai" && <p className="mt-1 text-sm text-slate-500">Set up and verify the local Bonsai runtime for this browser.</p>}
+              {section === "zominai" && <p className="mt-1 text-sm text-slate-500">{zominAiPane === "chat" ? "Private local conversation with Bonsai on this device." : "Set up and verify the local Bonsai runtime for this browser."}</p>}
               {section === "home" && <p className="mt-1 text-sm text-slate-500">Files you recently created, uploaded, or updated.</p>}
               {section === "pastes" && <p className="mt-1 text-sm text-slate-500">Create, keep, and securely share code or text snippets.</p>}
               {section === "transfer" && <p className="mt-1 text-sm text-slate-500">Create and manage public file links from Zo Drive.</p>}
@@ -1557,7 +1566,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
 
           {section === "home" && <RecentFiltersBar filters={recentFilters} onChange={setRecentFilters} />}
 
-          {section === "api-keys" ? <ApiKeys client={client} /> : section === "cluster-databases" ? <ClusterDatabases client={client} /> : section === "databases" ? <Databases client={client} /> : section === "functions" ? <Functions client={client} /> : section === "profile" ? <AccountScreen client={authClient} onAccountDeleted={onAccountDeleted} user={user} /> : section === "zominai" ? <ZominAiWorkspace /> : section === "transfer" ? <ZoTransfer client={client} onCreated={async () => { await refresh(); await queryClient.invalidateQueries({ queryKey: ["shares"] }); }} /> : section === "pastes" ? <ZoPaste files={displayedFiles} isError={filesQuery.isError} isLoading={isLoading} onCreate={() => startNativeFile("paste")} onDelete={(key) => deleteMutation.mutate(key)} onPreview={openPreview} onRetry={() => void filesQuery.refetch()} onShare={(file) => { setShareSettings(null); setShareFile(file); }} onToggleStar={(file) => starMutation.mutate({ key: file.key, starred: file.starred })} /> : isLoading ? (
+          {section === "api-keys" ? <ApiKeys client={client} /> : section === "cluster-databases" ? <ClusterDatabases client={client} /> : section === "databases" ? <Databases client={client} /> : section === "functions" ? <Functions client={client} /> : section === "profile" ? <AccountScreen client={authClient} onAccountDeleted={onAccountDeleted} user={user} /> : section === "zominai" ? <ZominAiWorkspace initialPane={zominAiPane} /> : section === "transfer" ? <ZoTransfer client={client} onCreated={async () => { await refresh(); await queryClient.invalidateQueries({ queryKey: ["shares"] }); }} /> : section === "pastes" ? <ZoPaste files={displayedFiles} isError={filesQuery.isError} isLoading={isLoading} onCreate={() => startNativeFile("paste")} onDelete={(key) => deleteMutation.mutate(key)} onPreview={openPreview} onRetry={() => void filesQuery.refetch()} onShare={(file) => { setShareSettings(null); setShareFile(file); }} onToggleStar={(file) => starMutation.mutate({ key: file.key, starred: file.starred })} /> : isLoading ? (
             <div className="grid h-64 place-items-center text-sm text-slate-500"><LoaderCircle className="mr-2 animate-spin" size={20} /> Loading your drive…</div>
           ) : (section === "shared" ? sharesQuery.isError : section === "starred" ? starredQuery.isError : section === "trash" ? trashQuery.isError : filesQuery.isError) ? (
             <EmptyState
@@ -3366,22 +3375,24 @@ function DriveEntries({ files, folders, viewMode, onOpenFolder, onPreview, onDel
 }) {
   const isGrid = viewMode === "grid";
   return (
-    <div className={isGrid ? "grid gap-3 sm:grid-cols-2 xl:grid-cols-3" : "overflow-hidden rounded-xl border border-slate-200 bg-white"}>
+    <div data-testid="drive-entries" className={isGrid ? "grid w-full min-w-0 max-w-full gap-3 sm:grid-cols-2 xl:grid-cols-3" : "w-full min-w-0 max-w-full overflow-hidden rounded-xl border border-slate-200 bg-white"}>
       {folders.map((folder) => (
-        <button key={folder.key} className={isGrid ? "flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 text-left hover:border-blue-300 hover:shadow-sm" : "flex w-full items-center gap-3 border-b border-slate-100 px-4 py-3 text-left hover:bg-slate-50"} onClick={() => onOpenFolder(folder)}>
+        <button key={folder.key} className={isGrid ? "flex min-w-0 items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 text-left hover:border-blue-300 hover:shadow-sm" : "flex w-full min-w-0 max-w-full items-center gap-3 border-b border-slate-100 px-4 py-3 text-left hover:bg-slate-50"} onClick={() => onOpenFolder(folder)}>
           <span className="rounded-lg bg-blue-50 p-2 text-blue-600"><Folder size={20} fill="currentColor" /></span>
           <span className="min-w-0 flex-1 truncate text-sm font-medium">{folder.name}</span>
         </button>
       ))}
       {files.map((file) => (
-        <article key={file.key} className={isGrid ? "group relative flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 hover:border-blue-300 hover:shadow-sm" : "group flex items-center gap-3 border-b border-slate-100 px-4 py-3 last:border-b-0 hover:bg-slate-50"}>
+        <article key={file.key} className={isGrid ? "group relative flex min-w-0 items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 hover:border-blue-300 hover:shadow-sm" : "group flex w-full min-w-0 max-w-full items-center gap-3 border-b border-slate-100 px-4 py-3 last:border-b-0 hover:bg-slate-50"}>
           <button className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => void onPreview(file)}>
             <span className="rounded-lg bg-slate-100 p-2 text-slate-500">{fileIcon(file.contentType)}</span>
-            <span className="min-w-0"><span className="block truncate text-sm font-medium text-slate-800">{file.name}</span><span className="block text-xs text-slate-400">{formatBytes(file.size)} · {new Date(file.updatedAt).toLocaleDateString()}</span></span>
+            <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-slate-800">{file.name}</span><span className="block truncate text-xs text-slate-400">{formatBytes(file.size)} · {new Date(file.updatedAt).toLocaleDateString()}</span></span>
           </button>
-          <button aria-label={`${file.starred ? "Remove" : "Add"} ${file.name} ${file.starred ? "from" : "to"} Starred`} className={`rounded-md p-2 transition hover:bg-amber-50 hover:text-amber-500 ${file.starred ? "text-amber-400 opacity-100" : "text-slate-400 opacity-100 md:opacity-0 md:group-hover:opacity-100"}`} onClick={() => onToggleStar(file)}><Star size={17} fill={file.starred ? "currentColor" : "none"} /></button>
-          <button aria-label={`Share ${file.name}`} className="rounded-md p-2 text-slate-400 opacity-100 transition hover:bg-blue-50 hover:text-blue-600 md:opacity-0 md:group-hover:opacity-100" onClick={() => onShare(file)}><Share2 size={17} /></button>
-          <button aria-label={`Move ${file.name} to Trash`} className="rounded-md p-2 text-slate-400 opacity-100 transition hover:bg-red-50 hover:text-red-600 md:opacity-0 md:group-hover:opacity-100" onClick={() => onDelete(file.key)}><Trash2 size={17} /></button>
+          <div className="flex shrink-0 items-center gap-1">
+            <button aria-label={`${file.starred ? "Remove" : "Add"} ${file.name} ${file.starred ? "from" : "to"} Starred`} className={`rounded-md p-2 transition hover:bg-amber-50 hover:text-amber-500 ${file.starred ? "text-amber-400 opacity-100" : "text-slate-400 opacity-100 md:opacity-0 md:group-hover:opacity-100"}`} onClick={() => onToggleStar(file)}><Star size={17} fill={file.starred ? "currentColor" : "none"} /></button>
+            <button aria-label={`Share ${file.name}`} className="rounded-md p-2 text-slate-400 opacity-100 transition hover:bg-blue-50 hover:text-blue-600 md:opacity-0 md:group-hover:opacity-100" onClick={() => onShare(file)}><Share2 size={17} /></button>
+            <button aria-label={`Move ${file.name} to Trash`} className="rounded-md p-2 text-slate-400 opacity-100 transition hover:bg-red-50 hover:text-red-600 md:opacity-0 md:group-hover:opacity-100" onClick={() => onDelete(file.key)}><Trash2 size={17} /></button>
+          </div>
         </article>
       ))}
     </div>
