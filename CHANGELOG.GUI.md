@@ -4,6 +4,19 @@ All notable changes to the Zo Drive browser experience are recorded here.
 
 ## Unreleased
 
+## v1.13.0 - 2026-07-21
+
+### Added
+
+- Made Shared Drives pairing clearer: choose approved Drive folders before
+  generating one-time pairing keys, or join folders another owner has shared
+  with you.
+
+### Fixed
+
+- Added clearer spacing between the database view switcher and the instances
+  workspace.
+
 ## v1.12.5 - 2026-07-21
 
 ### Fixed

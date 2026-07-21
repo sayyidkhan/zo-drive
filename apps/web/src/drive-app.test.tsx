@@ -39,11 +39,11 @@ describe("DriveApp", () => {
 
       expect(screen.getByRole("heading", { name: "Manage files in your private Drive." })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Share files on your terms" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 1.12.5" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 1.13.0" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI changelog version 1.12.5" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
+      expect(screen.getByRole("link", { name: "GUI changelog version 1.13.0" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText((_, element) => element?.tagName === "H3" && element.textContent === "GUI v1.12.5")).toBeInTheDocument();
+      expect(screen.getByText((_, element) => element?.tagName === "H3" && element.textContent === "GUI v1.13.0")).toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
 
       cleanup();
@@ -76,7 +76,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.12.5")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.13.0")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();
@@ -255,13 +255,13 @@ describe("DriveApp", () => {
     expect(screen.getByRole("button", { name: "New" })).toHaveAttribute("title", "New");
     expect(screen.getByRole("button", { name: "My Drive" })).toHaveAttribute("title", "My Drive");
     expect(screen.getByRole("button", { name: "Zo Databases" })).toHaveAttribute("title", "Zo Databases");
-    expect(screen.getByRole("button", { name: "Zo Cluster Databases" })).toHaveAttribute("title", "Zo Cluster Databases");
+    expect(screen.getByRole("button", { name: "Zo Shared Drives" })).toHaveAttribute("title", "Zo Shared Drives");
     expect(screen.getByRole("button", { name: "New" })).toHaveAttribute("data-tooltip", "New");
     expect(screen.getByRole("button", { name: "Recent" })).toHaveAttribute("data-tooltip", "Recent");
     expect(screen.getByRole("button", { name: "Zo Databases" })).toHaveAttribute("data-tooltip", "Zo Databases");
-    expect(screen.getByRole("button", { name: "Zo Cluster Databases" })).toHaveAttribute("data-tooltip", "Zo Cluster Databases");
+    expect(screen.getByRole("button", { name: "Zo Shared Drives" })).toHaveAttribute("data-tooltip", "Zo Shared Drives");
     expect(screen.getByRole("button", { name: "Zo Databases" })).toHaveClass("after:content-[attr(data-tooltip)]");
-    expect(screen.getByRole("button", { name: "Zo Cluster Databases" })).toHaveClass("after:content-[attr(data-tooltip)]");
+    expect(screen.getByRole("button", { name: "Zo Shared Drives" })).toHaveClass("after:content-[attr(data-tooltip)]");
     fireEvent.click(screen.getByRole("button", { name: "Expand navigation" }));
     expect(screen.getByRole("button", { name: "New" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
@@ -282,11 +282,16 @@ describe("DriveApp", () => {
     expect(await screen.findByRole("heading", { name: "Zo Databases" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Build with Zo Databases" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Zo Cluster Databases" }));
-    expect(await screen.findByRole("heading", { name: "Zo Cluster Databases" })).toBeInTheDocument();
-    expect(await screen.findByRole("heading", { name: "Share one folder. Keep every boundary deliberate." })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Zo Shared Drives" }));
+    expect(await screen.findByRole("heading", { name: "Zo Shared Drives" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Create shared drives with people you trust." })).toBeInTheDocument();
     expect(screen.getByText("Recursive scope")).toBeInTheDocument();
     expect(screen.getByText("Shared with me")).toBeInTheDocument();
+    fireEvent.click(await screen.findByLabelText("Share folder Notes"));
+    fireEvent.click(screen.getByRole("button", { name: "Create 1 pairing key" }));
+    await waitFor(() => expect(client.createClusterInvitation).toHaveBeenCalledWith("Notes"));
+    fireEvent.click(screen.getByRole("tab", { name: "Join a shared Drive" }));
+    expect(screen.getByText(/this does not expose any of your folders/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Zo Functions" }));
     expect(await screen.findByRole("heading", { name: "Zo Functions" })).toBeInTheDocument();
@@ -320,6 +325,7 @@ describe("DriveApp", () => {
     await waitFor(() => expect(client.installDatabaseEngine).toHaveBeenCalledWith("sqlite"));
     fireEvent.click(await screen.findByRole("button", { name: "Create SQLite database" }));
     expect((await screen.findAllByText("app-data")).length).toBe(2);
+    expect(screen.getByRole("heading", { name: "Your instances" }).closest("aside")?.parentElement).toHaveClass("mt-8");
     expect(await screen.findByText("tasks")).toBeInTheDocument();
     expect(await screen.findByText("Ship Database Engines")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Import SQLite file" })).toBeInTheDocument();
