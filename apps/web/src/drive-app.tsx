@@ -67,9 +67,9 @@ import { toast, Toaster } from "sonner";
 import { create } from "zustand";
 
 import { ZoDriveClient } from "@zo-drive/sdk";
-import type { ApiKeyScope, AuthStatus, ClusterInvitation, ClusterMount, DatabaseApiKey, DatabaseApiKeyScope, DatabaseEngine, DatabaseEngineId, DatabaseExecuteResult, DatabaseImportSettings, DatabaseRows, DriveApiKey, DriveDatabase, DriveFolder, DriveFunction, DriveFunctionRun, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, FunctionRuntime, FunctionVisibility, NativeFileType, PublicShare, PublishedForm, ShareAccess, StorageUsage } from "@zo-drive/types";
+import type { ApiKeyScope, AuthStatus, ClusterInvitation, ClusterMount, ClusterRole, DatabaseApiKey, DatabaseApiKeyScope, DatabaseEngine, DatabaseEngineId, DatabaseExecuteResult, DatabaseImportSettings, DatabaseRows, DriveApiKey, DriveDatabase, DriveFolder, DriveFunction, DriveFunctionRun, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, FunctionRuntime, FunctionVisibility, NativeFileType, PublicShare, PublishedForm, ShareAccess, StorageUsage } from "@zo-drive/types";
 
-type DriveClient = Pick<ZoDriveClient, "createApiKey" | "createFolder" | "createNativeFile" | "createShare" | "delete" | "download" | "emptyTrash" | "getUsage" | "list" | "listApiKeys" | "listFolders" | "listFormResponses" | "listShares" | "listStarred" | "listTrash" | "permanentlyDeleteTrash" | "publishForm" | "rename" | "restoreTrash" | "revokeApiKey" | "revokeShare" | "saveNativeFile" | "setQuota" | "star" | "unstar" | "updateSharePasscode" | "upload"> & Partial<Pick<ZoDriveClient, "createClusterFolder" | "createClusterInvitation" | "createClusterMount" | "deleteClusterMount" | "deleteClusterObject" | "downloadClusterObject" | "listClusterMounts" | "listClusterObjects" | "renameClusterObject" | "uploadClusterObject" | "createDatabase" | "createDatabaseApiKey" | "deleteDatabase" | "executeDatabase" | "exportDatabase" | "getDatabaseImportSettings" | "importDatabase" | "installDatabaseEngine" | "listDatabaseApiKeys" | "listDatabaseEngines" | "listDatabases" | "listDatabaseRows" | "listDatabaseTables" | "queryDatabase" | "revokeDatabaseApiKey" | "setDatabaseImportLimit" | "updateDatabaseEngine" | "createFunction" | "deleteFunction" | "listFunctions" | "listFunctionRuns" | "runFunction" | "updateFunction">>;
+type DriveClient = Pick<ZoDriveClient, "createApiKey" | "createFolder" | "createNativeFile" | "createShare" | "delete" | "download" | "emptyTrash" | "getUsage" | "list" | "listApiKeys" | "listFolders" | "listFormResponses" | "listShares" | "listStarred" | "listTrash" | "permanentlyDeleteTrash" | "publishForm" | "rename" | "restoreTrash" | "revokeApiKey" | "revokeShare" | "saveNativeFile" | "setQuota" | "star" | "unstar" | "updateSharePasscode" | "upload"> & Partial<Pick<ZoDriveClient, "createClusterFolder" | "createClusterInvitation" | "createClusterMount" | "deleteClusterMount" | "deleteClusterObject" | "deleteClusterPeer" | "downloadClusterObject" | "getClusterMountAccess" | "listClusterMounts" | "listClusterObjects" | "listClusterPeers" | "renameClusterObject" | "updateClusterPeerRole" | "uploadClusterObject" | "createDatabase" | "createDatabaseApiKey" | "deleteDatabase" | "executeDatabase" | "exportDatabase" | "getDatabaseImportSettings" | "importDatabase" | "installDatabaseEngine" | "listDatabaseApiKeys" | "listDatabaseEngines" | "listDatabases" | "listDatabaseRows" | "listDatabaseTables" | "queryDatabase" | "revokeDatabaseApiKey" | "setDatabaseImportLimit" | "updateDatabaseEngine" | "createFunction" | "deleteFunction" | "listFunctions" | "listFunctionRuns" | "runFunction" | "updateFunction">>;
 type AuthClient = Pick<ZoDriveClient, "changePassword" | "deleteAccount" | "getAuthStatus" | "login" | "logout" | "registerInitialUser" | "updateProfile">;
 type SharedClient = Pick<ZoDriveClient, "downloadShared" | "getPublicShare" | "openSharedPaste" | "saveSharedPaste">;
 type PublicFormClient = Pick<ZoDriveClient, "getPublicForm" | "submitFormResponse">;
@@ -115,6 +115,16 @@ type ZominAiDownloadStatus = {
   progress: number;
   state: "downloading" | "ready" | "stopped";
   updatedAt: string;
+};
+
+type ZominAiPlatform = "linux" | "macos" | "windows";
+
+type ZominAiInstallGuide = {
+  command: string;
+  label: string;
+  modelLocation: string;
+  prerequisite: string;
+  support: string;
 };
 
 type PasteShareSettings = {
@@ -213,10 +223,25 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.17.0";
+const GUI_VERSION = "1.18.2";
 const CLI_VERSION = "1.2.1";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.18.2",
+    date: "2026-07-21",
+    changes: ["Kept the mobile header actions together on the right, with ZominAI beside Settings and overflow beside sign out."]
+  },
+  {
+    version: "v1.18.1",
+    date: "2026-07-21",
+    changes: ["Made the private Drive workspace phone-friendly with a slide-out navigation drawer, a dedicated mobile search row, compact touch layouts, and always-available file actions."]
+  },
+  {
+    version: "v1.18.0",
+    date: "2026-07-21",
+    changes: ["Added Viewer and Editor roles for shared folders, owner-managed permission changes and revocation, and live access checks before write controls are shown."]
+  },
   {
     version: "v1.17.0",
     date: "2026-07-21",
@@ -776,11 +801,40 @@ const defaultZominAiSettings: ZominAiSettings = {
   endpoint: "http://127.0.0.1:57183",
   model: "Bonsai-27B-Q1_0.gguf"
 };
-const zominAiInstallCommand = `brew install llama.cpp
-llama-server --hf-repo prism-ml/Bonsai-27B-gguf --hf-file Bonsai-27B-Q1_0.gguf \\
+const zominAiRuntimeCommand = `llama-server --hf-repo prism-ml/Bonsai-27B-gguf --hf-file Bonsai-27B-Q1_0.gguf \\
   --gpu-layers all --ctx-size 4096 --host 127.0.0.1 --port 57183 \\
   --cors-origins https://public-apps-sayyidkhan.zocomputer.io --no-cors-credentials`;
+const zominAiInstallGuides: Record<ZominAiPlatform, ZominAiInstallGuide> = {
+  macos: {
+    label: "macOS",
+    prerequisite: "Apple Silicon or a supported Mac GPU. Homebrew is the simplest installer.",
+    support: "Supported now. Metal acceleration is used automatically by the packaged runtime. Without Homebrew, use MacPorts, Nix, or build from source using the linked llama.cpp instructions.",
+    modelLocation: "~/.cache/huggingface/hub/models--prism-ml--Bonsai-27B-gguf",
+    command: `brew install llama.cpp\n${zominAiRuntimeCommand}`
+  },
+  linux: {
+    label: "Linux",
+    prerequisite: "A desktop Linux machine with a compatible GPU. Install llama.cpp through Homebrew, Nix, a distribution package, or build it from source.",
+    support: "Setup guide. Bonsai needs a GPU-enabled llama.cpp build for practical performance; CPU-only Linux is not a supported experience. Without Homebrew, use Nix, a distribution package, or build llama.cpp from source.",
+    modelLocation: "~/.cache/huggingface/hub/models--prism-ml--Bonsai-27B-gguf",
+    command: `# If Homebrew is installed:\nbrew install llama.cpp\n\n# Otherwise build llama.cpp with your GPU backend, then run:\n${zominAiRuntimeCommand}`
+  },
+  windows: {
+    label: "Windows",
+    prerequisite: "Windows 10/11 with a compatible GPU. Run this in PowerShell or Windows Terminal.",
+    support: "Setup guide. Install the official package with winget; without winget, use an official llama.cpp release or build from source. GPU acceleration depends on the installed backend and hardware.",
+    modelLocation: "%USERPROFILE%\\.cache\\huggingface\\hub\\models--prism-ml--Bonsai-27B-gguf",
+    command: `winget install llama.cpp\n\nllama-server.exe --hf-repo prism-ml/Bonsai-27B-gguf --hf-file Bonsai-27B-Q1_0.gguf \`\n  --gpu-layers all --ctx-size 4096 --host 127.0.0.1 --port 57183 \`\n  --cors-origins https://public-apps-sayyidkhan.zocomputer.io --no-cors-credentials`
+  }
+};
 const zominAiStatusUrl = "http://127.0.0.1:57184/zominai/status";
+
+function detectZominAiPlatform(): ZominAiPlatform {
+  const platform = navigator.platform || navigator.userAgent;
+  if (/win/i.test(platform)) return "windows";
+  if (/linux/i.test(platform)) return "linux";
+  return "macos";
+}
 
 function readZominAiSettings(): ZominAiSettings {
   try {
@@ -867,6 +921,7 @@ async function verifyZominAiInstall(settings: ZominAiSettings): Promise<ZominAiV
 
 function ZominAiWorkspace() {
   const [activePane, setActivePane] = useState<ZominAiPane>("verify");
+  const [installPlatform, setInstallPlatform] = useState<ZominAiPlatform>(detectZominAiPlatform);
   const [settings, setSettings] = useState<ZominAiSettings>(readZominAiSettings);
   const [verification, setVerification] = useState<ZominAiVerification | null>(null);
   const [downloadStatus, setDownloadStatus] = useState<ZominAiDownloadStatus | null>(null);
@@ -917,9 +972,9 @@ function ZominAiWorkspace() {
     }
   }
 
-  async function copyInstallCommand() {
+  async function copyInstallCommand(command: string) {
     try {
-      await navigator.clipboard.writeText(zominAiInstallCommand);
+      await navigator.clipboard.writeText(command);
       toast.success("Local setup command copied");
     } catch {
       toast.error("Could not copy the setup command");
@@ -941,13 +996,14 @@ function ZominAiWorkspace() {
     { id: "settings", label: "ZominAI settings", description: "Local runtime and model preferences", icon: <Settings2 size={18} /> },
     { id: "uninstall", label: "Uninstall ZominAI", description: "Remove only browser-local settings", icon: <Trash2 size={18} /> }
   ];
+  const selectedInstallGuide = zominAiInstallGuides[installPlatform];
 
   return <div className="space-y-5">
     <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 via-cyan-950 to-slate-900 px-7 py-8 text-white shadow-sm md:px-9"><div className="absolute -right-20 -top-24 size-72 rounded-full bg-cyan-300/15 blur-3xl" /><div className="relative max-w-3xl"><span className="inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-cyan-200/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100"><Bot size={14} /> Local Bonsai runtime</span><h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">Run ZominAI beside your Drive.</h2><p className="mt-2 text-sm leading-6 text-slate-300">ZominAI stays on the device running the local model. The model weights and every inference stay on that device; Zo Drive stores only this browser’s local connection preferences, never model files, prompts, or Drive content.</p></div></section>
     <div className="grid gap-5 xl:grid-cols-[17rem_minmax(0,1fr)]"><aside className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-sm"><p className="px-3 pb-2 pt-3 text-xs font-bold uppercase tracking-[0.16em] text-slate-400">ZominAI</p>{panes.map((pane) => <button aria-label={`ZominAI menu: ${pane.label}`} className={`mb-1 flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left transition ${activePane === pane.id ? "bg-cyan-950 text-white shadow-sm" : "text-slate-700 hover:bg-slate-50"}`} key={pane.id} onClick={() => { setActivePane(pane.id); setConfirmUninstall(false); }}><span className={`mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg ${activePane === pane.id ? "bg-white/15 text-cyan-100" : "bg-slate-100 text-slate-500"}`}>{pane.icon}</span><span><span className="block text-sm font-semibold">{pane.label}</span><span className={`mt-0.5 block text-xs leading-5 ${activePane === pane.id ? "text-cyan-100" : "text-slate-400"}`}>{pane.description}</span></span></button>)}</aside>
       <div className="min-w-0">
         {activePane === "verify" && <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-700">Readiness check</p><h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">Verify this device before downloading.</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">This checks browser WebGPU, estimated local storage, and the configured localhost runtime. It does not inspect or upload files from this Drive.</p></div><button aria-label="Verify ZominAI install" className="inline-flex items-center gap-2 rounded-lg bg-cyan-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-cyan-800 disabled:bg-slate-300" disabled={verifying} onClick={() => void verify()}>{verifying ? <LoaderCircle className="animate-spin" size={17} /> : <ShieldCheck size={17} />}{verifying ? "Checking…" : "Verify install"}</button></div>{verification ? <div className="mt-6 grid gap-3"><ZominAiCheck label="WebGPU" result={verification.webGpu} /><ZominAiCheck label="Browser storage" result={verification.storage} /><ZominAiCheck label="Local runtime" result={verification.runtime} /><p className="pt-1 text-xs text-slate-400">Last checked {new Date(verification.checkedAt).toLocaleString()}.</p></div> : <div className="mt-6 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">No verification has run in this browser yet.</div>}</section>}
-        {activePane === "install" && <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-700">Local installation</p><h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">Install Bonsai where you use it.</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">ZominAI runs on your own Mac, not on the Zo server. This installs the Metal-enabled runtime and starts the model at a dedicated local address, <span className="font-mono text-slate-700">127.0.0.1:57183</span>. The first run downloads about 3.8 GB to your Mac.</p><ZominAiDownloadProgress status={downloadStatus} unavailable={downloadStatusUnavailable} /><div className="mt-6 rounded-xl bg-slate-950 p-4"><pre className="overflow-x-auto text-xs leading-6 text-cyan-100"><code>{zominAiInstallCommand}</code></pre></div><div className="mt-5 flex flex-wrap gap-3"><button className="inline-flex items-center gap-2 rounded-lg bg-cyan-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-cyan-800" onClick={() => void copyInstallCommand()}><Copy size={17} /> Copy local setup</button><a className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="https://huggingface.co/prism-ml/Bonsai-27B-gguf" rel="noreferrer" target="_blank">Open Bonsai download <ExternalLink size={16} /></a><button className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-cyan-800 hover:bg-cyan-50" onClick={() => setActivePane("verify")}>Verify after setup <ArrowUpRight size={16} /></button></div><div className="mt-6 grid gap-3 rounded-xl border border-cyan-100 bg-cyan-50/60 p-4 sm:grid-cols-3"><a className="rounded-lg bg-white p-3 text-sm font-semibold text-cyan-900 shadow-sm ring-1 ring-cyan-100 hover:ring-cyan-300" href="https://prismml.com/" rel="noreferrer" target="_blank">PrismML overview <ExternalLink className="ml-1 inline" size={14} /></a><a className="rounded-lg bg-white p-3 text-sm font-semibold text-cyan-900 shadow-sm ring-1 ring-cyan-100 hover:ring-cyan-300" href="https://huggingface.co/prism-ml/Bonsai-27B-gguf" rel="noreferrer" target="_blank">Bonsai model &amp; licence <ExternalLink className="ml-1 inline" size={14} /></a><a className="rounded-lg bg-white p-3 text-sm font-semibold text-cyan-900 shadow-sm ring-1 ring-cyan-100 hover:ring-cyan-300" href="https://github.com/ggml-org/llama.cpp/tree/master/tools/server" rel="noreferrer" target="_blank">Runtime documentation <ExternalLink className="ml-1 inline" size={14} /></a></div></section>}
+        {activePane === "install" && <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-700">Local installation</p><h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">Install Bonsai where you use it.</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">ZominAI runs on your own device, not on the Zo server. The local runtime listens only at <span className="font-mono text-slate-700">127.0.0.1:57183</span>; the first run downloads about 3.8 GB locally.</p><div className="mt-6 flex flex-wrap gap-2" role="group" aria-label="ZominAI platform"><PlatformChoice active={installPlatform === "macos"} label="macOS" onClick={() => setInstallPlatform("macos")} /><PlatformChoice active={installPlatform === "linux"} label="Linux" onClick={() => setInstallPlatform("linux")} /><PlatformChoice active={installPlatform === "windows"} label="Windows" onClick={() => setInstallPlatform("windows")} /></div><div className="mt-5 rounded-xl border border-cyan-100 bg-cyan-50/60 p-4"><p className="text-sm font-semibold text-slate-900">{selectedInstallGuide.label} setup</p><p className="mt-1 text-sm leading-6 text-slate-600">{selectedInstallGuide.prerequisite}</p><p className="mt-2 text-sm leading-6 text-cyan-900">{selectedInstallGuide.support}</p></div>{installPlatform === "macos" ? <ZominAiDownloadProgress status={downloadStatus} unavailable={downloadStatusUnavailable} /> : <div className="mt-6 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-500">Persistent download tracking is bundled with the supported macOS installer. Linux and Windows need the ZominAI Local Agent before this tracker can be enabled; use Verify install after the model starts.</div>}<div className="mt-6 rounded-xl bg-slate-950 p-4"><pre className="overflow-x-auto text-xs leading-6 text-cyan-100"><code>{selectedInstallGuide.command}</code></pre></div><p className="mt-3 text-xs leading-5 text-slate-500">Run the command in any terminal after <span className="font-mono">llama-server</span> is installed on your command path. If you build it yourself, run the generated binary from its build folder or add that folder to your command path. The model is cached locally at <span className="font-mono text-slate-700">{selectedInstallGuide.modelLocation}</span>.</p><div className="mt-5 flex flex-wrap gap-3"><button className="inline-flex items-center gap-2 rounded-lg bg-cyan-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-cyan-800" onClick={() => void copyInstallCommand(selectedInstallGuide.command)}><Copy size={17} /> Copy {selectedInstallGuide.label} setup</button><a className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="https://huggingface.co/prism-ml/Bonsai-27B-gguf" rel="noreferrer" target="_blank">Open Bonsai download <ExternalLink size={16} /></a><button className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-cyan-800 hover:bg-cyan-50" onClick={() => setActivePane("verify")}>Verify after setup <ArrowUpRight size={16} /></button></div><div className="mt-6 grid gap-3 rounded-xl border border-cyan-100 bg-cyan-50/60 p-4 sm:grid-cols-3"><a className="rounded-lg bg-white p-3 text-sm font-semibold text-cyan-900 shadow-sm ring-1 ring-cyan-100 hover:ring-cyan-300" href="https://prismml.com/" rel="noreferrer" target="_blank">PrismML overview <ExternalLink className="ml-1 inline" size={14} /></a><a className="rounded-lg bg-white p-3 text-sm font-semibold text-cyan-900 shadow-sm ring-1 ring-cyan-100 hover:ring-cyan-300" href="https://huggingface.co/prism-ml/Bonsai-27B-gguf" rel="noreferrer" target="_blank">Bonsai model &amp; licence <ExternalLink className="ml-1 inline" size={14} /></a><a className="rounded-lg bg-white p-3 text-sm font-semibold text-cyan-900 shadow-sm ring-1 ring-cyan-100 hover:ring-cyan-300" href="https://github.com/ggml-org/llama.cpp/blob/master/docs/install.md" rel="noreferrer" target="_blank">Runtime installation docs <ExternalLink className="ml-1 inline" size={14} /></a></div></section>}
         {activePane === "settings" && <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-700">Connection settings</p><h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">ZominAI settings</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">These values stay in this browser only. The endpoint must be local to protect Drive data from accidental remote inference routing.</p><div className="mt-6 grid gap-5 md:grid-cols-2"><label className="block text-sm font-semibold text-slate-700">Local runtime address<input aria-label="ZominAI runtime address" className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-mono text-sm outline-none focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100" value={settings.endpoint} onChange={(event) => { setUninstalled(false); setSettings((current) => ({ ...current, endpoint: event.target.value })); }} /></label><label className="block text-sm font-semibold text-slate-700">Model file<input aria-label="ZominAI model file" className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-mono text-sm outline-none focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100" value={settings.model} onChange={(event) => { setUninstalled(false); setSettings((current) => ({ ...current, model: event.target.value })); }} /></label><label className="block text-sm font-semibold text-slate-700">Context window<input aria-label="ZominAI context window" className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100" max={32768} min={1024} step={1024} type="number" value={settings.contextTokens} onChange={(event) => { setUninstalled(false); setSettings((current) => ({ ...current, contextTokens: Number(event.target.value) || 1024 })); }} /></label></div><div className="mt-6 flex flex-wrap items-center gap-3"><button className="inline-flex items-center gap-2 rounded-lg bg-cyan-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-cyan-800" onClick={() => void verify()}><Cpu size={17} /> Save and verify</button><p className="text-xs text-slate-400">Saved automatically in this browser.</p></div></section>}
         {activePane === "uninstall" && <section className="rounded-2xl border border-red-200 bg-white p-6 shadow-sm"><p className="text-xs font-bold uppercase tracking-[0.16em] text-red-600">Remove local settings</p><h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">Uninstall ZominAI from this browser</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">This clears ZominAI’s local endpoint, model preference, and verification record from this browser. It cannot remove the model or llama.cpp runtime from your Mac, iPhone, or another device.</p>{confirmUninstall ? <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4"><p className="text-sm font-medium text-red-900">Remove ZominAI browser settings now?</p><div className="mt-4 flex gap-3"><button aria-label="Confirm uninstall ZominAI" className="rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700" onClick={uninstall}>Remove settings</button><button className="rounded-lg border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-red-50" onClick={() => setConfirmUninstall(false)}>Cancel</button></div></div> : <button aria-label="Uninstall ZominAI browser settings" className="mt-6 inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-50" onClick={() => setConfirmUninstall(true)}><Trash2 size={17} /> Uninstall ZominAI</button>}</section>}
       </div>
@@ -959,12 +1015,16 @@ function ZominAiCheck({ label, result }: { label: string; result: { detail: stri
   return <div className={`flex items-start gap-3 rounded-xl border p-4 ${result.ready ? "border-emerald-200 bg-emerald-50/60" : "border-amber-200 bg-amber-50/70"}`}><span className={`mt-0.5 grid size-7 shrink-0 place-items-center rounded-full ${result.ready ? "bg-emerald-600 text-white" : "bg-amber-100 text-amber-700"}`}>{result.ready ? <Check size={16} /> : <Info size={16} />}</span><div><p className="text-sm font-semibold text-slate-900">{label}</p><p className="mt-0.5 text-sm leading-5 text-slate-600">{result.detail}</p></div></div>;
 }
 
+function PlatformChoice({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
+  return <button aria-pressed={active} className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${active ? "bg-cyan-700 text-white" : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"}`} onClick={onClick} type="button">{label}</button>;
+}
+
 function ZominAiDownloadProgress({ status, unavailable }: { status: ZominAiDownloadStatus | null; unavailable: boolean }) {
-  if (unavailable) return <div className="mt-6 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-500">Local download progress is available when this Zo Drive page is open on the Mac running ZominAI.</div>;
+  if (unavailable) return <div className="mt-6 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-500">Local download progress is available when this Zo Drive page is open on the device running ZominAI.</div>;
   if (!status) return <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">Checking the local ZominAI download status…</div>;
   const percent = Math.round(Math.max(0, Math.min(1, status.progress)) * 100);
   const ready = status.state === "ready";
-  return <section className={`mt-6 rounded-xl border p-4 ${ready ? "border-emerald-200 bg-emerald-50/60" : "border-cyan-200 bg-cyan-50/60"}`}><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-sm font-semibold text-slate-900">{ready ? "ZominAI is ready locally" : "ZominAI local download"}</p><p className="mt-1 text-sm text-slate-600">{status.detail}</p></div><span className={`rounded-full px-2.5 py-1 text-sm font-bold tabular-nums ${ready ? "bg-emerald-600 text-white" : "bg-cyan-700 text-white"}`}>{percent}%</span></div><div className="mt-4 h-2 overflow-hidden rounded-full bg-cyan-100"><div className={`h-full rounded-full transition-[width] duration-500 ${ready ? "bg-emerald-600" : "bg-cyan-600"}`} style={{ width: `${percent}%` }} /></div><p className="mt-3 text-xs leading-5 text-slate-500">{formatBytes(status.downloadedBytes)} of about {formatBytes(status.expectedBytes)} prepared on this Mac. This background service continues after you leave Zo Drive; return here to see the latest status.</p></section>;
+  return <section className={`mt-6 rounded-xl border p-4 ${ready ? "border-emerald-200 bg-emerald-50/60" : "border-cyan-200 bg-cyan-50/60"}`}><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-sm font-semibold text-slate-900">{ready ? "ZominAI is ready locally" : "ZominAI local download"}</p><p className="mt-1 text-sm text-slate-600">{status.detail}</p></div><span className={`rounded-full px-2.5 py-1 text-sm font-bold tabular-nums ${ready ? "bg-emerald-600 text-white" : "bg-cyan-700 text-white"}`}>{percent}%</span></div><div className="mt-4 h-2 overflow-hidden rounded-full bg-cyan-100"><div className={`h-full rounded-full transition-[width] duration-500 ${ready ? "bg-emerald-600" : "bg-cyan-600"}`} style={{ width: `${percent}%` }} /></div><p className="mt-3 text-xs leading-5 text-slate-500">{formatBytes(status.downloadedBytes)} of about {formatBytes(status.expectedBytes)} prepared on this device. This background service continues after you leave Zo Drive; return here to see the latest status.</p></section>;
 }
 
 function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: { authClient: AuthClient; client: DriveClient; user: DriveUser; onAccountDeleted: () => void; onSignOut: () => void }) {
@@ -977,7 +1037,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
   const [appliedAdvancedFilters, setAppliedAdvancedFilters] = useState<AdvancedFilters>(defaultAdvancedFilters);
   const [recentFilters, setRecentFilters] = useState<RecentFilters>(defaultRecentFilters);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() => typeof window === "undefined" || !window.matchMedia || window.matchMedia("(min-width: 768px)").matches);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [folderDialogOpen, setFolderDialogOpen] = useState(false);
   const [folderName, setFolderName] = useState("");
@@ -1004,6 +1064,14 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
     window.addEventListener("popstate", restoreRoute);
     return () => window.removeEventListener("popstate", restoreRoute);
   }, [setCurrentPath]);
+
+  useEffect(() => {
+    if (!window.matchMedia) return;
+    const mediaQuery = window.matchMedia("(min-width: 768px)");
+    const syncSidebar = (event: MediaQueryListEvent) => setSidebarOpen(event.matches);
+    mediaQuery.addEventListener("change", syncSidebar);
+    return () => mediaQuery.removeEventListener("change", syncSidebar);
+  }, []);
 
   useEffect(() => {
     updateDriveUrl({
@@ -1257,8 +1325,13 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
 
   function startNativeFile(type: NativeFileType) {
     setNewMenuOpen(false);
+    closeMobileNavigation();
     setNativeFileType(type);
     setNativeFileName(`Untitled ${nativeFileLabel(type).toLowerCase()}`);
+  }
+
+  function closeMobileNavigation() {
+    if (window.matchMedia && !window.matchMedia("(min-width: 768px)").matches) setSidebarOpen(false);
   }
 
   function applyAdvancedSearch() {
@@ -1282,15 +1355,18 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
 
   return (
     <main className="min-h-screen bg-[#f8faff] text-slate-800" onDragOver={(event) => event.preventDefault()} onDrop={handleDrop}>
-      <header className="flex h-18 items-center gap-5 border-b border-slate-200 bg-white px-5">
+      <header className="flex min-h-18 flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-3 py-3 sm:px-5 md:h-18 md:flex-nowrap md:gap-5 md:py-0">
+        <button aria-controls="drive-navigation" aria-expanded={sidebarOpen} aria-label="Open navigation" className="grid size-10 shrink-0 place-items-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-800 md:hidden" onClick={() => setSidebarOpen(true)}>
+          <PanelLeftOpen size={21} />
+        </button>
         <a aria-label="Back to Zo Drive landing page" className="flex shrink-0 items-center gap-2.5 text-xl font-semibold tracking-tight text-slate-900" href={landingUrl()}>
           <span className="relative block h-11 w-11 shrink-0" role="img" aria-label="Zo Drive Pegasus on a cloud">
             <img className="absolute inset-0 h-full w-full" src={driveCloudLogoUrl} alt="" />
             <img className="absolute left-[5.94%] top-0 h-[88.44%] w-[88.44%]" src={drivePegasusLogoUrl} alt="" />
           </span>
-          Zo Drive
+          <span className="hidden sm:inline">Zo Drive</span>
         </a>
-        <label className="relative min-w-0 flex-1">
+        <label className="order-3 relative min-w-0 basis-full md:order-none md:basis-auto md:flex-1">
           <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={19} />
           <input
             aria-label="Search files"
@@ -1300,11 +1376,11 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
             onChange={(event) => setSearch(event.target.value)}
           />
         </label>
-        <button aria-label="Advanced search" className={`rounded-lg p-2 transition ${advancedSearchActive ? "bg-blue-50 text-blue-700" : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"}`} onClick={() => { setAdvancedFilters(appliedAdvancedFilters); setAdvancedSearchOpen(true); }}><SlidersHorizontal size={21} /></button>
-        <button aria-label="ZominAI" className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-0.5 shadow-sm transition hover:border-blue-300 hover:bg-blue-50" onClick={() => { setSection("zominai"); setCurrentPath(""); }} title="ZominAI">
-          <img className="size-full rounded-[0.65rem] object-cover" src={zominAiButtonUrl} alt="" />
-        </button>
-        <div className="flex items-center gap-1 text-sm font-medium text-slate-500">
+        <div data-testid="header-actions" className="order-2 ml-auto flex shrink-0 items-center gap-0.5 text-sm font-medium text-slate-500 md:order-none md:ml-0 md:gap-1">
+          <button aria-label="ZominAI" className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-0.5 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 sm:size-11" onClick={() => { setSection("zominai"); setCurrentPath(""); }} title="ZominAI">
+            <img className="size-full rounded-[0.65rem] object-cover" src={zominAiButtonUrl} alt="" />
+          </button>
+          <button aria-label="Advanced search" className={`rounded-lg p-2 transition ${advancedSearchActive ? "bg-blue-50 text-blue-700" : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"}`} onClick={() => { setAdvancedFilters(appliedAdvancedFilters); setAdvancedSearchOpen(true); }}><SlidersHorizontal size={21} /></button>
           <div className="relative">
             <button title="Account menu" aria-label="Account menu" aria-expanded={accountMenuOpen} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800" onClick={() => setAccountMenuOpen((open) => !open)}><MoreHorizontal size={21} /></button>
             {accountMenuOpen && <div className="absolute right-0 top-11 z-20 w-52 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg">
@@ -1320,17 +1396,18 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
         </div>
       </header>
 
-      <div className="flex min-h-[calc(100vh-4.5rem)]">
-        <aside id="drive-navigation" className={`${sidebarOpen ? "w-64 overflow-hidden px-3" : "w-16 overflow-visible px-1.5"} shrink-0 border-r border-slate-200 bg-white py-5 transition-[width,padding] duration-200`}>
+      <div className="flex min-h-[calc(100dvh-4.5rem)]">
+        {sidebarOpen && <button aria-label="Close navigation" className="fixed inset-0 z-30 bg-slate-950/25 md:hidden" onClick={() => setSidebarOpen(false)} />}
+        <aside id="drive-navigation" className={`${sidebarOpen ? "w-72 translate-x-0 overflow-y-auto px-3" : "w-16 -translate-x-full overflow-visible px-1.5 md:translate-x-0"} fixed inset-y-0 left-0 z-40 shrink-0 border-r border-slate-200 bg-white py-5 shadow-xl transition-[width,padding,transform] duration-200 md:static md:z-auto md:shadow-none ${sidebarOpen ? "md:w-64" : "md:w-16"}`}>
           <div className={`flex gap-2 ${sidebarOpen ? "items-center" : "flex-col items-center"}`}>
           {sidebarOpen ? <div className="relative flex-1">
             <button aria-expanded={newMenuOpen} className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700" onClick={() => setNewMenuOpen((open) => !open)}>
               <Plus size={18} /> New
             </button>
             {newMenuOpen && <div className="absolute left-0 top-[calc(100%+0.5rem)] z-30 w-full overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
-              <button className="new-menu-item" onClick={() => { setNewMenuOpen(false); fileInput.current?.click(); }}><Upload size={17} /> File upload</button>
-              <button className="new-menu-item" onClick={() => { setNewMenuOpen(false); folderInput.current?.click(); }}><FolderUp size={17} /> Folder upload</button>
-              <button className="new-menu-item" onClick={() => { setNewMenuOpen(false); setFolderDialogOpen(true); }}><FolderPlus size={17} /> New folder</button>
+              <button className="new-menu-item" onClick={() => { setNewMenuOpen(false); closeMobileNavigation(); fileInput.current?.click(); }}><Upload size={17} /> File upload</button>
+              <button className="new-menu-item" onClick={() => { setNewMenuOpen(false); closeMobileNavigation(); folderInput.current?.click(); }}><FolderUp size={17} /> Folder upload</button>
+              <button className="new-menu-item" onClick={() => { setNewMenuOpen(false); closeMobileNavigation(); setFolderDialogOpen(true); }}><FolderPlus size={17} /> New folder</button>
               <div className="my-1 border-t border-slate-100" />
               {(["document", "spreadsheet", "presentation", "form"] as NativeFileType[]).map((type) => <button aria-label={`New Zo ${nativeFileLabel(type)}`} className="new-menu-item new-menu-native-item" key={type} onClick={() => startNativeFile(type)}><img className="size-9 shrink-0 rounded-md" src={nativeIllustrationUrl(type)} alt={`${nativeFileLabel(type)} illustration`} /><span>New Zo {nativeFileLabel(type)}</span></button>)}
               <button aria-label="New Zo Paste" className="new-menu-item new-menu-native-item" onClick={() => startNativeFile("paste")}><span className="grid size-9 shrink-0 place-items-center rounded-md bg-slate-900 text-cyan-300"><Code2 size={20} /></span><span>New Zo Paste</span></button>
@@ -1344,23 +1421,23 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
           <input ref={folderInput} aria-label="Upload folder" className="hidden" type="file" multiple {...{ webkitdirectory: "" }} onChange={handleFolderInput} />
 
           <nav className={`${sidebarOpen ? "mt-6 space-y-1" : "mt-5 space-y-2"}`}>
-            <button aria-label="Recent" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "home" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"} ${collapsedNavigationTooltip(sidebarOpen)}`} data-tooltip="Recent" onClick={() => { setSection("home"); setCurrentPath(""); }} title="Recent"><Clock3 size={18} />{sidebarOpen && <span>Recent</span>}</button>
-            <button aria-label="My Drive" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "my-drive" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"} ${collapsedNavigationTooltip(sidebarOpen)}`} data-tooltip="My Drive" onClick={() => { setSection("my-drive"); setCurrentPath(""); }} title="My Drive"><HardDrive size={18} />{sidebarOpen && <span>My Drive</span>}</button>
-            <button aria-label="Starred" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "starred" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"} ${collapsedNavigationTooltip(sidebarOpen)}`} data-tooltip="Starred" onClick={() => { setSection("starred"); setCurrentPath(""); }} title="Starred"><Star size={18} />{sidebarOpen && <span>Starred</span>}</button>
-            <button aria-label="Shared with others" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "shared" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"} ${collapsedNavigationTooltip(sidebarOpen)}`} data-tooltip="Shared with others" onClick={() => setSection("shared")} title="Shared with others"><UsersRound size={18} />{sidebarOpen && <span>Shared with others</span>}</button>
-            <button aria-label="Trash" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "trash" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"} ${collapsedNavigationTooltip(sidebarOpen)}`} data-tooltip="Trash" onClick={() => { setSection("trash"); setCurrentPath(""); }} title="Trash"><Trash2 size={18} />{sidebarOpen && <span>Trash</span>}</button>
+            <button aria-label="Recent" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "home" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"} ${collapsedNavigationTooltip(sidebarOpen)}`} data-tooltip="Recent" onClick={() => { setSection("home"); setCurrentPath(""); closeMobileNavigation(); }} title="Recent"><Clock3 size={18} />{sidebarOpen && <span>Recent</span>}</button>
+            <button aria-label="My Drive" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "my-drive" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"} ${collapsedNavigationTooltip(sidebarOpen)}`} data-tooltip="My Drive" onClick={() => { setSection("my-drive"); setCurrentPath(""); closeMobileNavigation(); }} title="My Drive"><HardDrive size={18} />{sidebarOpen && <span>My Drive</span>}</button>
+            <button aria-label="Starred" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "starred" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"} ${collapsedNavigationTooltip(sidebarOpen)}`} data-tooltip="Starred" onClick={() => { setSection("starred"); setCurrentPath(""); closeMobileNavigation(); }} title="Starred"><Star size={18} />{sidebarOpen && <span>Starred</span>}</button>
+            <button aria-label="Shared with others" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "shared" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"} ${collapsedNavigationTooltip(sidebarOpen)}`} data-tooltip="Shared with others" onClick={() => { setSection("shared"); closeMobileNavigation(); }} title="Shared with others"><UsersRound size={18} />{sidebarOpen && <span>Shared with others</span>}</button>
+            <button aria-label="Trash" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "trash" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"} ${collapsedNavigationTooltip(sidebarOpen)}`} data-tooltip="Trash" onClick={() => { setSection("trash"); setCurrentPath(""); closeMobileNavigation(); }} title="Trash"><Trash2 size={18} />{sidebarOpen && <span>Trash</span>}</button>
             <div className={`${sidebarOpen ? "my-3" : "mx-auto my-3 w-7"} border-t border-slate-200`} role="separator" />
-            <button aria-label="Zo Paste" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "pastes" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"} ${collapsedNavigationTooltip(sidebarOpen)}`} data-tooltip="Zo Paste" onClick={() => { setSection("pastes"); setCurrentPath(""); }} title="Zo Paste"><Code2 size={18} />{sidebarOpen && <span>Zo Paste</span>}</button>
-            <button aria-label="Zo Transfer" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "transfer" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"} ${collapsedNavigationTooltip(sidebarOpen)}`} data-tooltip="Zo Transfer" onClick={() => { setSection("transfer"); setCurrentPath(""); }} title="Zo Transfer"><Send size={18} />{sidebarOpen && <span>Zo Transfer</span>}</button>
-            <button aria-label="Zo Functions" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "functions" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"} ${collapsedNavigationTooltip(sidebarOpen)}`} data-tooltip="Zo Functions" onClick={() => { setSection("functions"); setCurrentPath(""); }} title="Zo Functions"><Terminal size={18} />{sidebarOpen && <span>Zo Functions</span>}</button>
-            <button aria-label="Zo Databases" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "databases" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"} ${collapsedNavigationTooltip(sidebarOpen)}`} data-tooltip="Zo Databases" onClick={() => { updateDriveUrl({ database: null, databasePanel: null, databaseView: "catalog", table: null }); setSection("databases"); setCurrentPath(""); }} title="Zo Databases"><Database size={18} />{sidebarOpen && <span>Zo Databases</span>}</button>
-            <button aria-label="Zo Shared Drives" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "cluster-databases" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"} ${collapsedNavigationTooltip(sidebarOpen)}`} data-tooltip="Zo Shared Drives" onClick={() => { setSection("cluster-databases"); setCurrentPath(""); }} title="Zo Shared Drives"><Network size={18} />{sidebarOpen && <span>Zo Shared Drives</span>}</button>
+            <button aria-label="Zo Paste" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "pastes" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"} ${collapsedNavigationTooltip(sidebarOpen)}`} data-tooltip="Zo Paste" onClick={() => { setSection("pastes"); setCurrentPath(""); closeMobileNavigation(); }} title="Zo Paste"><Code2 size={18} />{sidebarOpen && <span>Zo Paste</span>}</button>
+            <button aria-label="Zo Transfer" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "transfer" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"} ${collapsedNavigationTooltip(sidebarOpen)}`} data-tooltip="Zo Transfer" onClick={() => { setSection("transfer"); setCurrentPath(""); closeMobileNavigation(); }} title="Zo Transfer"><Send size={18} />{sidebarOpen && <span>Zo Transfer</span>}</button>
+            <button aria-label="Zo Functions" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "functions" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"} ${collapsedNavigationTooltip(sidebarOpen)}`} data-tooltip="Zo Functions" onClick={() => { setSection("functions"); setCurrentPath(""); closeMobileNavigation(); }} title="Zo Functions"><Terminal size={18} />{sidebarOpen && <span>Zo Functions</span>}</button>
+            <button aria-label="Zo Databases" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "databases" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"} ${collapsedNavigationTooltip(sidebarOpen)}`} data-tooltip="Zo Databases" onClick={() => { updateDriveUrl({ database: null, databasePanel: null, databaseView: "catalog", table: null }); setSection("databases"); setCurrentPath(""); closeMobileNavigation(); }} title="Zo Databases"><Database size={18} />{sidebarOpen && <span>Zo Databases</span>}</button>
+            <button aria-label="Zo Shared Drives" className={`flex items-center rounded-lg text-sm font-semibold ${sidebarOpen ? "w-full gap-3 px-3 py-2.5 text-left" : "mx-auto size-10 justify-center"} ${section === "cluster-databases" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50"} ${collapsedNavigationTooltip(sidebarOpen)}`} data-tooltip="Zo Shared Drives" onClick={() => { setSection("cluster-databases"); setCurrentPath(""); closeMobileNavigation(); }} title="Zo Shared Drives"><Network size={18} />{sidebarOpen && <span>Zo Shared Drives</span>}</button>
           </nav>
 
           {sidebarOpen && <UsageCard usage={usageQuery.data} onOpenBreakdown={() => setStorageBreakdownOpen(true)} />}
         </aside>
 
-        <section className="min-w-0 flex-1 p-6 md:p-9">
+        <section className="min-w-0 flex-1 p-4 sm:p-6 md:p-9">
           <div className="mb-7 flex flex-wrap items-center justify-between gap-4">
             <div>
               {section === "my-drive" && currentPath && <FolderNavigation currentPath={currentPath} onNavigate={setCurrentPath} />}
@@ -1433,7 +1510,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
         return updatedUsage;
       }} />}
       {uploadDialogOpen && <UploadDialog onClose={() => setUploadDialogOpen(false)} onChooseFiles={() => { setUploadDialogOpen(false); fileInput.current?.click(); }} onChooseFolder={() => { setUploadDialogOpen(false); folderInput.current?.click(); }} onDrop={(dataTransfer) => { setUploadDialogOpen(false); return uploadDroppedItems(dataTransfer); }} />}
-      {uploads.length === 0 && section !== "cluster-databases" && section !== "databases" && section !== "functions" && section !== "zominai" && <button aria-label="Open upload menu" className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-900/25 transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200" onClick={() => setUploadDialogOpen(true)}><Upload size={18} /> Upload</button>}
+      {uploads.length === 0 && section !== "cluster-databases" && section !== "databases" && section !== "functions" && section !== "zominai" && <button aria-label="Open upload menu" className="fixed bottom-4 right-4 z-40 inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-900/25 transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200 sm:bottom-6 sm:right-6 sm:px-5" onClick={() => setUploadDialogOpen(true)}><Upload size={18} /> <span className="hidden sm:inline">Upload</span></button>}
       {uploads.length > 0 && <UploadProgress uploads={uploads} />}
     </main>
   );
@@ -1523,85 +1600,739 @@ function defaultFunctionSource(runtime: FunctionRuntime): string {
 
 function ClusterDatabases({ client }: { client: DriveClient }) {
   const queryClient = useQueryClient();
-  const supported = Boolean(client.createClusterInvitation && client.createClusterMount && client.listClusterMounts && client.listClusterObjects && client.createClusterFolder && client.deleteClusterMount && client.deleteClusterObject && client.downloadClusterObject && client.renameClusterObject && client.uploadClusterObject);
+  const supported = Boolean(
+    client.createClusterInvitation &&
+      client.createClusterMount &&
+      client.listClusterMounts &&
+      client.listClusterObjects &&
+      client.createClusterFolder &&
+      client.deleteClusterMount &&
+      client.deleteClusterObject &&
+      client.deleteClusterPeer &&
+      client.downloadClusterObject &&
+      client.getClusterMountAccess &&
+      client.listClusterPeers &&
+      client.renameClusterObject &&
+      client.updateClusterPeerRole &&
+      client.uploadClusterObject,
+  );
   const [pairMode, setPairMode] = useState<"invite" | "join">("invite");
   const [selectedFolders, setSelectedFolders] = useState<string[]>([]);
+  const [inviteRole, setInviteRole] = useState<ClusterRole>("editor");
+  const [recipient, setRecipient] = useState("");
   const [remoteUrl, setRemoteUrl] = useState("");
   const [inviteToken, setInviteToken] = useState("");
   const [createdInvites, setCreatedInvites] = useState<ClusterInvitation[]>([]);
   const [openMount, setOpenMount] = useState<string | null>(null);
   const [remoteFolder, setRemoteFolder] = useState("");
   const remoteFileInput = useRef<HTMLInputElement>(null);
-  const mountsQuery = useQuery({ queryKey: ["cluster-mounts"], queryFn: () => client.listClusterMounts!(), enabled: supported });
-  const shareFoldersQuery = useQuery({ queryKey: ["cluster-share-folders"], queryFn: () => client.listFolders(), enabled: supported });
-  const objectsQuery = useQuery({ queryKey: ["cluster-objects", openMount], queryFn: () => client.listClusterObjects!(openMount!), enabled: supported && Boolean(openMount) });
-  const invitationMutation = useMutation({ mutationFn: () => Promise.all(selectedFolders.map((folder) => client.createClusterInvitation!(folder))), onSuccess: (invites) => { setCreatedInvites(invites); toast.success(`${invites.length} one-time pairing ${invites.length === 1 ? "key" : "keys"} created`); }, onError: (error) => toast.error(error instanceof Error ? error.message : "Could not create pairing keys") });
-  const mountMutation = useMutation({ mutationFn: () => client.createClusterMount!({ remoteUrl: remoteUrl.trim(), inviteToken: inviteToken.trim() }), onSuccess: async () => { setInviteToken(""); await queryClient.invalidateQueries({ queryKey: ["cluster-mounts"] }); toast.success("Cluster folder connected"); }, onError: (error) => toast.error(error instanceof Error ? error.message : "Could not connect the cluster folder") });
-  const refreshObjects = async () => { await queryClient.invalidateQueries({ queryKey: ["cluster-objects", openMount] }); };
-  const folderMutation = useMutation({ mutationFn: () => client.createClusterFolder!({ id: openMount!, path: remoteFolder.trim() }), onSuccess: async () => { setRemoteFolder(""); await refreshObjects(); toast.success("Shared folder created"); }, onError: (error) => toast.error(error instanceof Error ? error.message : "Could not create the shared folder") });
-  const uploadMutation = useMutation({ mutationFn: (file: File) => client.uploadClusterObject!({ id: openMount!, file, fileName: file.name }), onSuccess: async () => { await refreshObjects(); toast.success("File uploaded to the shared folder"); }, onError: (error) => toast.error(error instanceof Error ? error.message : "Could not upload to the shared folder") });
-  const renameMutation = useMutation({ mutationFn: ({ key, name }: { key: string; name: string }) => client.renameClusterObject!({ id: openMount!, key, name }), onSuccess: refreshObjects, onError: (error) => toast.error(error instanceof Error ? error.message : "Could not rename the shared file") });
-  const deleteMutation = useMutation({ mutationFn: (key: string) => client.deleteClusterObject!({ id: openMount!, key }), onSuccess: async () => { await refreshObjects(); toast.success("Shared file moved to the owner's Trash"); }, onError: (error) => toast.error(error instanceof Error ? error.message : "Could not delete the shared file") });
-  const disconnectMutation = useMutation({ mutationFn: (id: string) => client.deleteClusterMount!(id), onSuccess: async (_result, id) => { if (openMount === id) setOpenMount(null); await queryClient.invalidateQueries({ queryKey: ["cluster-mounts"] }); toast.success("Cluster folder disconnected"); }, onError: (error) => toast.error(error instanceof Error ? error.message : "Could not disconnect the cluster folder") });
+  const mountsQuery = useQuery({
+    queryKey: ["cluster-mounts"],
+    queryFn: () => client.listClusterMounts!(),
+    enabled: supported,
+  });
+  const peersQuery = useQuery({
+    queryKey: ["cluster-peers"],
+    queryFn: () => client.listClusterPeers!(),
+    enabled: supported,
+  });
+  const shareFoldersQuery = useQuery({
+    queryKey: ["cluster-share-folders"],
+    queryFn: () => client.listFolders(),
+    enabled: supported,
+  });
+  const objectsQuery = useQuery({
+    queryKey: ["cluster-objects", openMount],
+    queryFn: () => client.listClusterObjects!(openMount!),
+    enabled: supported && Boolean(openMount),
+  });
+  const accessQuery = useQuery({
+    queryKey: ["cluster-access", openMount],
+    queryFn: () => client.getClusterMountAccess!(openMount!),
+    enabled: supported && Boolean(openMount),
+  });
+  const invitationMutation = useMutation({
+    mutationFn: () =>
+      Promise.all(
+        selectedFolders.map((folder) =>
+          client.createClusterInvitation!({
+            folder,
+            role: inviteRole,
+            recipient: recipient.trim() || null,
+          }),
+        ),
+      ),
+    onSuccess: (invites) => {
+      setCreatedInvites(invites);
+      toast.success(
+        `${invites.length} one-time pairing ${invites.length === 1 ? "key" : "keys"} created`,
+      );
+    },
+    onError: (error) =>
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not create pairing keys",
+      ),
+  });
+  const mountMutation = useMutation({
+    mutationFn: () =>
+      client.createClusterMount!({
+        remoteUrl: remoteUrl.trim(),
+        inviteToken: inviteToken.trim(),
+      }),
+    onSuccess: async () => {
+      setInviteToken("");
+      await queryClient.invalidateQueries({ queryKey: ["cluster-mounts"] });
+      toast.success("Cluster folder connected");
+    },
+    onError: (error) =>
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not connect the cluster folder",
+      ),
+  });
+  const refreshObjects = async () => {
+    await queryClient.invalidateQueries({
+      queryKey: ["cluster-objects", openMount],
+    });
+  };
+  const folderMutation = useMutation({
+    mutationFn: () =>
+      client.createClusterFolder!({
+        id: openMount!,
+        path: remoteFolder.trim(),
+      }),
+    onSuccess: async () => {
+      setRemoteFolder("");
+      await refreshObjects();
+      toast.success("Shared folder created");
+    },
+    onError: (error) =>
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not create the shared folder",
+      ),
+  });
+  const uploadMutation = useMutation({
+    mutationFn: (file: File) =>
+      client.uploadClusterObject!({
+        id: openMount!,
+        file,
+        fileName: file.name,
+      }),
+    onSuccess: async () => {
+      await refreshObjects();
+      toast.success("File uploaded to the shared folder");
+    },
+    onError: (error) =>
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not upload to the shared folder",
+      ),
+  });
+  const renameMutation = useMutation({
+    mutationFn: ({ key, name }: { key: string; name: string }) =>
+      client.renameClusterObject!({ id: openMount!, key, name }),
+    onSuccess: refreshObjects,
+    onError: (error) =>
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not rename the shared file",
+      ),
+  });
+  const deleteMutation = useMutation({
+    mutationFn: (key: string) =>
+      client.deleteClusterObject!({ id: openMount!, key }),
+    onSuccess: async () => {
+      await refreshObjects();
+      toast.success("Shared file moved to the owner's Trash");
+    },
+    onError: (error) =>
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not delete the shared file",
+      ),
+  });
+  const disconnectMutation = useMutation({
+    mutationFn: (id: string) => client.deleteClusterMount!(id),
+    onSuccess: async (_result, id) => {
+      if (openMount === id) setOpenMount(null);
+      await queryClient.invalidateQueries({ queryKey: ["cluster-mounts"] });
+      toast.success("Cluster folder disconnected");
+    },
+    onError: (error) =>
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not disconnect the cluster folder",
+      ),
+  });
+  const updatePeerRoleMutation = useMutation({
+    mutationFn: ({ id, role }: { id: string; role: ClusterRole }) =>
+      client.updateClusterPeerRole!({ id, role }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["cluster-peers"] });
+      toast.success("Folder access updated");
+    },
+    onError: (error) =>
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not update folder access",
+      ),
+  });
+  const revokePeerMutation = useMutation({
+    mutationFn: (id: string) => client.deleteClusterPeer!(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["cluster-peers"] });
+      toast.success("Shared folder access revoked");
+    },
+    onError: (error) =>
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not revoke folder access",
+      ),
+  });
+  const canWrite = accessQuery.data?.role === "editor";
   async function downloadObject(key: string, name: string) {
     try {
-      const response = await client.downloadClusterObject!({ id: openMount!, key });
+      const response = await client.downloadClusterObject!({
+        id: openMount!,
+        key,
+      });
       const url = URL.createObjectURL(await response.blob());
-      const anchor = document.createElement("a"); anchor.href = url; anchor.download = name; document.body.append(anchor); anchor.click(); anchor.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 0);
-    } catch (error) { toast.error(error instanceof Error ? error.message : "Could not download the shared file"); }
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = name;
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not download the shared file",
+      );
+    }
   }
   function toggleFolder(folder: string) {
-    setSelectedFolders((current) => current.includes(folder)
-      ? current.filter((item) => item !== folder)
-      : [...current.filter((item) => !item.startsWith(`${folder}/`)), folder]);
+    setSelectedFolders((current) =>
+      current.includes(folder)
+        ? current.filter((item) => item !== folder)
+        : [...current.filter((item) => !item.startsWith(`${folder}/`)), folder],
+    );
   }
-  if (!supported) return <section className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm"><h2 className="text-xl font-semibold text-slate-900">Cluster Storage is unavailable</h2><p className="mt-2 text-sm text-slate-500">Update the Zo Drive API and browser workspace together to pair another Zo Computer.</p></section>;
-  return <div className="space-y-5">
-    <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 via-cyan-950 to-slate-900 px-7 py-8 text-white shadow-sm md:px-9">
-      <div className="absolute -right-16 -top-24 size-72 rounded-full bg-cyan-300/15 blur-3xl" />
-      <div className="relative max-w-3xl">
-        <span className="inline-flex items-center gap-2 rounded-full border border-cyan-100/20 bg-cyan-100/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100"><Network size={14} /> Private folder sharing</span>
-        <h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">Create shared drives with people you trust.</h2>
-        <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">Select the folders you are happy to expose, generate a one-time pairing key for each, and send them to the other Zo Drive owner. Everything else stays private.</p>
-      </div>
-    </section>
+  if (!supported)
+    return (
+      <section className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+        <h2 className="text-xl font-semibold text-slate-900">
+          Cluster Storage is unavailable
+        </h2>
+        <p className="mt-2 text-sm text-slate-500">
+          Update the Zo Drive API and browser workspace together to pair another
+          Zo Computer.
+        </p>
+      </section>
+    );
+  return (
+    <div className="space-y-5">
+      <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 via-cyan-950 to-slate-900 px-7 py-8 text-white shadow-sm md:px-9">
+        <div className="absolute -right-16 -top-24 size-72 rounded-full bg-cyan-300/15 blur-3xl" />
+        <div className="relative max-w-3xl">
+          <span className="inline-flex items-center gap-2 rounded-full border border-cyan-100/20 bg-cyan-100/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100">
+            <Network size={14} /> Private folder sharing
+          </span>
+          <h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">
+            Create shared drives with people you trust.
+          </h2>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
+            Select the folders you are happy to expose, generate a one-time
+            pairing key for each, choose Viewer or Editor access, and send it
+            to the other Zo Drive owner. Everything else stays private.
+          </p>
+        </div>
+      </section>
 
-    <section className="grid gap-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(18rem,0.85fr)]">
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 bg-slate-50 px-5 py-5">
-          <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-700">Shared Drive pairing</p><h2 className="mt-1 text-xl font-semibold tracking-tight text-slate-900">Invite someone or join their Drive</h2><p className="mt-2 max-w-xl text-sm leading-6 text-slate-500">You decide the folders they can access. Each selected folder receives an independent, time-limited pairing key.</p></div>
-          <span className="rounded-full bg-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600">Private by default</span>
-        </div>
-        <div className="grid gap-4 p-5 sm:grid-cols-3">
-          <ClusterStep number="1" title="Select folders" description="Choose the exact folders you are willing to share from My Drive." />
-          <ClusterStep number="2" title="Send keys" description="Each key works once and expires after 15 minutes if it is not used." />
-          <ClusterStep number="3" title="Work together" description="Both parties can work inside each approved shared folder." />
-        </div>
-        <div className="border-t border-slate-100 p-5">
-          <div aria-label="Shared Drive pairing mode" className="flex rounded-xl bg-slate-100 p-1" role="tablist">
-            <button aria-selected={pairMode === "invite"} className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold ${pairMode === "invite" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`} onClick={() => setPairMode("invite")} role="tab" type="button">Invite someone</button>
-            <button aria-selected={pairMode === "join"} className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold ${pairMode === "join" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`} onClick={() => setPairMode("join")} role="tab" type="button">Join a shared Drive</button>
+      <section className="grid gap-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(18rem,0.85fr)]">
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 bg-slate-50 px-5 py-5">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-700">
+                Shared Drive pairing
+              </p>
+              <h2 className="mt-1 text-xl font-semibold tracking-tight text-slate-900">
+                Invite someone or join their Drive
+              </h2>
+              <p className="mt-2 max-w-xl text-sm leading-6 text-slate-500">
+                You decide the folders they can access. Each selected folder
+                receives an independent, time-limited pairing key.
+              </p>
+            </div>
+            <span className="rounded-full bg-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600">
+              Private by default
+            </span>
           </div>
-          {pairMode === "invite" ? <div className="mt-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-sm font-semibold text-slate-900">Choose folders to share</h3><p className="mt-1 text-sm leading-6 text-slate-500">Select one or more folders. A parent folder already includes every subfolder, so overlapping selections are prevented.</p></div><span className="rounded-full bg-cyan-50 px-3 py-1 text-xs font-bold text-cyan-800">{selectedFolders.length} selected</span></div><div className="mt-4 max-h-64 overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-2">{shareFoldersQuery.isPending ? <p className="p-4 text-sm text-slate-500">Loading your folders…</p> : shareFoldersQuery.isError ? <p className="p-4 text-sm text-red-600">Your folders could not be loaded. Try again before creating a key.</p> : (shareFoldersQuery.data ?? []).length === 0 ? <p className="p-4 text-sm text-slate-500">Create a folder in My Drive first, then return here to share it.</p> : [...(shareFoldersQuery.data ?? [])].sort((left, right) => left.key.localeCompare(right.key)).map((item) => { const selected = selectedFolders.includes(item.key); const coveredByParent = selectedFolders.some((folder) => item.key.startsWith(`${folder}/`)); return <label className={`mb-1 flex cursor-pointer items-center gap-3 rounded-lg px-3 py-3 last:mb-0 ${selected ? "bg-cyan-100 text-cyan-950" : coveredByParent ? "cursor-not-allowed opacity-50" : "hover:bg-white"}`} key={item.key}><input aria-label={`Share folder ${item.key}`} checked={selected} className="size-4 accent-cyan-700" disabled={coveredByParent} onChange={() => toggleFolder(item.key)} type="checkbox" /><Folder size={17} className="shrink-0 text-cyan-700" /><span className="min-w-0 flex-1 truncate text-sm font-semibold">{item.key}</span>{selected && <Check size={17} className="text-cyan-800" />}</label>; })}</div><button className="mt-4 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:bg-slate-300" disabled={selectedFolders.length === 0 || invitationMutation.isPending} onClick={() => invitationMutation.mutate()}>{invitationMutation.isPending ? "Creating keys…" : `Create ${selectedFolders.length || ""} pairing ${selectedFolders.length === 1 ? "key" : "keys"}`}</button>{createdInvites.length > 0 && <div className="mt-4 space-y-3 rounded-xl border border-cyan-200 bg-cyan-50 p-4"><div><p className="text-xs font-bold uppercase tracking-wide text-cyan-800">Send these once</p><p className="mt-1 text-xs leading-5 text-cyan-900">Send each key with your Zo Drive URL. They expire in 15 minutes and grant access only to the named folder.</p></div>{createdInvites.map((invite) => <div className="rounded-lg border border-cyan-200 bg-white p-3" key={invite.id}><p className="text-sm font-semibold text-slate-900">{invite.folder}</p><code className="mt-2 block break-all text-xs leading-5 text-slate-700">{invite.token}</code><button className="mt-2 text-xs font-semibold text-cyan-800 hover:text-cyan-950" onClick={() => void copyText(invite.token, `${invite.folder} pairing key copied`)}>Copy key</button></div>)}</div>}</div> : <div className="mt-5"><h3 className="text-sm font-semibold text-slate-900">Join a folder someone shared with you</h3><p className="mt-1 max-w-xl text-sm leading-6 text-slate-500">The other owner chooses what they share. Paste their Drive URL and the one-time key they sent; this does not expose any of your folders.</p><div className="mt-4 grid gap-4 lg:grid-cols-2"><label className="text-sm font-semibold text-slate-700">Other Zo Drive URL<input aria-label="Remote Zo Drive URL" className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100" placeholder="https://other-drive.example/drive" value={remoteUrl} onChange={(event) => setRemoteUrl(event.target.value)} /></label><label className="text-sm font-semibold text-slate-700">Pairing key<input aria-label="Cluster pairing key" className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-mono text-xs outline-none focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100" value={inviteToken} onChange={(event) => setInviteToken(event.target.value)} /></label></div><button className="mt-4 rounded-lg bg-cyan-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-cyan-800 disabled:bg-slate-300" disabled={!remoteUrl.trim() || !inviteToken.trim() || mountMutation.isPending} onClick={() => mountMutation.mutate()}>{mountMutation.isPending ? "Connecting…" : "Join shared folder"}</button></div>}
+          <div className="grid gap-4 p-5 sm:grid-cols-3">
+            <ClusterStep
+              number="1"
+              title="Select folders"
+              description="Choose the exact folders you are willing to share from My Drive."
+            />
+            <ClusterStep
+              number="2"
+              title="Send keys"
+              description="Each key works once and expires after 15 minutes if it is not used."
+            />
+            <ClusterStep
+              number="3"
+              title="Set access"
+              description="Viewers can download; Editors can work inside the approved folder."
+            />
+          </div>
+          <div className="border-t border-slate-100 p-5">
+            <div
+              aria-label="Shared Drive pairing mode"
+              className="flex rounded-xl bg-slate-100 p-1"
+              role="tablist"
+            >
+              <button
+                aria-selected={pairMode === "invite"}
+                className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold ${pairMode === "invite" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                onClick={() => setPairMode("invite")}
+                role="tab"
+                type="button"
+              >
+                Invite someone
+              </button>
+              <button
+                aria-selected={pairMode === "join"}
+                className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold ${pairMode === "join" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                onClick={() => setPairMode("join")}
+                role="tab"
+                type="button"
+              >
+                Join a shared Drive
+              </button>
+            </div>
+            {pairMode === "invite" ? (
+              <div className="mt-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-900">
+                      Choose folders to share
+                    </h3>
+                    <p className="mt-1 text-sm leading-6 text-slate-500">
+                      Select one or more folders. A parent folder already
+                      includes every subfolder, so overlapping selections are
+                      prevented.
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-cyan-50 px-3 py-1 text-xs font-bold text-cyan-800">
+                    {selectedFolders.length} selected
+                  </span>
+                </div>
+                <div className="mt-4 max-h-64 overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-2">
+                  {shareFoldersQuery.isPending ? (
+                    <p className="p-4 text-sm text-slate-500">
+                      Loading your folders…
+                    </p>
+                  ) : shareFoldersQuery.isError ? (
+                    <p className="p-4 text-sm text-red-600">
+                      Your folders could not be loaded. Try again before
+                      creating a key.
+                    </p>
+                  ) : (shareFoldersQuery.data ?? []).length === 0 ? (
+                    <p className="p-4 text-sm text-slate-500">
+                      Create a folder in My Drive first, then return here to
+                      share it.
+                    </p>
+                  ) : (
+                    [...(shareFoldersQuery.data ?? [])]
+                      .sort((left, right) => left.key.localeCompare(right.key))
+                      .map((item) => {
+                        const selected = selectedFolders.includes(item.key);
+                        const coveredByParent = selectedFolders.some((folder) =>
+                          item.key.startsWith(`${folder}/`),
+                        );
+                        return (
+                          <label
+                            className={`mb-1 flex cursor-pointer items-center gap-3 rounded-lg px-3 py-3 last:mb-0 ${selected ? "bg-cyan-100 text-cyan-950" : coveredByParent ? "cursor-not-allowed opacity-50" : "hover:bg-white"}`}
+                            key={item.key}
+                          >
+                            <input
+                              aria-label={`Share folder ${item.key}`}
+                              checked={selected}
+                              className="size-4 accent-cyan-700"
+                              disabled={coveredByParent}
+                              onChange={() => toggleFolder(item.key)}
+                              type="checkbox"
+                            />
+                            <Folder
+                              size={17}
+                              className="shrink-0 text-cyan-700"
+                            />
+                            <span className="min-w-0 flex-1 truncate text-sm font-semibold">
+                              {item.key}
+                            </span>
+                            {selected && (
+                              <Check size={17} className="text-cyan-800" />
+                            )}
+                          </label>
+                        );
+                      })
+                  )}
+                </div>
+                <div className="mt-4 grid gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2">
+                  <label className="text-sm font-semibold text-slate-700">
+                    Recipient label <span className="font-normal text-slate-400">optional</span>
+                    <input aria-label="Pairing recipient" className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100" maxLength={120} placeholder="e.g. Maya - Finance" value={recipient} onChange={(event) => setRecipient(event.target.value)} />
+                  </label>
+                  <label className="text-sm font-semibold text-slate-700">
+                    Folder access
+                    <select aria-label="Folder access role" className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100" value={inviteRole} onChange={(event) => setInviteRole(event.target.value as ClusterRole)}>
+                      <option value="viewer">Viewer - download only</option>
+                      <option value="editor">Editor - upload and edit</option>
+                    </select>
+                  </label>
+                </div>
+                <button
+                  className="mt-4 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:bg-slate-300"
+                  disabled={
+                    selectedFolders.length === 0 || invitationMutation.isPending
+                  }
+                  onClick={() => invitationMutation.mutate()}
+                >
+                  {invitationMutation.isPending
+                    ? "Creating keys…"
+                    : `Create ${selectedFolders.length || ""} pairing ${selectedFolders.length === 1 ? "key" : "keys"}`}
+                </button>
+                {createdInvites.length > 0 && (
+                  <div className="mt-4 space-y-3 rounded-xl border border-cyan-200 bg-cyan-50 p-4">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wide text-cyan-800">
+                        Send these once
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-cyan-900">
+                        Send each key with your Zo Drive URL. They expire in 15
+                        minutes and grant access only to the named folder.
+                      </p>
+                    </div>
+                    {createdInvites.map((invite) => (
+                      <div
+                        className="rounded-lg border border-cyan-200 bg-white p-3"
+                        key={invite.id}
+                      >
+                        <p className="text-sm font-semibold text-slate-900">
+                          {invite.folder}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">{invite.recipient || "Unlabelled recipient"} · {invite.role === "viewer" ? "Viewer" : "Editor"}</p>
+                        <code className="mt-2 block break-all text-xs leading-5 text-slate-700">
+                          {invite.token}
+                        </code>
+                        <button
+                          className="mt-2 text-xs font-semibold text-cyan-800 hover:text-cyan-950"
+                          onClick={() =>
+                            void copyText(
+                              invite.token,
+                              `${invite.folder} pairing key copied`,
+                            )
+                          }
+                        >
+                          Copy key
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="mt-5">
+                <h3 className="text-sm font-semibold text-slate-900">
+                  Join a folder someone shared with you
+                </h3>
+                <p className="mt-1 max-w-xl text-sm leading-6 text-slate-500">
+                  The other owner chooses what they share. Paste their Drive URL
+                  and the one-time key they sent; this does not expose any of
+                  your folders.
+                </p>
+                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                  <label className="text-sm font-semibold text-slate-700">
+                    Other Zo Drive URL
+                    <input
+                      aria-label="Remote Zo Drive URL"
+                      className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100"
+                      placeholder="https://other-drive.example/drive"
+                      value={remoteUrl}
+                      onChange={(event) => setRemoteUrl(event.target.value)}
+                    />
+                  </label>
+                  <label className="text-sm font-semibold text-slate-700">
+                    Pairing key
+                    <input
+                      aria-label="Cluster pairing key"
+                      className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-mono text-xs outline-none focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100"
+                      value={inviteToken}
+                      onChange={(event) => setInviteToken(event.target.value)}
+                    />
+                  </label>
+                </div>
+                <button
+                  className="mt-4 rounded-lg bg-cyan-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-cyan-800 disabled:bg-slate-300"
+                  disabled={
+                    !remoteUrl.trim() ||
+                    !inviteToken.trim() ||
+                    mountMutation.isPending
+                  }
+                  onClick={() => mountMutation.mutate()}
+                >
+                  {mountMutation.isPending
+                    ? "Connecting…"
+                    : "Join shared folder"}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
 
-      <aside className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">How shared files behave</p>
-        <div className="mt-4 space-y-4">
-          <ClusterBehaviour title="Recursive scope" description="A shared folder includes its current and future subfolders, while parent and sibling folders remain private." />
-          <ClusterBehaviour title="Recent activity" description="Edits from either Zo Computer appear in Recent, ordered with the rest of your Drive activity." />
-          <ClusterBehaviour title="Shared with me" description="Folders another Zo Computer exposes to you are grouped in Shared with me, separate from public share links." />
-          <ClusterBehaviour title="Two-way access" description="Both trusted parties can create, edit, rename, and delete files within the approved shared folder." />
-        </div>
-      </aside>
-    </section>
-    {(mountsQuery.data ?? []).length > 0 && <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><header className="border-b border-slate-100 px-5 py-4"><h2 className="font-semibold text-slate-900">Connected folders</h2><p className="mt-1 text-sm text-slate-500">Credentials remain on this Zo; every action stays within the mounted folder.</p></header><div className="divide-y divide-slate-100">{mountsQuery.data?.map((mount) => <div className="flex items-center gap-3 px-5 py-4" key={mount.id}><button className="flex min-w-0 flex-1 items-center gap-3 text-left hover:text-cyan-800" onClick={() => setOpenMount(mount.id)}><span className="grid size-9 place-items-center rounded-lg bg-cyan-100 text-cyan-800"><Network size={17} /></span><span className="min-w-0 flex-1"><span className="block font-semibold text-slate-800">{mount.folder}</span><span className="block truncate text-xs text-slate-500">{mount.remoteUrl}</span></span></button><button className="rounded-lg px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50" disabled={disconnectMutation.isPending} onClick={() => { if (window.confirm(`Disconnect ${mount.folder}? The remote peer credential will be revoked.`)) disconnectMutation.mutate(mount.id); }}>Disconnect</button></div>)}</div>{openMount && <div className="border-t border-slate-100 bg-slate-50 p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm font-semibold text-slate-800">Shared files</p><p className="mt-1 text-xs text-slate-500">Upload, rename, download, or move files to the owner's Trash.</p></div><div className="flex flex-wrap gap-2"><input className="hidden" ref={remoteFileInput} type="file" onChange={(event) => { const file = event.target.files?.[0]; if (file) uploadMutation.mutate(file); event.target.value = ""; }} /><button className="rounded-lg bg-cyan-700 px-3 py-2 text-xs font-semibold text-white hover:bg-cyan-800 disabled:bg-slate-300" disabled={uploadMutation.isPending} onClick={() => remoteFileInput.current?.click()}>{uploadMutation.isPending ? "Uploading…" : "Upload file"}</button></div></div><div className="mt-4 flex max-w-md gap-2"><input aria-label="New shared folder" className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100" placeholder="New folder path" value={remoteFolder} onChange={(event) => setRemoteFolder(event.target.value)} /><button className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:text-slate-300" disabled={!remoteFolder.trim() || folderMutation.isPending} onClick={() => folderMutation.mutate()}>{folderMutation.isPending ? "Creating…" : "New folder"}</button></div>{objectsQuery.isPending ? <p className="mt-4 text-sm text-slate-500">Loading remote folder…</p> : <div className="mt-4 space-y-2">{(objectsQuery.data ?? []).map((object) => <div className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2" key={object.key}><File size={17} className="text-slate-400" /><span className="min-w-0 flex-1 truncate text-sm text-slate-700">{object.key}</span><span className="text-xs text-slate-400">{formatBytes(object.size)}</span><button className="text-xs font-semibold text-cyan-700 hover:text-cyan-900" onClick={() => void downloadObject(object.key, object.name)}>Download</button><button className="text-xs font-semibold text-slate-600 hover:text-slate-900" onClick={() => { const name = window.prompt("New file name", object.name); if (name?.trim() && name.trim() !== object.name) renameMutation.mutate({ key: object.key, name: name.trim() }); }}>Rename</button><button className="text-xs font-semibold text-red-600 hover:text-red-800" onClick={() => { if (window.confirm(`Move ${object.name} to the owner's Trash?`)) deleteMutation.mutate(object.key); }}>Delete</button></div>)}{(objectsQuery.data ?? []).length === 0 && <p className="text-sm text-slate-500">No files in this shared folder yet.</p>}</div>}</div>}</section>}
-  </div>;
+        <aside className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
+            How shared files behave
+          </p>
+          <div className="mt-4 space-y-4">
+            <ClusterBehaviour
+              title="Recursive scope"
+              description="A shared folder includes its current and future subfolders, while parent and sibling folders remain private."
+            />
+            <ClusterBehaviour
+              title="Recent activity"
+              description="Edits from either Zo Computer appear in Recent, ordered with the rest of your Drive activity."
+            />
+            <ClusterBehaviour
+              title="Shared with me"
+              description="Folders another Zo Computer exposes to you are grouped in Shared with me, separate from public share links."
+            />
+            <ClusterBehaviour
+              title="Role-based access"
+              description="Viewers can list and download files. Editors can also create, rename, and delete within the approved folder."
+            />
+          </div>
+        </aside>
+      </section>
+      {(peersQuery.data ?? []).length > 0 && (
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <header className="border-b border-slate-100 px-5 py-4">
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-700">Access you manage</p>
+            <h2 className="mt-1 font-semibold text-slate-900">Shared folder permissions</h2>
+            <p className="mt-1 text-sm text-slate-500">Change a recipient between Viewer and Editor, or revoke their pairing immediately.</p>
+          </header>
+          <div className="divide-y divide-slate-100">
+            {peersQuery.data?.map((peer) => (
+              <div className="flex flex-wrap items-center gap-3 px-5 py-4" key={peer.id}>
+                <span className="grid size-9 place-items-center rounded-lg bg-cyan-100 text-cyan-800"><UsersRound size={17} /></span>
+                <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-800">{peer.recipient || "Unlabelled recipient"}</span><span className="block truncate text-xs text-slate-500">{peer.folder}</span></span>
+                <select aria-label={`Access role for ${peer.folder}`} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-cyan-600" disabled={updatePeerRoleMutation.isPending} value={peer.role} onChange={(event) => updatePeerRoleMutation.mutate({ id: peer.id, role: event.target.value as ClusterRole })}>
+                  <option value="viewer">Viewer</option>
+                  <option value="editor">Editor</option>
+                </select>
+                <button className="rounded-lg px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:text-red-300" disabled={revokePeerMutation.isPending} onClick={() => { if (window.confirm(`Revoke ${peer.recipient || "this recipient"}'s access to ${peer.folder}?`)) revokePeerMutation.mutate(peer.id); }}>Revoke</button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+      {(mountsQuery.data ?? []).length > 0 && (
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <header className="border-b border-slate-100 px-5 py-4">
+            <h2 className="font-semibold text-slate-900">Connected folders</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Credentials remain on this Zo; every action stays within the
+              mounted folder.
+            </p>
+          </header>
+          <div className="divide-y divide-slate-100">
+            {mountsQuery.data?.map((mount) => (
+              <div className="flex items-center gap-3 px-5 py-4" key={mount.id}>
+                <button
+                  className="flex min-w-0 flex-1 items-center gap-3 text-left hover:text-cyan-800"
+                  onClick={() => setOpenMount(mount.id)}
+                >
+                  <span className="grid size-9 place-items-center rounded-lg bg-cyan-100 text-cyan-800">
+                    <Network size={17} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-semibold text-slate-800">
+                      {mount.folder}
+                    </span>
+                    <span className="block truncate text-xs text-slate-500">
+                      {mount.remoteUrl}
+                    </span>
+                    <span className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${mount.role === "editor" ? "bg-cyan-100 text-cyan-800" : "bg-slate-200 text-slate-600"}`}>{mount.role}</span>
+                  </span>
+                </button>
+                <button
+                  className="rounded-lg px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50"
+                  disabled={disconnectMutation.isPending}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        `Disconnect ${mount.folder}? The remote peer credential will be revoked.`,
+                      )
+                    )
+                      disconnectMutation.mutate(mount.id);
+                  }}
+                >
+                  Disconnect
+                </button>
+              </div>
+            ))}
+          </div>
+          {openMount && (
+            <div className="border-t border-slate-100 bg-slate-50 p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">
+                    Shared files
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {canWrite
+                      ? "Upload, rename, download, or move files to the owner's Trash."
+                      : "View-only access. You can list and download files in this folder."}
+                  </p>
+                </div>
+                {canWrite && <div className="flex flex-wrap gap-2">
+                  <input
+                    className="hidden"
+                    ref={remoteFileInput}
+                    type="file"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) uploadMutation.mutate(file);
+                      event.target.value = "";
+                    }}
+                  />
+                  <button
+                    className="rounded-lg bg-cyan-700 px-3 py-2 text-xs font-semibold text-white hover:bg-cyan-800 disabled:bg-slate-300"
+                    disabled={uploadMutation.isPending}
+                    onClick={() => remoteFileInput.current?.click()}
+                  >
+                    {uploadMutation.isPending ? "Uploading…" : "Upload file"}
+                  </button>
+                </div>}
+              </div>
+              {canWrite && <div className="mt-4 flex max-w-md gap-2">
+                <input
+                  aria-label="New shared folder"
+                  className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100"
+                  placeholder="New folder path"
+                  value={remoteFolder}
+                  onChange={(event) => setRemoteFolder(event.target.value)}
+                />
+                <button
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:text-slate-300"
+                  disabled={!remoteFolder.trim() || folderMutation.isPending}
+                  onClick={() => folderMutation.mutate()}
+                >
+                  {folderMutation.isPending ? "Creating…" : "New folder"}
+                </button>
+              </div>}
+              {objectsQuery.isPending ? (
+                <p className="mt-4 text-sm text-slate-500">
+                  Loading remote folder…
+                </p>
+              ) : (
+                <div className="mt-4 space-y-2">
+                  {(objectsQuery.data ?? []).map((object) => (
+                    <div
+                      className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2"
+                      key={object.key}
+                    >
+                      <File size={17} className="text-slate-400" />
+                      <span className="min-w-0 flex-1 truncate text-sm text-slate-700">
+                        {object.key}
+                      </span>
+                      <span className="text-xs text-slate-400">
+                        {formatBytes(object.size)}
+                      </span>
+                      <button
+                        className="text-xs font-semibold text-cyan-700 hover:text-cyan-900"
+                        onClick={() =>
+                          void downloadObject(object.key, object.name)
+                        }
+                      >
+                        Download
+                      </button>
+                      {canWrite && <button
+                        className="text-xs font-semibold text-slate-600 hover:text-slate-900"
+                        onClick={() => {
+                          const name = window.prompt(
+                            "New file name",
+                            object.name,
+                          );
+                          if (name?.trim() && name.trim() !== object.name)
+                            renameMutation.mutate({
+                              key: object.key,
+                              name: name.trim(),
+                            });
+                        }}
+                      >
+                        Rename
+                      </button>}
+                      {canWrite && <button
+                        className="text-xs font-semibold text-red-600 hover:text-red-800"
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              `Move ${object.name} to the owner's Trash?`,
+                            )
+                          )
+                            deleteMutation.mutate(object.key);
+                        }}
+                      >
+                        Delete
+                      </button>}
+                    </div>
+                  ))}
+                  {(objectsQuery.data ?? []).length === 0 && (
+                    <p className="text-sm text-slate-500">
+                      No files in this shared folder yet.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+    </div>
+  );
 }
 
-function ClusterStep({ description, number, title }: { description: string; number: string; title: string }) {
-  return <article className="rounded-xl border border-slate-200 bg-white p-4"><span className="grid size-8 place-items-center rounded-lg bg-cyan-100 text-sm font-bold text-cyan-800">{number}</span><h3 className="mt-4 text-sm font-semibold text-slate-900">{title}</h3><p className="mt-1 text-xs leading-5 text-slate-500">{description}</p></article>;
+function ClusterStep({
+  description,
+  number,
+  title,
+}: {
+  description: string;
+  number: string;
+  title: string;
+}) {
+  return (
+    <article className="rounded-xl border border-slate-200 bg-white p-4">
+      <span className="grid size-8 place-items-center rounded-lg bg-cyan-100 text-sm font-bold text-cyan-800">
+        {number}
+      </span>
+      <h3 className="mt-4 text-sm font-semibold text-slate-900">{title}</h3>
+      <p className="mt-1 text-xs leading-5 text-slate-500">{description}</p>
+    </article>
+  );
 }
 
 function ClusterBehaviour({ description, title }: { description: string; title: string }) {
@@ -2514,9 +3245,9 @@ function DriveEntries({ files, folders, viewMode, onOpenFolder, onPreview, onDel
             <span className="rounded-lg bg-slate-100 p-2 text-slate-500">{fileIcon(file.contentType)}</span>
             <span className="min-w-0"><span className="block truncate text-sm font-medium text-slate-800">{file.name}</span><span className="block text-xs text-slate-400">{formatBytes(file.size)} · {new Date(file.updatedAt).toLocaleDateString()}</span></span>
           </button>
-          <button aria-label={`${file.starred ? "Remove" : "Add"} ${file.name} ${file.starred ? "from" : "to"} Starred`} className={`rounded-md p-2 transition hover:bg-amber-50 hover:text-amber-500 focus:opacity-100 ${file.starred ? "text-amber-400 opacity-100" : "text-slate-400 opacity-0 group-hover:opacity-100"}`} onClick={() => onToggleStar(file)}><Star size={17} fill={file.starred ? "currentColor" : "none"} /></button>
-          <button aria-label={`Share ${file.name}`} className="rounded-md p-2 text-slate-400 opacity-0 transition hover:bg-blue-50 hover:text-blue-600 group-hover:opacity-100 focus:opacity-100" onClick={() => onShare(file)}><Share2 size={17} /></button>
-          <button aria-label={`Move ${file.name} to Trash`} className="rounded-md p-2 text-slate-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100 focus:opacity-100" onClick={() => onDelete(file.key)}><Trash2 size={17} /></button>
+          <button aria-label={`${file.starred ? "Remove" : "Add"} ${file.name} ${file.starred ? "from" : "to"} Starred`} className={`rounded-md p-2 transition hover:bg-amber-50 hover:text-amber-500 ${file.starred ? "text-amber-400 opacity-100" : "text-slate-400 opacity-100 md:opacity-0 md:group-hover:opacity-100"}`} onClick={() => onToggleStar(file)}><Star size={17} fill={file.starred ? "currentColor" : "none"} /></button>
+          <button aria-label={`Share ${file.name}`} className="rounded-md p-2 text-slate-400 opacity-100 transition hover:bg-blue-50 hover:text-blue-600 md:opacity-0 md:group-hover:opacity-100" onClick={() => onShare(file)}><Share2 size={17} /></button>
+          <button aria-label={`Move ${file.name} to Trash`} className="rounded-md p-2 text-slate-400 opacity-100 transition hover:bg-red-50 hover:text-red-600 md:opacity-0 md:group-hover:opacity-100" onClick={() => onDelete(file.key)}><Trash2 size={17} /></button>
         </article>
       ))}
     </div>
@@ -2563,7 +3294,7 @@ function RecentEntries({ files, onPreview, onDelete, onToggleStar, onShare }: {
               <span className="text-xs text-slate-500">{formatRecentActivity(file.updatedAt)}</span>
               <span className="text-xs text-slate-500">{formatBytes(file.size)}</span>
               <span className="truncate text-xs text-slate-500" title={recentFileLocation(file.key)}>{recentFileLocation(file.key)}</span>
-              <div className="flex items-center justify-end gap-1"><button aria-label={`${file.starred ? "Remove" : "Add"} ${file.name} ${file.starred ? "from" : "to"} Starred`} className={`rounded-md p-2 transition hover:bg-amber-50 hover:text-amber-500 ${file.starred ? "text-amber-400" : "text-slate-400 opacity-0 group-hover:opacity-100 focus:opacity-100"}`} onClick={() => onToggleStar(file)}><Star size={17} fill={file.starred ? "currentColor" : "none"} /></button><button aria-label={`Share ${file.name}`} className="rounded-md p-2 text-slate-400 opacity-0 transition hover:bg-blue-50 hover:text-blue-600 group-hover:opacity-100 focus:opacity-100" onClick={() => onShare(file)}><Share2 size={17} /></button><button aria-label={`Move ${file.name} to Trash`} className="rounded-md p-2 text-slate-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100 focus:opacity-100" onClick={() => onDelete(file.key)}><Trash2 size={17} /></button></div>
+              <div className="flex items-center justify-end gap-1"><button aria-label={`${file.starred ? "Remove" : "Add"} ${file.name} ${file.starred ? "from" : "to"} Starred`} className={`rounded-md p-2 transition hover:bg-amber-50 hover:text-amber-500 ${file.starred ? "text-amber-400" : "text-slate-400 opacity-100 md:opacity-0 md:group-hover:opacity-100"}`} onClick={() => onToggleStar(file)}><Star size={17} fill={file.starred ? "currentColor" : "none"} /></button><button aria-label={`Share ${file.name}`} className="rounded-md p-2 text-slate-400 opacity-100 transition hover:bg-blue-50 hover:text-blue-600 md:opacity-0 md:group-hover:opacity-100" onClick={() => onShare(file)}><Share2 size={17} /></button><button aria-label={`Move ${file.name} to Trash`} className="rounded-md p-2 text-slate-400 opacity-100 transition hover:bg-red-50 hover:text-red-600 md:opacity-0 md:group-hover:opacity-100" onClick={() => onDelete(file.key)}><Trash2 size={17} /></button></div>
             </article>
           ))}
         </section>

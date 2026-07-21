@@ -40,9 +40,9 @@ describe("DriveApp", () => {
 
       expect(screen.getByRole("heading", { name: "Manage files in your private Drive." })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Share files on your terms" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 1.17.0" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 1.18.2" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI changelog version 1.17.0" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
+      expect(screen.getByRole("link", { name: "GUI changelog version 1.18.2" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
       expect(screen.getByText((_, element) => element?.tagName === "H3" && element.textContent === "GUI v1.17.0")).toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
@@ -77,7 +77,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.17.0")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.18.2")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();
@@ -202,15 +202,19 @@ describe("DriveApp", () => {
       createApiKey: vi.fn(),
       listApiKeys: vi.fn().mockResolvedValue([]),
       revokeApiKey: vi.fn(),
-      createClusterInvitation: vi.fn().mockResolvedValue({ id: "11111111-1111-4111-8111-111111111111", folder: "Projects/Shared", createdAt: "2026-07-21T00:00:00.000Z", expiresAt: "2026-07-21T00:15:00.000Z", token: "zci_11111111111141118111111111111111_example" }),
+      createClusterInvitation: vi.fn().mockResolvedValue({ id: "11111111-1111-4111-8111-111111111111", folder: "Projects/Shared", role: "editor", recipient: null, createdAt: "2026-07-21T00:00:00.000Z", expiresAt: "2026-07-21T00:15:00.000Z", token: "zci_11111111111141118111111111111111_example" }),
       createClusterMount: vi.fn(),
       createClusterFolder: vi.fn(),
       deleteClusterMount: vi.fn(),
       deleteClusterObject: vi.fn(),
+      deleteClusterPeer: vi.fn(),
       downloadClusterObject: vi.fn(),
+      getClusterMountAccess: vi.fn().mockResolvedValue({ role: "editor" }),
       listClusterMounts: vi.fn().mockResolvedValue([]),
       listClusterObjects: vi.fn().mockResolvedValue([]),
+      listClusterPeers: vi.fn().mockResolvedValue([]),
       renameClusterObject: vi.fn(),
+      updateClusterPeerRole: vi.fn(),
       uploadClusterObject: vi.fn(),
       listDatabases: vi.fn<() => Promise<DriveDatabase[]>>().mockResolvedValue([{ id: "db-11111111-1111-4111-8111-111111111111", name: "app-data", engine: "sqlite", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", sizeBytes: 4096 }]),
       listDatabaseEngines: vi.fn<() => Promise<DatabaseEngine[]>>(() => Promise.resolve([{ engine: "sqlite", name: "SQLite", packageName: "sqlite", availableVersion: "3.0.0", installedVersion: sqliteInstalled ? "3.0.0" : null, protocol: "sql", installed: sqliteInstalled, installedAt: sqliteInstalled ? "2026-07-20T00:00:00.000Z" : null, updatedAt: null, updateAvailable: false, workspaceAvailable: true }])),
@@ -253,6 +257,11 @@ describe("DriveApp", () => {
     expect(screen.getByText("2 files")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign out" })).toHaveAttribute("title", "Sign out");
     expect(screen.getByRole("button", { name: "ZominAI" })).toHaveAttribute("title", "ZominAI");
+    expect(screen.getByTestId("header-actions")).toHaveClass("order-2", "ml-auto");
+    expect(screen.getByTestId("header-actions")).toContainElement(screen.getByRole("button", { name: "ZominAI" }));
+    expect(screen.getByTestId("header-actions")).toContainElement(screen.getByRole("button", { name: "Advanced search" }));
+    expect(screen.getByTestId("header-actions")).toContainElement(screen.getByRole("button", { name: "Account menu" }));
+    expect(screen.getByTestId("header-actions")).toContainElement(screen.getByRole("button", { name: "Sign out" }));
     fireEvent.click(screen.getByRole("button", { name: "Collapse navigation" }));
     expect(screen.getByRole("button", { name: "New" })).toHaveAttribute("title", "New");
     expect(screen.getByRole("button", { name: "My Drive" })).toHaveAttribute("title", "My Drive");
@@ -277,10 +286,20 @@ describe("DriveApp", () => {
     expect(screen.getByRole("button", { name: "ZominAI menu: ZominAI settings" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "ZominAI menu: Uninstall ZominAI" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "ZominAI menu: Install ZominAI" }));
+    expect(screen.getByRole("group", { name: "ZominAI platform" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "macOS" }));
+    expect(screen.getByRole("button", { name: "macOS" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText(/The model is cached locally at/)).toHaveTextContent("models--prism-ml--Bonsai-27B-gguf");
+    fireEvent.click(screen.getByRole("button", { name: "Windows" }));
+    expect(screen.getByText("Windows setup")).toBeInTheDocument();
+    expect(screen.getByText((_, element) => element?.tagName === "CODE" && element.textContent?.includes("winget install llama.cpp") === true)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Linux" }));
+    expect(screen.getByText("Linux setup")).toBeInTheDocument();
+    expect(screen.getByText(/CPU-only Linux is not a supported experience/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open Bonsai download" })).toHaveAttribute("href", "https://huggingface.co/prism-ml/Bonsai-27B-gguf");
     expect(screen.getByRole("link", { name: /PrismML overview/ })).toHaveAttribute("href", "https://prismml.com/");
     expect(screen.getByRole("link", { name: /Bonsai model & licence/ })).toHaveAttribute("href", "https://huggingface.co/prism-ml/Bonsai-27B-gguf");
-    expect(screen.getByRole("link", { name: /Runtime documentation/ })).toHaveAttribute("href", "https://github.com/ggml-org/llama.cpp/tree/master/tools/server");
+    expect(screen.getByRole("link", { name: /Runtime installation docs/ })).toHaveAttribute("href", "https://github.com/ggml-org/llama.cpp/blob/master/docs/install.md");
     fireEvent.click(screen.getByRole("button", { name: "ZominAI menu: ZominAI settings" }));
     fireEvent.change(screen.getByRole("textbox", { name: "ZominAI runtime address" }), { target: { value: "http://127.0.0.1:9000" } });
     await waitFor(() => expect(window.localStorage.getItem("zo-drive:zominai:v1")).toContain("9000"));
@@ -311,7 +330,7 @@ describe("DriveApp", () => {
     expect(screen.getByText("Shared with me")).toBeInTheDocument();
     fireEvent.click(await screen.findByLabelText("Share folder Notes"));
     fireEvent.click(screen.getByRole("button", { name: "Create 1 pairing key" }));
-    await waitFor(() => expect(client.createClusterInvitation).toHaveBeenCalledWith("Notes"));
+    await waitFor(() => expect(client.createClusterInvitation).toHaveBeenCalledWith({ folder: "Notes", role: "editor", recipient: null }));
     fireEvent.click(screen.getByRole("tab", { name: "Join a shared Drive" }));
     expect(screen.getByText(/this does not expose any of your folders/)).toBeInTheDocument();
 

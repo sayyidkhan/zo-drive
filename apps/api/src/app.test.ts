@@ -76,6 +76,28 @@ describe("Zo Drive API", () => {
     expect((await app.request("http://localhost/cluster/invitations/accept", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ inviteToken: invite.token }) })).status).toBe(410);
   });
 
+  it("enforces viewer access and lets the owner change or revoke it", async () => {
+    const app = await createTestApp();
+    const ownerHeaders = { "content-type": "application/json", "x-test-user-id": "alice" };
+    await app.request("http://localhost/objects", { method: "POST", headers: { ...ownerHeaders, "x-zo-drive-file-name": encodeURIComponent("brief.txt"), "x-zo-drive-path": encodeURIComponent("Client") }, body: "private brief" });
+    const invitation = await app.request("http://localhost/clusters/invitations", { method: "POST", headers: ownerHeaders, body: JSON.stringify({ folder: "Client", role: "viewer", recipient: "Maya - Finance" }) });
+    expect(invitation.status).toBe(201);
+    const invite = await invitation.json() as { token: string; role: string; recipient: string };
+    expect(invite).toMatchObject({ role: "viewer", recipient: "Maya - Finance" });
+    const accepted = await app.request("http://localhost/cluster/invitations/accept", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ inviteToken: invite.token }) });
+    const peer = await accepted.json() as { peerId: string; peerKey: string; role: string };
+    expect(peer.role).toBe("viewer");
+    const peerHeaders = { authorization: `Bearer ${peer.peerKey}`, "content-type": "text/plain", "x-zo-drive-file-name": encodeURIComponent("notes.txt") };
+    expect((await app.request(`http://localhost/cluster/peers/${peer.peerId}/objects`, { method: "POST", headers: peerHeaders, body: "not permitted" })).status).toBe(403);
+    const listed = await app.request("http://localhost/clusters/peers", { headers: ownerHeaders });
+    await expect(listed.json()).resolves.toMatchObject({ peers: [expect.objectContaining({ id: peer.peerId, folder: "Client", role: "viewer", recipient: "Maya - Finance" })] });
+    const updated = await app.request(`http://localhost/clusters/peers/${peer.peerId}`, { method: "PATCH", headers: ownerHeaders, body: JSON.stringify({ role: "editor" }) });
+    await expect(updated.json()).resolves.toMatchObject({ id: peer.peerId, role: "editor" });
+    expect((await app.request(`http://localhost/cluster/peers/${peer.peerId}/objects`, { method: "POST", headers: peerHeaders, body: "now permitted" })).status).toBe(201);
+    expect((await app.request(`http://localhost/clusters/peers/${peer.peerId}`, { method: "DELETE", headers: ownerHeaders })).status).toBe(204);
+    expect((await app.request(`http://localhost/cluster/peers/${peer.peerId}/access`, { headers: { authorization: `Bearer ${peer.peerKey}` } })).status).toBe(401);
+  });
+
   it("proxies mounted folder writes without exposing the peer credential to the browser", async () => {
     const remote = await createTestApp();
     const local = await createTestApp();

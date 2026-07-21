@@ -16,9 +16,13 @@ export const listObjectsResponseSchema = z.object({
   objects: z.array(driveObjectSchema)
 });
 
-export const clusterInvitationSchema = z.object({ id: z.string().uuid(), folder: z.string(), createdAt: z.string().datetime(), expiresAt: z.string().datetime(), token: z.string() });
-export const clusterMountSchema = z.object({ id: z.string().uuid(), remoteUrl: z.string().url(), remotePeerId: z.string().uuid(), folder: z.string(), createdAt: z.string().datetime() });
+export const clusterRoleSchema = z.enum(["viewer", "editor"]);
+export const clusterInvitationSchema = z.object({ id: z.string().uuid(), folder: z.string(), role: clusterRoleSchema, recipient: z.string().nullable(), createdAt: z.string().datetime(), expiresAt: z.string().datetime(), token: z.string() });
+export const clusterMountSchema = z.object({ id: z.string().uuid(), remoteUrl: z.string().url(), remotePeerId: z.string().uuid(), folder: z.string(), role: clusterRoleSchema, recipient: z.string().nullable(), createdAt: z.string().datetime() });
 export const listClusterMountsResponseSchema = z.object({ mounts: z.array(clusterMountSchema) });
+export const clusterPeerSchema = z.object({ id: z.string().uuid(), folder: z.string(), role: clusterRoleSchema, recipient: z.string().nullable(), createdAt: z.string().datetime() });
+export const listClusterPeersResponseSchema = z.object({ peers: z.array(clusterPeerSchema) });
+export const clusterAccessSchema = z.object({ role: clusterRoleSchema });
 
 export const driveTrashItemSchema = z.object({
   id: z.string(),
@@ -262,6 +266,8 @@ export type NativeFileType = z.infer<typeof nativeFileTypeSchema>;
 export type ListObjectsResponse = z.infer<typeof listObjectsResponseSchema>;
 export type ClusterInvitation = z.infer<typeof clusterInvitationSchema>;
 export type ClusterMount = z.infer<typeof clusterMountSchema>;
+export type ClusterPeer = z.infer<typeof clusterPeerSchema>;
+export type ClusterRole = z.infer<typeof clusterRoleSchema>;
 export type DriveTrashItem = z.infer<typeof driveTrashItemSchema>;
 export type ListTrashResponse = z.infer<typeof listTrashResponseSchema>;
 export type DriveFolder = z.infer<typeof driveFolderSchema>;

@@ -2,12 +2,15 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypt
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
-type Invitation = { id: string; ownerUserId: string; folder: string; secretHash: string; createdAt: string; expiresAt: string; claimedAt: string | null };
-type Peer = { id: string; ownerUserId: string; folder: string; secretHash: string; createdAt: string };
-type Mount = { id: string; ownerUserId: string; remoteUrl: string; remotePeerId: string; remotePeerKey: string; folder: string; createdAt: string };
+export type ClusterRole = "viewer" | "editor";
+
+type Invitation = { id: string; ownerUserId: string; folder: string; role: ClusterRole; recipient: string | null; secretHash: string; createdAt: string; expiresAt: string; claimedAt: string | null };
+type Peer = { id: string; ownerUserId: string; folder: string; role: ClusterRole; recipient: string | null; secretHash: string; createdAt: string };
+type Mount = { id: string; ownerUserId: string; remoteUrl: string; remotePeerId: string; remotePeerKey: string; folder: string; role: ClusterRole; recipient: string | null; createdAt: string };
 type Data = { invitations: Invitation[]; peers: Peer[]; mounts: Mount[] };
 
 export type ClusterMount = Omit<Mount, "ownerUserId" | "remotePeerKey">;
+export type ClusterPeer = Omit<Peer, "ownerUserId" | "secretHash">;
 
 export class LocalClusterStore {
   private readonly file: string;
@@ -15,14 +18,14 @@ export class LocalClusterStore {
 
   constructor({ root }: { root: string }) { this.file = join(root, "v1", "clusters", "clusters.json"); }
 
-  async createInvitation({ ownerUserId, folder }: { ownerUserId: string; folder: string }) {
+  async createInvitation({ ownerUserId, folder, role, recipient }: { ownerUserId: string; folder: string; role: ClusterRole; recipient: string | null }) {
     return this.withWriteLock(async () => {
       const id = randomUUID();
       const secret = randomBytes(24).toString("base64url");
       const createdAt = new Date().toISOString();
-      const invitation: Invitation = { id, ownerUserId, folder, secretHash: hash(secret), createdAt, expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(), claimedAt: null };
+      const invitation: Invitation = { id, ownerUserId, folder, role, recipient, secretHash: hash(secret), createdAt, expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(), claimedAt: null };
       const data = await this.read(); data.invitations.push(invitation); await this.write(data);
-      return { id, folder, createdAt, expiresAt: invitation.expiresAt, token: `zci_${id.replaceAll("-", "")}_${secret}` };
+      return { id, folder, role, recipient, createdAt, expiresAt: invitation.expiresAt, token: `zci_${id.replaceAll("-", "")}_${secret}` };
     });
   }
 
@@ -34,25 +37,26 @@ export class LocalClusterStore {
       if (!invitation || !secret || !sameHash(invitation.secretHash, hash(secret))) return null;
       invitation.claimedAt = new Date().toISOString();
       const peerKey = `zcs_${randomBytes(32).toString("base64url")}`;
-      const peer: Peer = { id: randomUUID(), ownerUserId: invitation.ownerUserId, folder: invitation.folder, secretHash: hash(peerKey), createdAt: new Date().toISOString() };
+      const peer: Peer = { id: randomUUID(), ownerUserId: invitation.ownerUserId, folder: invitation.folder, role: invitation.role ?? "editor", recipient: invitation.recipient ?? null, secretHash: hash(peerKey), createdAt: new Date().toISOString() };
       data.peers.push(peer); await this.write(data);
-      return { peerId: peer.id, peerKey, folder: peer.folder };
+      return { peerId: peer.id, peerKey, folder: peer.folder, role: peer.role, recipient: peer.recipient };
     });
   }
 
   async authorizePeer({ id, key }: { id: string; key: string }) {
     const peer = (await this.read()).peers.find((item) => item.id === id && sameHash(item.secretHash, hash(key)));
-    return peer ? { ownerUserId: peer.ownerUserId, folder: peer.folder } : null;
+    return peer ? { ownerUserId: peer.ownerUserId, folder: peer.folder, role: peer.role ?? "editor" } : null;
   }
 
-  async addMount({ ownerUserId, remoteUrl, remotePeerId, remotePeerKey, folder }: Omit<Mount, "id" | "createdAt">): Promise<ClusterMount> {
+  async addMount({ ownerUserId, remoteUrl, remotePeerId, remotePeerKey, folder, role, recipient }: Omit<Mount, "id" | "createdAt">): Promise<ClusterMount> {
     return this.withWriteLock(async () => {
-      const mount: Mount = { id: randomUUID(), ownerUserId, remoteUrl, remotePeerId, remotePeerKey, folder, createdAt: new Date().toISOString() };
+      const mount: Mount = { id: randomUUID(), ownerUserId, remoteUrl, remotePeerId, remotePeerKey, folder, role, recipient, createdAt: new Date().toISOString() };
       const data = await this.read(); data.mounts.push(mount); await this.write(data); return publicMount(mount);
     });
   }
 
   async listMounts(ownerUserId: string): Promise<ClusterMount[]> { return (await this.read()).mounts.filter((item) => item.ownerUserId === ownerUserId).map(publicMount); }
+  async listPeers(ownerUserId: string): Promise<ClusterPeer[]> { return (await this.read()).peers.filter((item) => item.ownerUserId === ownerUserId).map(publicPeer); }
   async findMount({ ownerUserId, id }: { ownerUserId: string; id: string }): Promise<Mount | null> { return (await this.read()).mounts.find((item) => item.ownerUserId === ownerUserId && item.id === id) ?? null; }
   async removeMount({ ownerUserId, id }: { ownerUserId: string; id: string }): Promise<Mount | null> {
     return this.withWriteLock(async () => {
@@ -70,6 +74,24 @@ export class LocalClusterStore {
       const index = data.peers.findIndex((item) => item.id === id && sameHash(item.secretHash, hash(key)));
       if (index < 0) return false;
       data.peers.splice(index, 1); await this.write(data); return true;
+    });
+  }
+  async removePeerByOwner({ ownerUserId, id }: { ownerUserId: string; id: string }): Promise<boolean> {
+    return this.withWriteLock(async () => {
+      const data = await this.read();
+      const index = data.peers.findIndex((item) => item.id === id && item.ownerUserId === ownerUserId);
+      if (index < 0) return false;
+      data.peers.splice(index, 1); await this.write(data); return true;
+    });
+  }
+  async updatePeerRole({ ownerUserId, id, role }: { ownerUserId: string; id: string; role: ClusterRole }): Promise<ClusterPeer | null> {
+    return this.withWriteLock(async () => {
+      const data = await this.read();
+      const peer = data.peers.find((item) => item.id === id && item.ownerUserId === ownerUserId);
+      if (!peer) return null;
+      peer.role = role;
+      await this.write(data);
+      return publicPeer(peer);
     });
   }
   async renameOwner({ fromUserId, toUserId }: { fromUserId: string; toUserId: string }): Promise<void> {
@@ -103,4 +125,5 @@ export class LocalClusterStore {
 
 function hash(value: string) { return createHash("sha256").update(value).digest("hex"); }
 function sameHash(left: string, right: string) { const a = Buffer.from(left); const b = Buffer.from(right); return a.length === b.length && timingSafeEqual(a, b); }
-function publicMount({ ownerUserId: _ownerUserId, remotePeerKey: _remotePeerKey, ...mount }: Mount): ClusterMount { return mount; }
+function publicMount({ ownerUserId: _ownerUserId, remotePeerKey: _remotePeerKey, role = "editor", recipient = null, ...mount }: Mount): ClusterMount { return { ...mount, role, recipient }; }
+function publicPeer({ ownerUserId: _ownerUserId, secretHash: _secretHash, role = "editor", recipient = null, ...peer }: Peer): ClusterPeer { return { ...peer, role, recipient }; }

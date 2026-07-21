@@ -164,8 +164,10 @@ const functionFieldsSchema = z.object({
 const functionCreateSchema = functionFieldsSchema.extend({ visibility: z.enum(["private", "public"]).default("private"), cron: z.string().trim().max(100).nullable().default(null), enabled: z.boolean().default(true) }).superRefine((value, context) => { if (value.cron && !validCron(value.cron)) context.addIssue({ code: z.ZodIssueCode.custom, message: "Use a valid five-field UTC cron expression" }); });
 const functionUpdateSchema = z.object({ name: z.string().trim().min(1).max(80).optional(), runtime: z.enum(["javascript", "python"]).optional(), source: z.string().min(1).max(50_000).optional(), visibility: z.enum(["private", "public"]).optional(), cron: z.string().trim().max(100).nullable().optional(), enabled: z.boolean().optional() }).superRefine((value, context) => { if (Object.keys(value).length === 0) context.addIssue({ code: z.ZodIssueCode.custom, message: "Provide at least one change" }); if (value.cron && !validCron(value.cron)) context.addIssue({ code: z.ZodIssueCode.custom, message: "Use a valid five-field UTC cron expression" }); });
 const functionRunSchema = z.object({ input: z.unknown().optional().default({}) });
-const clusterInvitationSchema = z.object({ folder: z.string().trim().min(1).max(1_024) });
+const clusterRoleSchema = z.enum(["viewer", "editor"]);
+const clusterInvitationSchema = z.object({ folder: z.string().trim().min(1).max(1_024), role: clusterRoleSchema.default("editor"), recipient: z.string().trim().min(1).max(120).nullable().optional() });
 const clusterMountSchema = z.object({ remoteUrl: z.string().url().max(2_048), inviteToken: z.string().min(20).max(256) });
+const clusterPeerUpdateSchema = z.object({ role: clusterRoleSchema });
 
 export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys, invalidApiKeyRateLimiter = new InvalidApiKeyRateLimiter(), sharing, forms, databases = new LocalDatabaseStore(storage.root), databaseApiKeys = new LocalDatabaseApiKeyStore({ root: storage.root }), functions = new LocalFunctionStore(storage.root), clusters = new LocalClusterStore({ root: storage.root }), maxDatabaseImportBytes = Number.MAX_SAFE_INTEGER, trustProxy = false }: CreateAppOptions) {
   const app = new Hono();
@@ -468,7 +470,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     const parsed = clusterInvitationSchema.safeParse(await context.req.json().catch(() => null));
     if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Choose one Drive folder to share" } }, 400);
     await storage.list({ userId, prefix: parsed.data.folder });
-    return context.json(await clusters.createInvitation({ ownerUserId: userId, folder: parsed.data.folder }), 201);
+    return context.json(await clusters.createInvitation({ ownerUserId: userId, folder: parsed.data.folder, role: parsed.data.role, recipient: parsed.data.recipient ?? null }), 201);
   });
 
   app.post("/cluster/invitations/accept", async (context) => {
@@ -489,8 +491,29 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     if (!remoteUrl) return context.json({ error: { code: "INVALID_REQUEST", message: "Cluster peers must use an HTTP(S) URL" } }, 400);
     const response = await fetch(`${remoteUrl}/cluster/invitations/accept`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ inviteToken: parsed.data.inviteToken }) });
     if (!response.ok) return context.json({ error: { code: "PAIRING_FAILED", message: "The remote Zo Drive rejected this invitation" } }, 400);
-    const remote = await response.json() as { peerId: string; peerKey: string; folder: string };
-    return context.json(await clusters.addMount({ ownerUserId: userId, remoteUrl, remotePeerId: remote.peerId, remotePeerKey: remote.peerKey, folder: remote.folder }), 201);
+    const remote = await response.json() as { peerId: string; peerKey: string; folder: string; role?: "viewer" | "editor"; recipient?: string | null };
+    return context.json(await clusters.addMount({ ownerUserId: userId, remoteUrl, remotePeerId: remote.peerId, remotePeerKey: remote.peerKey, folder: remote.folder, role: remote.role ?? "editor", recipient: remote.recipient ?? null }), 201);
+  });
+
+  app.get("/clusters/peers", async (context) => {
+    const userId = await requireClusterOwner(context.req.raw, resolveActiveUser, auth);
+    return userId ? context.json({ peers: await clusters.listPeers(userId) }) : unauthorized(context);
+  });
+
+  app.patch("/clusters/peers/:id", async (context) => {
+    const userId = await requireClusterOwner(context.req.raw, resolveActiveUser, auth);
+    if (!userId) return unauthorized(context);
+    const parsed = clusterPeerUpdateSchema.safeParse(await context.req.json().catch(() => null));
+    if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Choose Viewer or Editor access" } }, 400);
+    const peer = await clusters.updatePeerRole({ ownerUserId: userId, id: context.req.param("id"), role: parsed.data.role });
+    return peer ? context.json(peer) : context.json({ error: { code: "NOT_FOUND", message: "Shared folder access not found" } }, 404);
+  });
+
+  app.delete("/clusters/peers/:id", async (context) => {
+    const userId = await requireClusterOwner(context.req.raw, resolveActiveUser, auth);
+    if (!userId) return unauthorized(context);
+    const removed = await clusters.removePeerByOwner({ ownerUserId: userId, id: context.req.param("id") });
+    return removed ? context.body(null, 204) : context.json({ error: { code: "NOT_FOUND", message: "Shared folder access not found" } }, 404);
   });
 
   app.get("/clusters/mounts", async (context) => {
@@ -506,6 +529,14 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     const response = await forwardClusterRequest(mount, "/objects");
     if (!response.ok) return context.json({ error: { code: "REMOTE_UNAVAILABLE", message: "Could not read this cluster mount" } }, 502);
     return context.json(await response.json());
+  });
+
+  app.get("/clusters/mounts/:id/access", async (context) => {
+    const userId = await requireClusterOwner(context.req.raw, resolveActiveUser, auth);
+    if (!userId) return unauthorized(context);
+    const mount = await clusters.findMount({ ownerUserId: userId, id: context.req.param("id") });
+    if (!mount) return context.json({ error: { code: "NOT_FOUND", message: "Cluster mount not found" } }, 404);
+    return clusterProxyResponse(await forwardClusterRequest(mount, "/access"));
   });
 
   app.post("/clusters/mounts/:id/objects", async (context) => {
@@ -573,9 +604,15 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     return context.json({ objects: objects.map((object) => ({ ...object, key: object.key.startsWith(prefix) ? object.key.slice(prefix.length) : object.key })) });
   });
 
+  app.get("/cluster/peers/:id/access", async (context) => {
+    const peer = await requireClusterPeer(context, clusters);
+    return peer ? context.json({ role: peer.role }) : unauthorized(context);
+  });
+
   app.post("/cluster/peers/:id/objects", async (context) => {
     const peer = await requireClusterPeer(context, clusters);
     if (!peer) return unauthorized(context);
+    if (peer.role !== "editor") return clusterReadOnly(context);
     const fileName = decodeUploadHeader(context.req.header("x-zo-drive-file-name"));
     const path = decodeUploadHeader(context.req.header("x-zo-drive-path"));
     if (!fileName || fileName.length > 1_024 || path.length > 1_024 || !context.req.raw.body) return context.json({ error: { code: "INVALID_REQUEST", message: "A valid file and relative folder are required" } }, 400);
@@ -587,6 +624,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
   app.post("/cluster/peers/:id/folders", async (context) => {
     const peer = await requireClusterPeer(context, clusters);
     if (!peer) return unauthorized(context);
+    if (peer.role !== "editor") return clusterReadOnly(context);
     const parsed = createFolderSchema.safeParse(await context.req.json().catch(() => null));
     if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "A valid relative folder path is required" } }, 400);
     const folder = await storage.createFolder({ userId: peer.ownerUserId, key: clusterScopedKey(peer.folder, parsed.data.path) });
@@ -604,6 +642,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
   app.patch("/cluster/peers/:id/objects/*", async (context) => {
     const peer = await requireClusterPeer(context, clusters);
     if (!peer) return unauthorized(context);
+    if (peer.role !== "editor") return clusterReadOnly(context);
     const parsed = updateFileSchema.safeParse(await context.req.json().catch(() => null));
     if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Enter a valid file name or relative destination" } }, 400);
     const key = clusterScopedKey(peer.folder, clusterObjectKeyFromPath(context.req.path, `/cluster/peers/${context.req.param("id")}/objects/`));
@@ -618,6 +657,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
   app.delete("/cluster/peers/:id/objects/*", async (context) => {
     const peer = await requireClusterPeer(context, clusters);
     if (!peer) return unauthorized(context);
+    if (peer.role !== "editor") return clusterReadOnly(context);
     const key = clusterScopedKey(peer.folder, clusterObjectKeyFromPath(context.req.path, `/cluster/peers/${context.req.param("id")}/objects/`));
     await storage.trash({ userId: peer.ownerUserId, key });
     await forms?.removeByKey({ ownerUserId: peer.ownerUserId, key });
@@ -1178,6 +1218,10 @@ function clusterProxyResponse(response: Response): Response {
 
 function unauthorized(context: Context) {
   return context.json({ error: { code: "UNAUTHORIZED", message: "Authentication is required" } }, 401);
+}
+
+function clusterReadOnly(context: Context) {
+  return context.json({ error: { code: "READ_ONLY", message: "This shared folder is view-only" } }, 403);
 }
 
 function rateLimited(context: Context, retryAfter: number) {

@@ -2,7 +2,28 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
-## Unreleased
+## v1.18.2 - 2026-07-21
+
+### Fixed
+
+- Kept phone header controls together on the right: ZominAI sits beside search
+  settings, with the overflow menu beside sign out.
+
+## v1.18.1 - 2026-07-21
+
+### Fixed
+
+- Reworked the private Drive workspace for phone screens with a slide-out
+  navigation drawer, a dedicated search row, compact spacing, and touch-visible
+  file actions.
+
+## v1.18.0 - 2026-07-21
+
+### Added
+
+- Shared Drive folder invitations now assign Viewer or Editor access. Owners can
+  label, change, and revoke each accepted pairing; Viewer restrictions are
+  enforced by the owner Drive API.
 
 ## v1.17.0 - 2026-07-21
 

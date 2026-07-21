@@ -35,11 +35,14 @@ import {
   listFunctionRunsResponseSchema,
   clusterInvitationSchema,
   clusterMountSchema,
+  clusterAccessSchema,
+  clusterPeerSchema,
+  listClusterPeersResponseSchema,
   listClusterMountsResponseSchema,
   functionRunSchema,
   storageUsageSchema
 } from "@zo-drive/types";
-import type { ApiKeyScope, AuthStatus, ClusterInvitation, ClusterMount, CreatedDatabaseApiKey, CreatedDriveApiKey, DatabaseApiKey, DatabaseApiKeyScope, DatabaseEngine, DatabaseEngineId, DatabaseExecuteRequest, DatabaseExecuteResult, DatabaseImportSettings, DatabaseQueryResult, DatabaseRows, DatabaseTable, DriveApiKey, DriveDatabase, DriveFolder, DriveFunction, DriveFunctionRun, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, FunctionRuntime, FunctionVisibility, Health, NativeFileType, PublicShare, PublishedForm, ShareAccess, ShareKind, SharedPaste, StorageUsage } from "@zo-drive/types";
+import type { ApiKeyScope, AuthStatus, ClusterInvitation, ClusterMount, ClusterPeer, ClusterRole, CreatedDatabaseApiKey, CreatedDriveApiKey, DatabaseApiKey, DatabaseApiKeyScope, DatabaseEngine, DatabaseEngineId, DatabaseExecuteRequest, DatabaseExecuteResult, DatabaseImportSettings, DatabaseQueryResult, DatabaseRows, DatabaseTable, DriveApiKey, DriveDatabase, DriveFolder, DriveFunction, DriveFunctionRun, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, FunctionRuntime, FunctionVisibility, Health, NativeFileType, PublicShare, PublishedForm, ShareAccess, ShareKind, SharedPaste, StorageUsage } from "@zo-drive/types";
 
 type Fetcher = typeof fetch;
 
@@ -112,8 +115,8 @@ export class ZoDriveClient {
     return listObjectsResponseSchema.parse(await response.json()).objects;
   }
 
-  async createClusterInvitation(folder: string): Promise<ClusterInvitation> {
-    const response = await this.request("/clusters/invitations", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ folder }) });
+  async createClusterInvitation({ folder, role = "editor", recipient = null }: { folder: string; role?: ClusterRole; recipient?: string | null }): Promise<ClusterInvitation> {
+    const response = await this.request("/clusters/invitations", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ folder, role, recipient }) });
     return clusterInvitationSchema.parse(await response.json());
   }
 
@@ -127,9 +130,28 @@ export class ZoDriveClient {
     return listClusterMountsResponseSchema.parse(await response.json()).mounts;
   }
 
+  async listClusterPeers(): Promise<ClusterPeer[]> {
+    const response = await this.request("/clusters/peers", { method: "GET" });
+    return listClusterPeersResponseSchema.parse(await response.json()).peers;
+  }
+
+  async updateClusterPeerRole({ id, role }: { id: string; role: ClusterRole }): Promise<ClusterPeer> {
+    const response = await this.request(`/clusters/peers/${encodeURIComponent(id)}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ role }) });
+    return clusterPeerSchema.parse(await response.json());
+  }
+
+  async deleteClusterPeer(id: string): Promise<void> {
+    await this.request(`/clusters/peers/${encodeURIComponent(id)}`, { method: "DELETE" });
+  }
+
   async listClusterObjects(id: string): Promise<DriveObject[]> {
     const response = await this.request(`/clusters/mounts/${encodeURIComponent(id)}/objects`, { method: "GET" });
     return listObjectsResponseSchema.parse(await response.json()).objects;
+  }
+
+  async getClusterMountAccess(id: string): Promise<{ role: ClusterRole }> {
+    const response = await this.request(`/clusters/mounts/${encodeURIComponent(id)}/access`, { method: "GET" });
+    return clusterAccessSchema.parse(await response.json());
   }
 
   async uploadClusterObject({ id, file, fileName, path }: { id: string; file: Blob; fileName: string; path?: string }): Promise<DriveObject> {
