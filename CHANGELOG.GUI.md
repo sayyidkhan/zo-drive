@@ -2,6 +2,14 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.21.5 - 2026-07-22
+
+### Fixed
+
+- Removed the forced desktop sidebar scrollbar and tightened navigation spacing.
+  The storage summary stays anchored at the bottom when room allows, and steps
+  aside on shorter screens so navigation remains fully visible.
+
 ## v1.21.4 - 2026-07-22
 
 ### Fixed
