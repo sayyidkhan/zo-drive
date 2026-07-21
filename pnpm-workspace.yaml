@@ -6,4 +6,9 @@ onlyBuiltDependencies:
   - esbuild
 allowBuilds:
   better-sqlite3: true
+  classic-level: true
   esbuild: true
+  kuzu: true
+  onnxruntime-node: false
+  protobufjs: false
+  sharp: false

@@ -163,12 +163,25 @@ describe("ZoDriveClient", () => {
   });
 
   it("updates a passcode-protected share through the API", async () => {
-    const share = { id: "share-123", key: "hello.txt", name: "hello.txt", size: 5, contentType: "text/plain", access: "passcode", kind: "share", expiresAt: null, createdAt: "2026-01-01T00:00:00.000Z" };
+    const share = { id: "share-123", key: "hello.txt", name: "hello.txt", size: 5, contentType: "text/plain", access: "passcode", editable: false, kind: "share", expiresAt: null, createdAt: "2026-01-01T00:00:00.000Z" };
     const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify(share), { status: 200 }));
     const client = new ZoDriveClient({ baseUrl: "https://drive.example", fetcher });
 
     await expect(client.updateSharePasscode({ id: share.id, passcode: "new-secret" })).resolves.toEqual(share);
     expect(fetcher).toHaveBeenCalledWith("https://drive.example/shares/share-123/passcode", expect.objectContaining({ method: "PATCH" }));
+  });
+
+  it("opens and saves an editable shared paste with a revision token", async () => {
+    const paste = { content: { format: "zo-native" as const, type: "paste" as const, version: 1 as const, language: "plaintext", tags: [] as string[], text: "Team notes" }, revision: "a".repeat(64) };
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(paste), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(paste), { status: 200 }));
+    const client = new ZoDriveClient({ baseUrl: "https://drive.example", fetcher });
+
+    await expect(client.openSharedPaste("share-123", "open-sesame")).resolves.toEqual(paste);
+    await expect(client.saveSharedPaste({ id: "share-123", content: paste.content, expectedRevision: paste.revision, passcode: "open-sesame" })).resolves.toEqual(paste);
+    expect(fetcher).toHaveBeenNthCalledWith(1, "https://drive.example/shared/share-123/paste", expect.objectContaining({ method: "GET" }));
+    expect(fetcher).toHaveBeenNthCalledWith(2, "https://drive.example/shared/share-123/paste", expect.objectContaining({ body: JSON.stringify({ content: paste.content, expectedRevision: paste.revision }), method: "PUT" }));
   });
 
   it("creates, lists, and revokes browser-managed API keys", async () => {
@@ -210,5 +223,23 @@ describe("ZoDriveClient", () => {
     await expect(client.getDatabaseImportSettings()).resolves.toEqual(settings);
     await expect(client.setDatabaseImportLimit(settings.importLimitBytes)).resolves.toEqual(settings);
     expect(fetcher).toHaveBeenNthCalledWith(2, "https://drive.example/databases/settings", expect.objectContaining({ method: "PUT" }));
+  });
+
+  it("creates, updates, and executes a non-SQLite database through the shared contract", async () => {
+    const engine = { engine: "leveldb", name: "LevelDB", packageName: "classic-level", availableVersion: "3.0.0", installedVersion: "3.0.0", protocol: "key-value", installed: true, installedAt: "2026-07-21T00:00:00.000Z", updatedAt: "2026-07-21T00:00:00.000Z", updateAvailable: false, workspaceAvailable: false };
+    const database = { id: "11111111-1111-4111-8111-111111111111", name: "cache", engine: "leveldb", createdAt: "2026-07-21T00:00:00.000Z", updatedAt: "2026-07-21T00:00:00.000Z", sizeBytes: 1024 };
+    const execution = { engine: "leveldb", result: { value: "Ada" } };
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(engine), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(database), { status: 201 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(execution), { status: 200 }));
+    const client = new ZoDriveClient({ baseUrl: "https://drive.example", fetcher });
+
+    await expect(client.updateDatabaseEngine("leveldb")).resolves.toEqual(engine);
+    await expect(client.createDatabase("cache", "leveldb")).resolves.toEqual(database);
+    await expect(client.executeDatabase({ id: database.id, request: { operation: "get", key: "customer:1" } })).resolves.toEqual(execution);
+    expect(fetcher).toHaveBeenNthCalledWith(1, "https://drive.example/databases/engines/leveldb/update", expect.objectContaining({ method: "POST" }));
+    expect(fetcher).toHaveBeenNthCalledWith(2, "https://drive.example/databases", expect.objectContaining({ body: JSON.stringify({ name: "cache", engine: "leveldb" }) }));
+    expect(fetcher).toHaveBeenNthCalledWith(3, `https://drive.example/databases/${database.id}/execute`, expect.objectContaining({ body: JSON.stringify({ operation: "get", key: "customer:1" }) }));
   });
 });

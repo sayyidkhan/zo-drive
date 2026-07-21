@@ -13,8 +13,9 @@ authentication, or workflow change.
 
 ## What works now
 
-- Hono REST API for upload, list, download/preview, delete, search, and storage usage
-- Database HTTP API for private SQLite databases, with per-database read/write credentials for external backends and validated `.sqlite` import/export with owner-configurable limits
+- Hono REST API for upload, list, download/preview, delete, search, and owner-complete storage usage across files, Trash, databases, functions, and Zo Originals data
+- Persistent runtimes for SQLite, DuckDB, libSQL, PGlite, LanceDB, LevelDB, Redis, and Kuzu, with versioned installation, updates, private database creation, and per-database read/write credentials for external backends
+- SQLite table browsing and validated `.sqlite` import/export with owner-configurable limits; other engines expose native SQL, vector, key-value, Redis, or Cypher requests without a fake preview
 - Zo Functions: owner-scoped JavaScript and Python handlers with private or public invocation, UTC cron schedules, and run history
 - Owner-account authentication: signed HttpOnly sessions and one-time registration
 - Account controls for username, password, sign-out, and permanent account/data deletion
@@ -23,7 +24,7 @@ authentication, or workflow change.
 - `zo-drive` CLI: upload, list, download, delete, usage, and secure per-device configuration
 - React GUI: folder browsing, search, drag-and-drop/multiple upload of any file type, list/grid views, previews, deletion, and usage display
 - Zo-native files: documents, spreadsheets, presentations, forms, and secure text pastes created privately inside the drive
-- Zo Paste: dark text editor with language and tag metadata; shared paste links honour the existing expiry and passcode controls
+- Zo Paste: dark text editor with language and tag metadata; create view-only or editable shared-notepad links with public or passcode access, expiry, and revocation controls
 - Home for recently updated files; My Drive as the default; Starred files and Shared with others for managed links
 - Share links: public or passcode-protected, with one-day, seven-day, thirty-day, or no-expiry TTL; copy and revoke controls
 - Zo Transfer: upload a file or select one already in Drive to create and manage public or passcode-protected expiring links; payment-gated delivery is coming soon
@@ -41,6 +42,9 @@ ZO_DRIVE_DATA_ROOT/
   v1/users/{username}/files/
     Notes/hello.txt
     Photos/image.jpg
+  v1/users/{username}/databases/
+    databases.json                    # private database registry
+    instances/                        # persistent engine data
   v1/users/{username}/stars.json       # private starred-file metadata
 ```
 
@@ -59,6 +63,9 @@ Install dependencies once:
 ```bash
 pnpm install
 ```
+
+Redis databases also require a `redis-server` executable on the host. The
+catalogue install action verifies the binary before marking Redis installed.
 
 In one terminal, start the API:
 
@@ -101,7 +108,7 @@ folder.
 
 #### GUI versioning
 
-The browser GUI has its own release track, currently `GUI v1.7.3`. GUI changes
+The browser GUI has its own release track, currently `GUI v1.10.0`. GUI changes
 are deployed to Zo Drive directly; browser users receive the current version by
 loading the page. Use `gui-v*` Git tags to trace a deployed GUI release. CLI
 releases are separate and do not change the GUI version.

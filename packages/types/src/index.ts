@@ -16,6 +16,10 @@ export const listObjectsResponseSchema = z.object({
   objects: z.array(driveObjectSchema)
 });
 
+export const clusterInvitationSchema = z.object({ id: z.string().uuid(), folder: z.string(), createdAt: z.string().datetime(), expiresAt: z.string().datetime(), token: z.string() });
+export const clusterMountSchema = z.object({ id: z.string().uuid(), remoteUrl: z.string().url(), remotePeerId: z.string().uuid(), folder: z.string(), createdAt: z.string().datetime() });
+export const listClusterMountsResponseSchema = z.object({ mounts: z.array(clusterMountSchema) });
+
 export const driveTrashItemSchema = z.object({
   id: z.string(),
   originalKey: z.string(),
@@ -56,7 +60,7 @@ export const storageUsageSchema = z.object({
   availableBytes: z.number().int().nonnegative(),
   systemUsedBytes: z.number().int().nonnegative(),
   categories: z.array(z.object({
-    id: z.enum(["photos", "videos", "documents", "audio", "archives", "other", "trash"]),
+    id: z.enum(["photos", "videos", "documents", "audio", "archives", "other", "trash", "databases", "functions", "zo-originals"]),
     bytes: z.number().int().nonnegative(),
     fileCount: z.number().int().nonnegative()
   }))
@@ -98,24 +102,33 @@ export const driveApiKeySchema = z.object({
 export const createdDriveApiKeySchema = driveApiKeySchema.extend({ apiKey: z.string() });
 export const listDriveApiKeysResponseSchema = z.object({ keys: z.array(driveApiKeySchema) });
 
+export const databaseEngineIdSchema = z.enum(["sqlite", "duckdb", "libsql", "pglite", "lancedb", "leveldb", "redis", "kuzu"]);
+export const databaseProtocolSchema = z.enum(["sql", "vector", "key-value", "redis", "cypher"]);
 export const driveDatabaseSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
-  engine: z.literal("sqlite"),
+  engine: databaseEngineIdSchema,
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
   sizeBytes: z.number().int().nonnegative()
 });
 export const listDriveDatabasesResponseSchema = z.object({ databases: z.array(driveDatabaseSchema) });
-export const databaseEngineIdSchema = z.enum(["sqlite", "duckdb", "libsql", "pglite", "lancedb", "leveldb", "redis", "kuzu"]);
 export const databaseEngineSchema = z.object({
   engine: databaseEngineIdSchema,
   name: z.string(),
+  packageName: z.string(),
+  availableVersion: z.string(),
+  installedVersion: z.string().nullable(),
+  protocol: databaseProtocolSchema,
   installed: z.boolean(),
   installedAt: z.string().datetime().nullable(),
+  updatedAt: z.string().datetime().nullable(),
+  updateAvailable: z.boolean(),
   workspaceAvailable: z.boolean()
 });
 export const listDatabaseEnginesResponseSchema = z.object({ engines: z.array(databaseEngineSchema) });
+export const databaseExecuteRequestSchema = z.record(z.string(), z.unknown()).refine((value) => Object.keys(value).length > 0, "Provide an engine request");
+export const databaseExecuteResultSchema = z.object({ engine: databaseEngineIdSchema, result: z.unknown() });
 export const databaseTableSchema = z.object({ name: z.string(), schema: z.string() });
 export const listDatabaseTablesResponseSchema = z.object({ tables: z.array(databaseTableSchema) });
 export const databaseRowsSchema = z.object({
@@ -186,13 +199,24 @@ export const driveShareSchema = z.object({
   size: z.number().int().nonnegative(),
   contentType: z.string(),
   access: shareAccessSchema,
+  editable: z.boolean().default(false),
   kind: shareKindSchema.default("share"),
   expiresAt: z.string().nullable(),
   createdAt: z.string()
 });
 
 export const listSharesResponseSchema = z.object({ shares: z.array(driveShareSchema) });
-export const publicShareSchema = driveShareSchema.pick({ "access": true, "contentType": true, "expiresAt": true, "id": true, "name": true, "size": true }).extend({ requiresPasscode: z.boolean() });
+export const publicShareSchema = driveShareSchema.pick({ "access": true, "contentType": true, "editable": true, "expiresAt": true, "id": true, "name": true, "size": true }).extend({ requiresPasscode: z.boolean(), updatedAt: z.string().datetime() });
+
+export const sharedPasteContentSchema = z.object({
+  format: z.literal("zo-native"),
+  type: z.literal("paste"),
+  version: z.literal(1),
+  language: z.string().max(80),
+  tags: z.array(z.string().max(80)).max(20),
+  text: z.string().max(1_000_000)
+});
+export const sharedPasteSchema = z.object({ content: sharedPasteContentSchema, revision: z.string().min(1) });
 
 export const formQuestionSchema = z.object({
   id: z.string(),
@@ -236,6 +260,8 @@ export const listFormResponsesSchema = z.object({ responses: z.array(formRespons
 export type DriveObject = z.infer<typeof driveObjectSchema>;
 export type NativeFileType = z.infer<typeof nativeFileTypeSchema>;
 export type ListObjectsResponse = z.infer<typeof listObjectsResponseSchema>;
+export type ClusterInvitation = z.infer<typeof clusterInvitationSchema>;
+export type ClusterMount = z.infer<typeof clusterMountSchema>;
 export type DriveTrashItem = z.infer<typeof driveTrashItemSchema>;
 export type ListTrashResponse = z.infer<typeof listTrashResponseSchema>;
 export type DriveFolder = z.infer<typeof driveFolderSchema>;
@@ -250,7 +276,10 @@ export type DriveApiKey = z.infer<typeof driveApiKeySchema>;
 export type CreatedDriveApiKey = z.infer<typeof createdDriveApiKeySchema>;
 export type DriveDatabase = z.infer<typeof driveDatabaseSchema>;
 export type DatabaseEngineId = z.infer<typeof databaseEngineIdSchema>;
+export type DatabaseProtocol = z.infer<typeof databaseProtocolSchema>;
 export type DatabaseEngine = z.infer<typeof databaseEngineSchema>;
+export type DatabaseExecuteRequest = z.infer<typeof databaseExecuteRequestSchema>;
+export type DatabaseExecuteResult = z.infer<typeof databaseExecuteResultSchema>;
 export type DatabaseTable = z.infer<typeof databaseTableSchema>;
 export type DatabaseRows = z.infer<typeof databaseRowsSchema>;
 export type DatabaseQueryResult = z.infer<typeof databaseQueryResultSchema>;
@@ -266,6 +295,7 @@ export type DriveShare = z.infer<typeof driveShareSchema>;
 export type ShareAccess = z.infer<typeof shareAccessSchema>;
 export type ShareKind = z.infer<typeof shareKindSchema>;
 export type PublicShare = z.infer<typeof publicShareSchema>;
+export type SharedPaste = z.infer<typeof sharedPasteSchema>;
 export type FormQuestion = z.infer<typeof formQuestionSchema>;
 export type PublishedForm = z.infer<typeof publishedFormSchema>;
 export type FormResponse = z.infer<typeof formResponseSchema>;

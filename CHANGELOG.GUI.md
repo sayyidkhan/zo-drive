@@ -4,6 +4,27 @@ All notable changes to the Zo Drive browser experience are recorded here.
 
 ## Unreleased
 
+## v1.10.0 - 2026-07-21
+
+### Added
+
+- Added a dedicated Function Logs workspace with manual, public, and scheduled
+  invocation history, status, duration, output, and runtime logs.
+- Added editable Zo Paste links, letting anyone with a public or
+  passcode-protected link update a shared notepad without an account.
+- Added a Zo Cluster Databases workspace for the upcoming private,
+  folder-scoped connection flow between trusted Zo Computers.
+- Added real persistent runtimes for SQLite, DuckDB, libSQL, PGlite, LanceDB,
+  LevelDB, Redis, and Kuzu, with versioned installation and updates.
+- Added database creation and scoped HTTPS execution for every engine.
+
+### Changed
+
+- Count Zo Databases, Zo Functions, and owner-owned Zo Originals data towards Drive storage usage and quota, with dedicated categories in the storage breakdown.
+- Keep the table and SQL preview workspace exclusive to SQLite. Other engines
+  expose their native command contract through Backend access without a fake
+  preview.
+
 ## v1.7.3 - 2026-07-21
 
 ### Added

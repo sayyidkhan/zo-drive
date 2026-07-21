@@ -1,12 +1,14 @@
 import Database from "better-sqlite3";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+
+import { executeRuntime, initialiseRuntime, runtimeRequestIsWrite, stopRuntime, type RuntimeRequest } from "./engine-runtimes.js";
 
 export type DriveDatabase = {
   id: string;
   name: string;
-  engine: "sqlite";
+  engine: DatabaseEngineId;
   createdAt: string;
   updatedAt: string;
   sizeBytes: number;
@@ -57,14 +59,14 @@ export type DatabaseImportSettings = {
 };
 
 export const databaseEngineDefinitions = [
-  { engine: "sqlite", name: "SQLite", workspaceAvailable: true },
-  { engine: "duckdb", name: "DuckDB", workspaceAvailable: false },
-  { engine: "libsql", name: "libSQL", workspaceAvailable: false },
-  { engine: "pglite", name: "PGlite", workspaceAvailable: false },
-  { engine: "lancedb", name: "LanceDB", workspaceAvailable: false },
-  { engine: "leveldb", name: "LevelDB", workspaceAvailable: false },
-  { engine: "redis", name: "Redis", workspaceAvailable: false },
-  { engine: "kuzu", name: "Kuzu", workspaceAvailable: false }
+  { engine: "sqlite", name: "SQLite", packageName: "better-sqlite3", availableVersion: "12.11.1", protocol: "sql", workspaceAvailable: true },
+  { engine: "duckdb", name: "DuckDB", packageName: "@duckdb/node-api", availableVersion: "1.5.4-r.1", protocol: "sql", workspaceAvailable: false },
+  { engine: "libsql", name: "libSQL", packageName: "@libsql/client", availableVersion: "0.17.4", protocol: "sql", workspaceAvailable: false },
+  { engine: "pglite", name: "PGlite", packageName: "@electric-sql/pglite", availableVersion: "0.5.4", protocol: "sql", workspaceAvailable: false },
+  { engine: "lancedb", name: "LanceDB", packageName: "@lancedb/lancedb", availableVersion: "0.31.0", protocol: "vector", workspaceAvailable: false },
+  { engine: "leveldb", name: "LevelDB", packageName: "classic-level", availableVersion: "3.0.0", protocol: "key-value", workspaceAvailable: false },
+  { engine: "redis", name: "Redis", packageName: "redis + redis-server", availableVersion: "7.0.15", protocol: "redis", workspaceAvailable: false },
+  { engine: "kuzu", name: "Kuzu", packageName: "kuzu", availableVersion: "0.11.3", protocol: "cypher", workspaceAvailable: false }
 ] as const;
 
 export type DatabaseEngineId = typeof databaseEngineDefinitions[number]["engine"];
@@ -78,27 +80,33 @@ export type DatabaseEngineInstallation = {
   name: string;
   installed: boolean;
   installedAt: string | null;
+  installedVersion: string | null;
+  updatedAt: string | null;
+  updateAvailable: boolean;
   workspaceAvailable: boolean;
 };
 
-type StoredDatabaseEngines = Partial<Record<DatabaseEngineId, { installedAt: string }>>;
+type StoredDatabaseEngines = Partial<Record<DatabaseEngineId, { installedAt: string; installedVersion?: string; updatedAt?: string }>>;
 
 export class DatabaseEngineNotInstalledError extends Error {
-  constructor() {
-    super("Install SQLite before creating or using databases");
+  constructor(engine: DatabaseEngineId = "sqlite") {
+    const name = databaseEngineDefinitions.find((candidate) => candidate.engine === engine)?.name ?? engine;
+    super(`Install ${name} before creating or using databases`);
     this.name = "DatabaseEngineNotInstalledError";
   }
 }
 
 export class LocalDatabaseStore {
-  constructor(private readonly root: string) {}
+  constructor(private readonly root: string, private readonly verifyRuntimes = process.env.NODE_ENV !== "test") {}
 
   async listEngines(ownerUserId: string): Promise<DatabaseEngineInstallation[]> {
     const stored = await this.readEngines(ownerUserId);
     const sqliteInstalledAt = await this.sqliteInstalledAt(ownerUserId);
     return databaseEngineDefinitions.map((definition) => {
-      const installedAt = definition.engine === "sqlite" ? sqliteInstalledAt : stored[definition.engine]?.installedAt ?? null;
-      return { ...definition, installed: Boolean(installedAt), installedAt };
+      const installedAt = definition.engine === "sqlite" ? stored.sqlite?.installedAt ?? sqliteInstalledAt : stored[definition.engine]?.installedAt ?? null;
+      const metadata = stored[definition.engine];
+      const installedVersion = installedAt ? metadata?.installedVersion ?? null : null;
+      return { ...definition, installed: Boolean(installedAt), installedAt, installedVersion, updatedAt: installedAt ? metadata?.updatedAt ?? installedAt : null, updateAvailable: Boolean(installedAt && installedVersion !== definition.availableVersion) };
     });
   }
 
@@ -107,41 +115,45 @@ export class LocalDatabaseStore {
     if (!definition) throw new Error("Unsupported database engine");
     const engines = await this.readEngines(ownerUserId);
     const installedAt = engines[engine]?.installedAt ?? new Date().toISOString();
-    if (!engines[engine]) await this.writeEngines(ownerUserId, { ...engines, [engine]: { installedAt } });
-    return { ...definition, installed: true, installedAt };
+    const updatedAt = new Date().toISOString();
+    if (this.verifyRuntimes) await this.verifyRuntime(ownerUserId, engine);
+    await this.writeEngines(ownerUserId, { ...engines, [engine]: { installedAt, installedVersion: definition.availableVersion, updatedAt } });
+    return { ...definition, installed: true, installedAt, installedVersion: definition.availableVersion, updatedAt, updateAvailable: false };
   }
 
-  async requireEngineInstalled(ownerUserId: string): Promise<void> {
-    if (!(await this.sqliteInstalledAt(ownerUserId))) throw new DatabaseEngineNotInstalledError();
+  async updateEngine({ ownerUserId, engine }: { ownerUserId: string; engine: DatabaseEngineId }): Promise<DatabaseEngineInstallation> {
+    if (!(await this.listEngines(ownerUserId)).some((candidate) => candidate.engine === engine && candidate.installed)) throw new DatabaseEngineNotInstalledError(engine);
+    return this.installEngine({ ownerUserId, engine });
+  }
+
+  async requireEngineInstalled(ownerUserId: string, engine: DatabaseEngineId = "sqlite"): Promise<void> {
+    if (!(await this.listEngines(ownerUserId)).some((candidate) => candidate.engine === engine && candidate.installed)) throw new DatabaseEngineNotInstalledError(engine);
   }
 
   async list(ownerUserId: string): Promise<DriveDatabase[]> {
     const stored = await this.read(ownerUserId);
     return Promise.all(stored.databases
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
-      .map(async (database) => ({ ...database, sizeBytes: await this.sizeBytes(ownerUserId, database.id) })));
+      .map(async (database) => ({ ...database, sizeBytes: await this.sizeBytes(ownerUserId, database) })));
   }
 
-  async create({ ownerUserId, name }: { ownerUserId: string; name: string }): Promise<DriveDatabase> {
-    await this.requireEngineInstalled(ownerUserId);
+  async create({ ownerUserId, name, engine = "sqlite" }: { ownerUserId: string; name: string; engine?: DatabaseEngineId }): Promise<DriveDatabase> {
+    await this.requireEngineInstalled(ownerUserId, engine);
     const stored = await this.read(ownerUserId);
     if (stored.databases.some((database) => database.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
       throw Object.assign(new Error("A database with this name already exists"), { code: "EEXIST" });
     }
     const now = new Date().toISOString();
-    const database: StoredDatabase = { id: randomUUID(), name, engine: "sqlite", createdAt: now, updatedAt: now };
-    const filePath = this.databasePath(ownerUserId, database.id);
+    const database: StoredDatabase = { id: randomUUID(), name, engine, createdAt: now, updatedAt: now };
+    const filePath = this.databasePath(ownerUserId, database);
     await mkdir(dirname(filePath), { recursive: true });
-    const sqlite = new Database(filePath);
-    try {
-      sqlite.pragma("journal_mode = WAL");
-      sqlite.pragma("foreign_keys = ON");
-    } finally {
-      sqlite.close();
-    }
+    if (engine === "sqlite") {
+      const sqlite = new Database(filePath);
+      try { sqlite.pragma("journal_mode = WAL"); sqlite.pragma("foreign_keys = ON"); } finally { sqlite.close(); }
+    } else await initialiseRuntime(engine, filePath);
     stored.databases.push(database);
     await this.write(ownerUserId, stored);
-    return { ...database, sizeBytes: await this.sizeBytes(ownerUserId, database.id) };
+    return { ...database, sizeBytes: await this.sizeBytes(ownerUserId, database) };
   }
 
   async getImportSettings({ ownerUserId, maxImportLimitBytes }: { ownerUserId: string; maxImportLimitBytes: number }): Promise<DatabaseImportSettings> {
@@ -173,7 +185,7 @@ export class LocalDatabaseStore {
     }
     const now = new Date().toISOString();
     const database: StoredDatabase = { id: randomUUID(), name, engine: "sqlite", createdAt: now, updatedAt: now };
-    const filePath = this.databasePath(ownerUserId, database.id);
+    const filePath = this.databasePath(ownerUserId, database);
     const temporaryPath = `${filePath}.${randomUUID()}.import`;
     await mkdir(dirname(filePath), { recursive: true });
     try {
@@ -190,7 +202,7 @@ export class LocalDatabaseStore {
       await rename(temporaryPath, filePath);
       stored.databases.push(database);
       await this.write(ownerUserId, stored);
-      return { ...database, sizeBytes: await this.sizeBytes(ownerUserId, database.id) };
+      return { ...database, sizeBytes: await this.sizeBytes(ownerUserId, database) };
     } catch (error) {
       await rm(temporaryPath, { force: true });
       throw error;
@@ -201,24 +213,27 @@ export class LocalDatabaseStore {
     const stored = await this.read(ownerUserId);
     const database = stored.databases.find((candidate) => candidate.id === id);
     if (!database) throw Object.assign(new Error("Database not found"), { code: "ENOENT" });
-    const filePath = this.databasePath(ownerUserId, id);
+    if (database.engine !== "sqlite") throw new DatabaseQueryError("Only SQLite databases can be exported as .sqlite files");
+    const filePath = this.databasePath(ownerUserId, database);
     const sqlite = new Database(filePath, { fileMustExist: true });
     try {
       sqlite.pragma("wal_checkpoint(TRUNCATE)");
     } finally {
       sqlite.close();
     }
-    return { bytes: await readFile(filePath), database: { ...database, sizeBytes: await this.sizeBytes(ownerUserId, id) } };
+    return { bytes: await readFile(filePath), database: { ...database, sizeBytes: await this.sizeBytes(ownerUserId, database) } };
   }
 
   async remove({ ownerUserId, id }: { ownerUserId: string; id: string }): Promise<boolean> {
     const stored = await this.read(ownerUserId);
     const index = stored.databases.findIndex((database) => database.id === id);
     if (index === -1) return false;
-    stored.databases.splice(index, 1);
+    const [database] = stored.databases.splice(index, 1);
+    if (!database) return false;
     await this.write(ownerUserId, stored);
-    const filePath = this.databasePath(ownerUserId, id);
-    await Promise.all([rm(filePath, { force: true }), rm(`${filePath}-wal`, { force: true }), rm(`${filePath}-shm`, { force: true })]);
+    const filePath = this.databasePath(ownerUserId, database);
+    await stopRuntime(database.engine, filePath);
+    await Promise.all([rm(filePath, { force: true, recursive: true }), rm(`${filePath}-wal`, { force: true }), rm(`${filePath}-shm`, { force: true })]);
     return true;
   }
 
@@ -250,10 +265,32 @@ export class LocalDatabaseStore {
     }, true);
   }
 
+  async execute({ ownerUserId, id, request }: { ownerUserId: string; id: string; request: RuntimeRequest }): Promise<{ engine: DatabaseEngineId; result: unknown }> {
+    const stored = await this.read(ownerUserId);
+    const database = stored.databases.find((candidate) => candidate.id === id);
+    if (!database) throw Object.assign(new Error("Database not found"), { code: "ENOENT" });
+    await this.requireEngineInstalled(ownerUserId, database.engine);
+    let result: unknown;
+    try { result = await executeRuntime(database.engine, this.databasePath(ownerUserId, database), request); }
+    catch (error) { throw new DatabaseQueryError(error instanceof Error ? error.message : "The database request failed"); }
+    if (runtimeRequestIsWrite(database.engine, request)) {
+      database.updatedAt = new Date().toISOString();
+      await this.write(ownerUserId, stored);
+    }
+    return { engine: database.engine, result };
+  }
+
+  async get({ ownerUserId, id }: { ownerUserId: string; id: string }): Promise<DriveDatabase> {
+    const database = (await this.read(ownerUserId)).databases.find((candidate) => candidate.id === id);
+    if (!database) throw Object.assign(new Error("Database not found"), { code: "ENOENT" });
+    return { ...database, sizeBytes: await this.sizeBytes(ownerUserId, database) };
+  }
+
   async renameOwner({ fromUserId, toUserId }: { fromUserId: string; toUserId: string }): Promise<void> {
     const from = this.ownerDirectory(fromUserId);
     const to = this.ownerDirectory(toUserId);
     try {
+      await this.stopOwnerRuntimes(fromUserId);
       await mkdir(dirname(to), { recursive: true });
       await rename(from, to);
     } catch (error: unknown) {
@@ -262,15 +299,22 @@ export class LocalDatabaseStore {
   }
 
   async removeByOwner(ownerUserId: string): Promise<void> {
+    await this.stopOwnerRuntimes(ownerUserId);
     await rm(this.ownerDirectory(ownerUserId), { force: true, recursive: true });
+  }
+
+  private async stopOwnerRuntimes(ownerUserId: string): Promise<void> {
+    const stored = await this.read(ownerUserId);
+    await Promise.all(stored.databases.map((database) => stopRuntime(database.engine, this.databasePath(ownerUserId, database))));
   }
 
   private async withDatabase<T>(ownerUserId: string, id: string, action: (sqlite: Database.Database) => T, changed = false): Promise<T> {
     const stored = await this.read(ownerUserId);
     const database = stored.databases.find((candidate) => candidate.id === id);
     if (!database) throw Object.assign(new Error("Database not found"), { code: "ENOENT" });
-    await this.requireEngineInstalled(ownerUserId);
-    const sqlite = new Database(this.databasePath(ownerUserId, id));
+    if (database.engine !== "sqlite") throw new DatabaseQueryError("The table workspace is available only for SQLite databases");
+    await this.requireEngineInstalled(ownerUserId, "sqlite");
+    const sqlite = new Database(this.databasePath(ownerUserId, database));
     try {
       sqlite.pragma("foreign_keys = ON");
       const result = action(sqlite);
@@ -307,13 +351,9 @@ export class LocalDatabaseStore {
     await rename(temporary, path);
   }
 
-  private async sizeBytes(ownerUserId: string, id: string): Promise<number> {
-    const filePath = this.databasePath(ownerUserId, id);
-    const files = [filePath, `${filePath}-wal`];
-    const sizes = await Promise.all(files.map(async (file) => {
-      try { return (await stat(file)).size; } catch { return 0; }
-    }));
-    return sizes.reduce((total, size) => total + size, 0);
+  private async sizeBytes(ownerUserId: string, database: StoredDatabase): Promise<number> {
+    const filePath = this.databasePath(ownerUserId, database);
+    return (await Promise.all([filePath, `${filePath}-wal`].map((path) => directorySize(path)))).reduce((total, size) => total + size, 0);
   }
 
   private ownerDirectory(ownerUserId: string): string {
@@ -336,7 +376,7 @@ export class LocalDatabaseStore {
     const engines = await this.readEngines(ownerUserId);
     if (engines.sqlite?.installedAt) return engines.sqlite.installedAt;
     const databases = await this.read(ownerUserId);
-    return databases.databases.length > 0 ? databases.databases[0]?.createdAt ?? new Date().toISOString() : null;
+    return databases.databases.find((database) => database.engine === "sqlite")?.createdAt ?? null;
   }
 
   private async readEngines(ownerUserId: string): Promise<StoredDatabaseEngines> {
@@ -375,8 +415,39 @@ export class LocalDatabaseStore {
     await rename(temporary, path);
   }
 
-  private databasePath(ownerUserId: string, id: string): string {
-    return join(this.ownerDirectory(ownerUserId), `${id}.sqlite`);
+  private databasePath(ownerUserId: string, database: Pick<StoredDatabase, "engine" | "id">): string {
+    if (database.engine === "sqlite") return join(this.ownerDirectory(ownerUserId), `${database.id}.sqlite`);
+    const extension: Record<DatabaseEngineId, string> = { sqlite: ".sqlite", duckdb: ".duckdb", libsql: ".libsql", pglite: ".pglite", lancedb: ".lancedb", leveldb: ".leveldb", redis: ".redis", kuzu: ".kuzu" };
+    return join(this.ownerDirectory(ownerUserId), "instances", `${database.id}${extension[database.engine]}`);
+  }
+
+  private async verifyRuntime(ownerUserId: string, engine: DatabaseEngineId): Promise<void> {
+    const database = { id: `_runtime-${engine}`, engine };
+    const path = this.databasePath(ownerUserId, database);
+    await rm(path, { force: true, recursive: true });
+    try {
+      if (engine === "sqlite") {
+        await mkdir(dirname(path), { recursive: true });
+        const sqlite = new Database(path);
+        try { sqlite.prepare("SELECT 1").get(); } finally { sqlite.close(); }
+      } else await initialiseRuntime(engine, path);
+    } finally {
+      await stopRuntime(engine, path);
+      await Promise.all([rm(path, { force: true, recursive: true }), rm(`${path}-wal`, { force: true }), rm(`${path}-shm`, { force: true })]);
+    }
+  }
+}
+
+async function directorySize(path: string): Promise<number> {
+  try {
+    const info = await stat(path);
+    if (info.isFile()) return info.size;
+    if (!info.isDirectory()) return 0;
+    const entries = await readdir(path, { withFileTypes: true });
+    return (await Promise.all(entries.map((entry) => directorySize(join(path, entry.name))))).reduce((total, size) => total + size, 0);
+  } catch (error: unknown) {
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return 0;
+    throw error;
   }
 }
 

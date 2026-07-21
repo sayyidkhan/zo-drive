@@ -1,6 +1,6 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { LocalDriveStorage, MIN_STORAGE_QUOTA_BYTES, StorageQuotaConfigurationError, StorageQuotaExceededError, UnsafeDrivePathError } from "./local-drive-storage.js";
@@ -106,6 +106,45 @@ describe("LocalDriveStorage", () => {
       { key: "Photos/cat.jpg", size: 5, contentType: "image/jpeg" }
     ]);
     await expect(storage.getUsage({ userId: "user_123" })).resolves.toMatchObject({ fileCount: 2, usedBytes: 8, quotaBytes: 100 * 1024 * 1024 * 1024, quotaAvailableBytes: 100 * 1024 * 1024 * 1024 - 8, totalBytes: expect.any(Number), availableBytes: expect.any(Number), systemUsedBytes: expect.any(Number), categories: expect.arrayContaining([{ id: "photos", bytes: 5, fileCount: 1 }, { id: "documents", bytes: 3, fileCount: 1 }]) });
+  });
+
+  it("counts every owner-scoped Zo feature towards usage without charging another owner", async () => {
+    const storage = await createStorage();
+    const writeJson = async (path: string, value: unknown) => {
+      await mkdir(dirname(path), { recursive: true });
+      await writeFile(path, JSON.stringify(value, null, 2));
+    };
+    const aliceDatabaseDirectory = join(storage.root, "v1", "databases", "alice", "instances");
+    const bobDatabaseDirectory = join(storage.root, "v1", "databases", "bob", "instances");
+    await Promise.all([mkdir(aliceDatabaseDirectory, { recursive: true }), mkdir(bobDatabaseDirectory, { recursive: true })]);
+    await Promise.all([
+      writeFile(join(aliceDatabaseDirectory, "alice.sqlite"), "alice database"),
+      writeFile(join(aliceDatabaseDirectory, ".active.tmp"), "temporary bytes are not quota data"),
+      writeFile(join(bobDatabaseDirectory, "bob.sqlite"), "b"),
+      writeJson(join(storage.root, "v1", "functions", "alice", "functions.json"), { functions: [{ id: "alice-function" }], runs: [] }),
+      writeJson(join(storage.root, "v1", "databases", "api-keys.json"), { keys: [{ id: "alice-db-key", ownerUserId: "alice" }, { id: "bob-db-key", ownerUserId: "bob" }] }),
+      writeJson(join(storage.root, "v1", "auth", "users.json"), { users: [{ id: "alice" }, { id: "bob" }] }),
+      writeJson(join(storage.root, "v1", "auth", "api-keys.json"), { keys: [{ id: "alice-key", ownerUserId: "alice" }, { id: "bob-key", ownerUserId: "bob" }] }),
+      writeJson(join(storage.root, "v1", "shares", "shares.json"), { shares: [{ id: "alice-share", ownerUserId: "alice" }, { id: "bob-share", ownerUserId: "bob" }] }),
+      writeJson(join(storage.root, "v1", "forms", "forms.json"), { forms: [{ id: "alice-form", ownerUserId: "alice" }, { id: "bob-form", ownerUserId: "bob" }], responses: [{ id: "alice-response", formId: "alice-form" }, { id: "bob-response", formId: "bob-form" }] }),
+      writeJson(join(storage.root, "v1", "clusters", "clusters.json"), { invitations: [{ id: "alice-invite", ownerUserId: "alice" }], peers: [{ id: "bob-peer", ownerUserId: "bob" }], mounts: [] })
+    ]);
+
+    const aliceUsage = await storage.getUsage({ userId: "alice" });
+    const bobUsage = await storage.getUsage({ userId: "bob" });
+    const aliceCategories = Object.fromEntries(aliceUsage.categories.map((category) => [category.id, category]));
+    const bobCategories = Object.fromEntries(bobUsage.categories.map((category) => [category.id, category]));
+
+    expect(aliceCategories.databases).toMatchObject({ bytes: expect.any(Number), fileCount: 2 });
+    expect(aliceCategories.databases!.bytes).toBeGreaterThan(Buffer.byteLength("alice database"));
+    expect(aliceCategories.functions).toMatchObject({ bytes: expect.any(Number), fileCount: 1 });
+    expect(aliceCategories["zo-originals"]).toMatchObject({ bytes: expect.any(Number), fileCount: 6 });
+    expect(bobCategories.databases).toMatchObject({ bytes: expect.any(Number), fileCount: 2 });
+    expect(bobCategories.functions).toMatchObject({ bytes: 0, fileCount: 0 });
+    expect(bobCategories["zo-originals"]).toMatchObject({ bytes: expect.any(Number), fileCount: 6 });
+    expect(aliceUsage.usedBytes).toBe(aliceUsage.categories.reduce((total, category) => total + category.bytes, 0));
+    expect(bobUsage.usedBytes).toBe(bobUsage.categories.reduce((total, category) => total + category.bytes, 0));
+    expect(aliceUsage.quotaAvailableBytes).toBe(aliceUsage.quotaBytes - aliceUsage.usedBytes);
   });
 
   it("enforces the configured quota while allowing a replacement file to reuse its allocation", async () => {

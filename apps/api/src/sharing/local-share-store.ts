@@ -13,6 +13,7 @@ export type StoredShare = {
   ownerUserId: string;
   key: string;
   access: ShareAccess;
+  editable?: boolean;
   kind?: ShareKind;
   passcodeHash: string | null;
   expiresAt: string | null;
@@ -29,13 +30,14 @@ export class LocalShareStore {
     this.sharesFile = join(root, "v1", "shares", "shares.json");
   }
 
-  async create({ ownerUserId, key, access, kind = "share", passcode, expiresAt }: { ownerUserId: string; key: string; access: ShareAccess; kind?: ShareKind; passcode?: string; expiresAt: string | null }): Promise<StoredShare> {
+  async create({ ownerUserId, key, access, editable = false, kind = "share", passcode, expiresAt }: { ownerUserId: string; key: string; access: ShareAccess; editable?: boolean; kind?: ShareKind; passcode?: string; expiresAt: string | null }): Promise<StoredShare> {
     const shares = await this.readShares();
     const share: StoredShare = {
       id: randomUUID(),
       ownerUserId,
       key,
       access,
+      editable,
       kind,
       passcodeHash: access === "passcode" && passcode ? await hashSecret(passcode) : null,
       expiresAt,

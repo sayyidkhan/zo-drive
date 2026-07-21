@@ -52,6 +52,9 @@ surface and use JSON except for object upload/download.
   file.
 - `GET /shared/{id}/content` — shared file content. Protected shares require
   the `x-zo-drive-share-passcode` request header.
+- `GET|PUT /shared/{id}/paste` — open or save an explicitly editable Zo Paste.
+  Protected links require the `x-zo-drive-share-passcode` header; saves must
+  provide the current revision and are rejected if another editor saved first.
 - `GET /public/forms/{id}` — published form definition.
 - `POST /public/forms/{id}/responses` — submit a form response. This changes
   data; require explicit user confirmation.
@@ -68,7 +71,25 @@ surface and use JSON except for object upload/download.
 - `GET|PUT|DELETE /stars/{key}` and `GET /stars` — manage starred objects.
 - `GET /trash`, `PUT /trash/{id}/restore`, `DELETE /trash/{id}`, and
   `DELETE /trash` — inspect, restore, permanently delete, or empty Trash.
-- `GET /usage` and `PUT /usage/quota` — storage usage and quota.
+- `GET /usage` and `PUT /usage/quota` — owner-complete storage usage and quota,
+  including files, Trash, databases, functions, and Zo Originals data.
+- `GET /databases/engines`, `POST /databases/engines/{engine}/install`, and
+  `POST /databases/engines/{engine}/update` — inspect, provision, verify, or
+  update one of SQLite, DuckDB, libSQL, PGlite, LanceDB, LevelDB, Redis, or
+  Kuzu. Installation and updates require the owner browser session.
+- `GET|POST /databases` and `DELETE /databases/{id}` — list, create, or
+  permanently delete private persistent databases. Creation accepts `name`
+  and `engine`.
+- `POST /databases/{id}/query` — execute one SQLite statement. SQLite alone
+  also supports `/tables`, `/tables/{table}/rows`, import, and export routes.
+- `POST /databases/{id}/execute` — execute the selected engine's native
+  contract: `query` plus parameters for DuckDB, libSQL, PGlite, and Kuzu;
+  `operation` fields for LanceDB and LevelDB; or `command` plus `args` for
+  Redis.
+- `GET|POST /databases/{id}/api-keys` and
+  `DELETE /databases/{id}/api-keys/{keyId}` — manage database-scoped read or
+  write bearer credentials. These keys can call that database's query or
+  execute route but cannot access another database.
 - `POST /native-files` and `PUT /native-files/{key}` — create and save Zo
   native documents, spreadsheets, presentations, forms, and pastes.
 - `GET|POST /api-keys` and `DELETE /api-keys/{id}` — list, create, or revoke

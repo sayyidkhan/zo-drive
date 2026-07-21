@@ -39,11 +39,11 @@ describe("DriveApp", () => {
 
       expect(screen.getByRole("heading", { name: "Manage files in your private Drive." })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Share files on your terms" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 1.7.3" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 1.10.0" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI changelog version 1.7.3" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
+      expect(screen.getByRole("link", { name: "GUI changelog version 1.10.0" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("GUI v1.7.3")).toBeInTheDocument();
+      expect(screen.getByText((_, element) => element?.tagName === "H3" && element.textContent === "GUI v1.10.0")).toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
 
       cleanup();
@@ -76,7 +76,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.7.3")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.10.0")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();
@@ -147,9 +147,14 @@ describe("DriveApp", () => {
       createApiKey: vi.fn(),
       listApiKeys: vi.fn().mockResolvedValue([]),
       revokeApiKey: vi.fn(),
+      createClusterInvitation: vi.fn().mockResolvedValue({ id: "11111111-1111-4111-8111-111111111111", folder: "Projects/Shared", createdAt: "2026-07-21T00:00:00.000Z", expiresAt: "2026-07-21T00:15:00.000Z", token: "zci_11111111111141118111111111111111_example" }),
+      createClusterMount: vi.fn(),
+      listClusterMounts: vi.fn().mockResolvedValue([]),
+      listClusterObjects: vi.fn().mockResolvedValue([]),
       listDatabases: vi.fn().mockResolvedValue([{ id: "db-11111111-1111-4111-8111-111111111111", name: "app-data", engine: "sqlite", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", sizeBytes: 4096 }]),
-      listDatabaseEngines: vi.fn(() => Promise.resolve([{ engine: "sqlite" as const, name: "SQLite", installed: sqliteInstalled, installedAt: sqliteInstalled ? "2026-07-20T00:00:00.000Z" : null, workspaceAvailable: true }])),
-      installDatabaseEngine: vi.fn((engine: DatabaseEngineId) => { if (engine === "sqlite") sqliteInstalled = true; return Promise.resolve({ engine, name: engine === "sqlite" ? "SQLite" : "Redis", installed: true, installedAt: "2026-07-20T00:00:00.000Z", workspaceAvailable: engine === "sqlite" }); }),
+      listDatabaseEngines: vi.fn(() => Promise.resolve([{ engine: "sqlite" as const, name: "SQLite", packageName: "sqlite", availableVersion: "3.0.0", installedVersion: sqliteInstalled ? "3.0.0" : null, protocol: "sql" as const, installed: sqliteInstalled, installedAt: sqliteInstalled ? "2026-07-20T00:00:00.000Z" : null, updatedAt: null, updateAvailable: false, workspaceAvailable: true }])),
+      installDatabaseEngine: vi.fn((engine: DatabaseEngineId) => { if (engine === "sqlite") sqliteInstalled = true; return Promise.resolve({ engine, name: engine === "sqlite" ? "SQLite" : "Redis", packageName: engine, availableVersion: "3.0.0", installedVersion: "3.0.0", protocol: "sql" as const, installed: true, installedAt: "2026-07-20T00:00:00.000Z", updatedAt: null, updateAvailable: false, workspaceAvailable: engine === "sqlite" }); }),
+      updateDatabaseEngine: vi.fn((engine: DatabaseEngineId) => Promise.resolve({ engine, name: engine === "sqlite" ? "SQLite" : "Redis", packageName: engine, availableVersion: "3.0.0", installedVersion: "3.0.0", protocol: "sql" as const, installed: true, installedAt: "2026-07-20T00:00:00.000Z", updatedAt: "2026-07-21T00:00:00.000Z", updateAvailable: false, workspaceAvailable: engine === "sqlite" })),
       createDatabase: vi.fn(),
       deleteDatabase: vi.fn(),
       importDatabase: vi.fn(),
@@ -167,7 +172,7 @@ describe("DriveApp", () => {
       updateFunction: vi.fn(),
       deleteFunction: vi.fn(),
       runFunction: vi.fn(),
-      listFunctionRuns: vi.fn().mockResolvedValue([])
+      listFunctionRuns: vi.fn().mockResolvedValue([{ id: "run-11111111-1111-4111-8111-111111111111", functionId: "fn-11111111-1111-4111-8111-111111111111", startedAt: "2026-07-21T00:00:00.000Z", finishedAt: "2026-07-21T00:00:00.143Z", status: "success", output: { greeting: "Hello, Zo" }, logs: "", trigger: "manual" }])
     };
 
     const authClient = {
@@ -187,10 +192,13 @@ describe("DriveApp", () => {
     expect(screen.getByRole("button", { name: "New" })).toHaveAttribute("title", "New");
     expect(screen.getByRole("button", { name: "My Drive" })).toHaveAttribute("title", "My Drive");
     expect(screen.getByRole("button", { name: "Zo Databases" })).toHaveAttribute("title", "Zo Databases");
+    expect(screen.getByRole("button", { name: "Zo Cluster Databases" })).toHaveAttribute("title", "Zo Cluster Databases");
     expect(screen.getByRole("button", { name: "New" })).toHaveAttribute("data-tooltip", "New");
     expect(screen.getByRole("button", { name: "Recent" })).toHaveAttribute("data-tooltip", "Recent");
     expect(screen.getByRole("button", { name: "Zo Databases" })).toHaveAttribute("data-tooltip", "Zo Databases");
+    expect(screen.getByRole("button", { name: "Zo Cluster Databases" })).toHaveAttribute("data-tooltip", "Zo Cluster Databases");
     expect(screen.getByRole("button", { name: "Zo Databases" })).toHaveClass("after:content-[attr(data-tooltip)]");
+    expect(screen.getByRole("button", { name: "Zo Cluster Databases" })).toHaveClass("after:content-[attr(data-tooltip)]");
     fireEvent.click(screen.getByRole("button", { name: "Expand navigation" }));
     expect(screen.getByRole("button", { name: "New" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
@@ -211,9 +219,22 @@ describe("DriveApp", () => {
     expect(await screen.findByRole("heading", { name: "Zo Databases" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Build with Zo Databases" })).toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole("button", { name: "Zo Cluster Databases" }));
+    expect(await screen.findByRole("heading", { name: "Zo Cluster Databases" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Share one folder. Keep every boundary deliberate." })).toBeInTheDocument();
+    expect(screen.getByText("Recursive scope")).toBeInTheDocument();
+    expect(screen.getByText("Shared with me")).toBeInTheDocument();
+
     fireEvent.click(screen.getByRole("button", { name: "Zo Functions" }));
     expect(await screen.findByRole("heading", { name: "Zo Functions" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Run small jobs without another service." })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Invocation timeline" })).toBeInTheDocument();
+    const invocation = await screen.findByRole("button", { name: /Run now from Zo Drive/ });
+    expect(invocation).toHaveTextContent("Took 143 ms");
+    expect(invocation).toHaveTextContent('Result: {"greeting":"Hello, Zo"}');
+    fireEvent.click(invocation);
+    expect(screen.getByText("Function output")).toBeInTheDocument();
+    expect(screen.getAllByText((_, element) => element?.tagName === "CODE" && element.textContent?.includes('"greeting": "Hello, Zo"') === true).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: /Public endpoint/ }));
     expect(screen.getByText("/public/functions/fn-11111111-1111-4111-8111-111111111111/invoke", { exact: false })).toBeInTheDocument();
     expect(screen.getByText("Save changes to activate this endpoint publicly.")).toBeInTheDocument();
@@ -230,10 +251,11 @@ describe("DriveApp", () => {
     expect(screen.getByText("LanceDB")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Install Redis" }));
     await waitFor(() => expect(client.installDatabaseEngine).toHaveBeenCalledWith("redis"));
-    expect(await screen.findByText("Installed · Workspace coming soon")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Create Redis database" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Update Redis" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Install SQLite" }));
     await waitFor(() => expect(client.installDatabaseEngine).toHaveBeenCalledWith("sqlite"));
-    fireEvent.click(await screen.findByRole("button", { name: "Open SQLite workspace" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Create SQLite database" }));
     expect((await screen.findAllByText("app-data")).length).toBe(2);
     expect(await screen.findByText("tasks")).toBeInTheDocument();
     expect(await screen.findByText("Ship Database Engines")).toBeInTheDocument();

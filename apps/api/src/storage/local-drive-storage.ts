@@ -3,7 +3,7 @@ import { mkdir, readdir, readFile, rename, rm, stat, statfs, writeFile } from "n
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 export const nativeFileTypes = ["document", "spreadsheet", "presentation", "form", "paste"] as const;
 export type NativeFileType = (typeof nativeFileTypes)[number];
@@ -28,7 +28,7 @@ export class UnsafeDrivePathError extends Error {
 
 export class StorageQuotaExceededError extends Error {
   constructor() {
-    super("Your Zo Drive has reached its 100 GB storage limit. Empty Trash or remove files to continue.");
+    super("Your Zo Drive has reached its configured storage limit. Remove Drive data or increase the limit to continue.");
     this.name = "StorageQuotaExceededError";
   }
 }
@@ -37,6 +37,12 @@ export class StorageQuotaConfigurationError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "StorageQuotaConfigurationError";
+  }
+}
+
+export class NativeFileVersionConflictError extends Error {
+  constructor() {
+    super("This paste changed before your save. Reload the latest version before trying again.");
   }
 }
 
@@ -71,7 +77,7 @@ export type DriveTrashItem = {
   expiresAt: string;
 };
 
-type StorageCategory = "photos" | "videos" | "documents" | "audio" | "archives" | "other" | "trash";
+type StorageCategory = "photos" | "videos" | "documents" | "audio" | "archives" | "other" | "trash" | "databases" | "functions" | "zo-originals";
 type StorageUsage = {
   fileCount: number;
   usedBytes: number;
@@ -200,7 +206,10 @@ export class LocalDriveStorage {
   }
 
   async write({ userId, key, content, contentType }: WriteDriveFile): Promise<DriveFile> {
-    return this.withWriteLock(userId, async () => {
+    return this.withWriteLock(userId, () => this.writeUnlocked({ userId, key, content, contentType }));
+  }
+
+  private async writeUnlocked({ userId, key, content, contentType }: WriteDriveFile): Promise<DriveFile> {
     const target = this.resolveFilePath(userId, key);
     const normalizedKey = this.normalizeKey(key, { allowEmpty: false });
     await mkdir(dirname(target), { recursive: true });
@@ -231,7 +240,6 @@ export class LocalDriveStorage {
       await this.writeContentTypes(userId, storedContentTypes);
     }
     return this.describe(target, normalizedKey, starredKeys.has(normalizedKey), storedContentTypes.get(normalizedKey));
-    });
   }
 
   async createNativeFile({ userId, key, type }: CreateNativeDriveFile): Promise<DriveFile> {
@@ -261,6 +269,23 @@ export class LocalDriveStorage {
       key,
       content: Buffer.from(JSON.stringify(content)),
       contentType: nativeContentTypes[content.type]
+    });
+  }
+
+  async updateNativeFileIfUnchanged({ userId, key, content, expectedRevision }: UpdateNativeDriveFile & { expectedRevision: string }): Promise<DriveFile> {
+    return this.withWriteLock(userId, async () => {
+      const existing = await this.read({ userId, key });
+      if (existing.nativeType !== "paste" || content.type !== "paste") {
+        throw Object.assign(new Error("This is not an editable Zo Paste"), { code: "ENOTSUP" });
+      }
+      const existingContent = JSON.parse(await readFile(existing.filePath, "utf8")) as Record<string, unknown>;
+      if (pasteContentRevision(existingContent) !== expectedRevision) throw new NativeFileVersionConflictError();
+      return this.writeUnlocked({
+        userId,
+        key,
+        content: Buffer.from(JSON.stringify(content)),
+        contentType: nativeContentTypes.paste
+      });
     });
   }
 
@@ -555,7 +580,12 @@ export class LocalDriveStorage {
   }
 
   async getUsage({ userId }: Pick<StorageTarget, "userId">): Promise<StorageUsage> {
-    const [files, trash] = await Promise.all([this.list({ userId }), this.listTrash({ userId })]);
+    const safeUserId = this.normalizeUserId(userId);
+    const [files, trash, featureUsage] = await Promise.all([
+      this.list({ userId: safeUserId }),
+      this.listTrash({ userId: safeUserId }),
+      ownerFeatureUsage(this.root, safeUserId)
+    ]);
     const categories = new Map<StorageCategory, { bytes: number; fileCount: number }>([
       ["photos", { bytes: 0, fileCount: 0 }],
       ["videos", { bytes: 0, fileCount: 0 }],
@@ -563,16 +593,21 @@ export class LocalDriveStorage {
       ["audio", { bytes: 0, fileCount: 0 }],
       ["archives", { bytes: 0, fileCount: 0 }],
       ["other", { bytes: 0, fileCount: 0 }],
-      ["trash", { bytes: 0, fileCount: 0 }]
+      ["trash", { bytes: 0, fileCount: 0 }],
+      ["databases", featureUsage.databases],
+      ["functions", featureUsage.functions],
+      ["zo-originals", featureUsage.originals]
     ]);
     for (const file of files) addUsageCategory(categories, categoryForFile(file), file.size);
     for (const file of trash) addUsageCategory(categories, "trash", file.size);
     await mkdir(this.root, { recursive: true });
     const { availableBytes, maxQuotaBytes, totalBytes } = await this.getFilesystemQuotaBounds();
-    const quotaBytes = await this.readQuota(userId);
-    const usedBytes = [...files, ...trash].reduce((total, file) => total + file.size, 0);
+    const quotaBytes = await this.readQuota(safeUserId);
+    const featureBytes = Object.values(featureUsage).reduce((total, usage) => total + usage.bytes, 0);
+    const featureItems = Object.values(featureUsage).reduce((total, usage) => total + usage.fileCount, 0);
+    const usedBytes = [...files, ...trash].reduce((total, file) => total + file.size, featureBytes);
     return {
-      fileCount: files.length + trash.length,
+      fileCount: files.length + trash.length + featureItems,
       usedBytes,
       quotaBytes,
       quotaAvailableBytes: Math.max(0, quotaBytes - usedBytes),
@@ -891,6 +926,111 @@ export class LocalDriveStorage {
   }
 }
 
+type UsageCounter = { bytes: number; fileCount: number };
+
+type OwnerJsonSelection = {
+  value: unknown;
+  selectedItems: number;
+  totalItems: number;
+};
+
+async function ownerFeatureUsage(root: string, ownerUserId: string): Promise<{ databases: UsageCounter; functions: UsageCounter; originals: UsageCounter }> {
+  const [databaseFiles, functionFiles, databaseKeys, account, deviceKeys, shares, forms, clusters] = await Promise.all([
+    storedPathUsage(join(root, "v1", "databases", ownerUserId)),
+    storedPathUsage(join(root, "v1", "functions", ownerUserId)),
+    selectedJsonUsage(join(root, "v1", "databases", "api-keys.json"), (value) => selectFlatOwnerRecords(value, "keys", ownerUserId)),
+    selectedJsonUsage(join(root, "v1", "auth", "users.json"), (value) => selectFlatOwnerRecords(value, "users", ownerUserId, "id")),
+    selectedJsonUsage(join(root, "v1", "auth", "api-keys.json"), (value) => selectFlatOwnerRecords(value, "keys", ownerUserId)),
+    selectedJsonUsage(join(root, "v1", "shares", "shares.json"), (value) => selectFlatOwnerRecords(value, "shares", ownerUserId)),
+    selectedJsonUsage(join(root, "v1", "forms", "forms.json"), (value) => selectFormRecords(value, ownerUserId)),
+    selectedJsonUsage(join(root, "v1", "clusters", "clusters.json"), (value) => selectClusterRecords(value, ownerUserId))
+  ]);
+  return {
+    databases: combineUsage(databaseFiles, databaseKeys),
+    functions: functionFiles,
+    originals: combineUsage(account, deviceKeys, shares, forms, clusters)
+  };
+}
+
+async function storedPathUsage(path: string): Promise<UsageCounter> {
+  try {
+    const info = await stat(path);
+    if (info.isFile()) return isTemporaryStoragePath(path) ? { bytes: 0, fileCount: 0 } : { bytes: info.size, fileCount: 1 };
+    if (!info.isDirectory()) return { bytes: 0, fileCount: 0 };
+    const entries = await readdir(path);
+    return combineUsage(...await Promise.all(entries.map((entry) => storedPathUsage(join(path, entry)))));
+  } catch (error: unknown) {
+    if (isNotFound(error)) return { bytes: 0, fileCount: 0 };
+    throw error;
+  }
+}
+
+async function selectedJsonUsage(path: string, select: (value: unknown) => OwnerJsonSelection): Promise<UsageCounter> {
+  try {
+    const contents = await readFile(path, "utf8");
+    const selected = select(JSON.parse(contents));
+    if (selected.selectedItems === 0) return { bytes: 0, fileCount: 0 };
+    const bytes = selected.selectedItems === selected.totalItems
+      ? Buffer.byteLength(contents)
+      : Buffer.byteLength(JSON.stringify(selected.value, null, 2));
+    return { bytes, fileCount: selected.selectedItems };
+  } catch (error: unknown) {
+    if (isNotFound(error)) return { bytes: 0, fileCount: 0 };
+    throw error;
+  }
+}
+
+function selectFlatOwnerRecords(value: unknown, key: string, ownerUserId: string, ownerKey = "ownerUserId"): OwnerJsonSelection {
+  const records = objectArray(value, key);
+  const selected = records.filter((record) => objectString(record, ownerKey) === ownerUserId);
+  return { value: { [key]: selected }, selectedItems: selected.length, totalItems: records.length };
+}
+
+function selectFormRecords(value: unknown, ownerUserId: string): OwnerJsonSelection {
+  const forms = objectArray(value, "forms");
+  const responses = objectArray(value, "responses");
+  const selectedForms = forms.filter((form) => objectString(form, "ownerUserId") === ownerUserId);
+  const formIds = new Set(selectedForms.map((form) => objectString(form, "id")).filter((id): id is string => Boolean(id)));
+  const selectedResponses = responses.filter((response) => formIds.has(objectString(response, "formId") ?? ""));
+  return {
+    value: { forms: selectedForms, responses: selectedResponses },
+    selectedItems: selectedForms.length + selectedResponses.length,
+    totalItems: forms.length + responses.length
+  };
+}
+
+function selectClusterRecords(value: unknown, ownerUserId: string): OwnerJsonSelection {
+  const invitations = objectArray(value, "invitations");
+  const peers = objectArray(value, "peers");
+  const mounts = objectArray(value, "mounts");
+  const selectedInvitations = invitations.filter((record) => objectString(record, "ownerUserId") === ownerUserId);
+  const selectedPeers = peers.filter((record) => objectString(record, "ownerUserId") === ownerUserId);
+  const selectedMounts = mounts.filter((record) => objectString(record, "ownerUserId") === ownerUserId);
+  return {
+    value: { invitations: selectedInvitations, peers: selectedPeers, mounts: selectedMounts },
+    selectedItems: selectedInvitations.length + selectedPeers.length + selectedMounts.length,
+    totalItems: invitations.length + peers.length + mounts.length
+  };
+}
+
+function objectArray(value: unknown, key: string): Record<string, unknown>[] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  const records = (value as Record<string, unknown>)[key];
+  return Array.isArray(records) ? records.filter((record): record is Record<string, unknown> => Boolean(record) && typeof record === "object" && !Array.isArray(record)) : [];
+}
+
+function objectString(value: Record<string, unknown>, key: string): string | null {
+  return typeof value[key] === "string" ? value[key] : null;
+}
+
+function combineUsage(...values: UsageCounter[]): UsageCounter {
+  return values.reduce((total, value) => ({ bytes: total.bytes + value.bytes, fileCount: total.fileCount + value.fileCount }), { bytes: 0, fileCount: 0 });
+}
+
+function isTemporaryStoragePath(path: string): boolean {
+  return /(?:\.tmp|\.uploading|\.import)$/.test(path);
+}
+
 function contentTypeFor(key: string): string {
   const extension = key.slice(key.lastIndexOf(".")).toLowerCase();
   return contentTypes[extension] ?? "application/octet-stream";
@@ -937,6 +1077,10 @@ function nativeFileTemplate(type: NativeFileType): Record<string, unknown> {
     case "form": return { format: "zo-native", type, version: 1, createdAt, title: "Untitled form", description: "", questions: [{ id: "question-1", title: "", description: "", type: "multiple-choice", options: ["Option 1"], required: false }] };
     case "paste": return { format: "zo-native", type, version: 1, createdAt, language: "plaintext", tags: [], text: "" };
   }
+}
+
+function pasteContentRevision(content: Record<string, unknown>): string {
+  return createHash("sha256").update(JSON.stringify({ format: content.format, type: content.type, version: content.version, language: content.language, tags: content.tags, text: content.text })).digest("hex");
 }
 
 function isNotFound(error: unknown): error is NodeJS.ErrnoException {

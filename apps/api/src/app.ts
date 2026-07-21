@@ -15,7 +15,8 @@ import { LocalFormStore, type PublishedForm } from "./forms/local-form-store.js"
 import { DatabaseEngineNotInstalledError, DatabaseImportError, DatabaseQueryError, LocalDatabaseStore, isDatabaseEngineId } from "./databases/local-database-store.js";
 import { LocalDatabaseApiKeyStore, type DatabaseApiKeyScope } from "./databases/local-database-api-key-store.js";
 import { LocalFunctionStore, validCron } from "./functions/local-function-store.js";
-import { LocalDriveStorage, StorageQuotaConfigurationError, StorageQuotaExceededError, TrashRestoreConflictError, UnsafeDrivePathError, nativeFileTypes, type DriveFileCategory } from "./storage/local-drive-storage.js";
+import { LocalClusterStore } from "./clusters/local-cluster-store.js";
+import { LocalDriveStorage, NativeFileVersionConflictError, StorageQuotaConfigurationError, StorageQuotaExceededError, TrashRestoreConflictError, UnsafeDrivePathError, nativeFileTypes, type DriveFileCategory } from "./storage/local-drive-storage.js";
 
 export type UserResolver = (request: Request) => string | null | Promise<string | null>;
 
@@ -35,6 +36,7 @@ type CreateAppOptions = {
   databases?: LocalDatabaseStore;
   databaseApiKeys?: LocalDatabaseApiKeyStore;
   functions?: LocalFunctionStore;
+  clusters?: LocalClusterStore;
   maxDatabaseImportBytes?: number;
   trustProxy?: boolean;
 };
@@ -99,6 +101,7 @@ const deleteAccountSchema = z.object({
 const createShareSchema = z.object({
   key: z.string().min(1).max(1_024),
   access: z.enum(["public", "passcode"]),
+  editable: z.boolean().optional().default(false),
   kind: z.enum(["share", "transfer"]).optional(),
   passcode: z.string().min(1).max(256).optional(),
   expiresAt: z.string().datetime().nullable().optional()
@@ -107,6 +110,18 @@ const createShareSchema = z.object({
 });
 const changeSharePasscodeSchema = z.object({
   passcode: z.string().min(1).max(256)
+});
+const sharedPasteContentSchema = z.object({
+  format: z.literal("zo-native"),
+  type: z.literal("paste"),
+  version: z.literal(1),
+  language: z.string().max(80),
+  tags: z.array(z.string().max(80)).max(20),
+  text: z.string().max(1_000_000)
+});
+const updateSharedPasteSchema = z.object({
+  content: sharedPasteContentSchema,
+  expectedRevision: z.string().min(1).max(128)
 });
 const updateStorageQuotaSchema = z.object({
   quotaBytes: z.number().int().positive()
@@ -117,7 +132,8 @@ const createApiKeySchema = z.object({
   expiresAt: z.string().datetime().nullable()
 });
 const createDatabaseSchema = z.object({
-  name: z.string().trim().min(1).max(80)
+  name: z.string().trim().min(1).max(80),
+  engine: z.enum(["sqlite", "duckdb", "libsql", "pglite", "lancedb", "leveldb", "redis", "kuzu"]).default("sqlite")
 });
 const updateDatabaseImportSettingsSchema = z.object({
   importLimitBytes: z.number().int().positive()
@@ -130,6 +146,7 @@ const databaseQuerySchema = z.object({
   sql: z.string().min(1).max(50_000),
   params: z.array(z.union([z.string(), z.number(), z.boolean(), z.null()])).max(100).default([])
 });
+const databaseExecuteSchema = z.record(z.string(), z.unknown()).refine((value) => Object.keys(value).length > 0 && JSON.stringify(value).length <= 1_000_000);
 const createDatabaseApiKeySchema = z.object({
   name: z.string().trim().min(1).max(80),
   scopes: z.array(z.enum(["read", "write"])).min(1).max(2),
@@ -147,8 +164,10 @@ const functionFieldsSchema = z.object({
 const functionCreateSchema = functionFieldsSchema.extend({ visibility: z.enum(["private", "public"]).default("private"), cron: z.string().trim().max(100).nullable().default(null), enabled: z.boolean().default(true) }).superRefine((value, context) => { if (value.cron && !validCron(value.cron)) context.addIssue({ code: z.ZodIssueCode.custom, message: "Use a valid five-field UTC cron expression" }); });
 const functionUpdateSchema = z.object({ name: z.string().trim().min(1).max(80).optional(), runtime: z.enum(["javascript", "python"]).optional(), source: z.string().min(1).max(50_000).optional(), visibility: z.enum(["private", "public"]).optional(), cron: z.string().trim().max(100).nullable().optional(), enabled: z.boolean().optional() }).superRefine((value, context) => { if (Object.keys(value).length === 0) context.addIssue({ code: z.ZodIssueCode.custom, message: "Provide at least one change" }); if (value.cron && !validCron(value.cron)) context.addIssue({ code: z.ZodIssueCode.custom, message: "Use a valid five-field UTC cron expression" }); });
 const functionRunSchema = z.object({ input: z.unknown().optional().default({}) });
+const clusterInvitationSchema = z.object({ folder: z.string().trim().min(1).max(1_024) });
+const clusterMountSchema = z.object({ remoteUrl: z.string().url().max(2_048), inviteToken: z.string().min(20).max(256) });
 
-export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys, invalidApiKeyRateLimiter = new InvalidApiKeyRateLimiter(), sharing, forms, databases = new LocalDatabaseStore(storage.root), databaseApiKeys = new LocalDatabaseApiKeyStore({ root: storage.root }), functions = new LocalFunctionStore(storage.root), maxDatabaseImportBytes = Number.MAX_SAFE_INTEGER, trustProxy = false }: CreateAppOptions) {
+export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys, invalidApiKeyRateLimiter = new InvalidApiKeyRateLimiter(), sharing, forms, databases = new LocalDatabaseStore(storage.root), databaseApiKeys = new LocalDatabaseApiKeyStore({ root: storage.root }), functions = new LocalFunctionStore(storage.root), clusters = new LocalClusterStore({ root: storage.root }), maxDatabaseImportBytes = Number.MAX_SAFE_INTEGER, trustProxy = false }: CreateAppOptions) {
   const app = new Hono();
   const resolveActiveUser: UserResolver = async (request) => {
     const userId = await resolveUserId(request);
@@ -182,6 +201,8 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     app.use("/functions", cors(corsOptions));
     app.use("/functions/*", cors(corsOptions));
     app.use("/public/functions/*", cors(corsOptions));
+    app.use("/clusters", cors(corsOptions));
+    app.use("/clusters/*", cors(corsOptions));
   }
 
   app.use("*", async (context, next) => {
@@ -327,7 +348,10 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
         const parsed = createShareSchema.safeParse(await context.req.json().catch(() => null));
         if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Enter a valid file, share setting, and optional expiry" } }, 400);
         if (parsed.data.expiresAt && new Date(parsed.data.expiresAt).getTime() <= Date.now()) return context.json({ error: { code: "INVALID_REQUEST", message: "Expiry must be in the future" } }, 400);
-        await storage.read({ userId, key: parsed.data.key });
+        const file = await storage.read({ userId, key: parsed.data.key });
+        if (parsed.data.editable && file.nativeType !== "paste") {
+          return context.json({ error: { code: "INVALID_REQUEST", message: "Only Zo Pastes can be shared for editing" } }, 400);
+        }
         const share = await sharing.create({ ...parsed.data, ownerUserId: userId, expiresAt: parsed.data.expiresAt ?? null });
         const described = await describeShare(storage, share);
         return context.json(described, 201);
@@ -405,13 +429,91 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
       return new Response(Readable.toWeb(storage.createReadStream(object.filePath)) as ReadableStream, { headers: { "content-disposition": `inline; filename*=UTF-8''${encodeURIComponent(object.name)}`, "content-length": object.size.toString(), "content-type": object.contentType } });
     });
 
+    app.get("/shared/:id/paste", async (context) => {
+      const share = await sharing.findActive(context.req.param("id"));
+      if (!share) return context.json({ error: { code: "NOT_FOUND", message: "Share link not found or expired" } }, 404);
+      if (!share.editable) return context.json({ error: { code: "READ_ONLY", message: "This paste link is view-only" } }, 403);
+      if (!(await sharing.verifyPasscode(share, context.req.header("x-zo-drive-share-passcode")))) return context.json({ error: { code: "PASSCODE_REQUIRED", message: "A valid share passcode is required" } }, 401);
+      const object = await storage.read({ userId: share.ownerUserId, key: share.key });
+      if (object.nativeType !== "paste") return context.json({ error: { code: "NOT_FOUND", message: "Editable paste not found" } }, 404);
+      const parsed = sharedPasteContentSchema.safeParse(JSON.parse(await readFile(object.filePath, "utf8")));
+      if (!parsed.success) return context.json({ error: { code: "INVALID_PASTE", message: "This paste has an unsupported format" } }, 422);
+      return context.json({ content: parsed.data, revision: pasteRevision(parsed.data) });
+    });
+
+    app.put("/shared/:id/paste", async (context) => {
+      const share = await sharing.findActive(context.req.param("id"));
+      if (!share) return context.json({ error: { code: "NOT_FOUND", message: "Share link not found or expired" } }, 404);
+      if (!share.editable) return context.json({ error: { code: "READ_ONLY", message: "This paste link is view-only" } }, 403);
+      if (!(await sharing.verifyPasscode(share, context.req.header("x-zo-drive-share-passcode")))) return context.json({ error: { code: "PASSCODE_REQUIRED", message: "A valid share passcode is required" } }, 401);
+      const parsed = updateSharedPasteSchema.safeParse(await context.req.json().catch(() => null));
+      if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Send valid paste content and its current version" } }, 400);
+      await storage.updateNativeFileIfUnchanged({ userId: share.ownerUserId, key: share.key, content: parsed.data.content, expectedRevision: parsed.data.expectedRevision });
+      return context.json({ content: parsed.data.content, revision: pasteRevision(parsed.data.content) });
+    });
+
     app.get("/shared/:id", async (context) => {
       const share = await sharing.findActive(context.req.param("id"));
       if (!share) return context.json({ error: { code: "NOT_FOUND", message: "Share link not found or expired" } }, 404);
       const object = await storage.read({ userId: share.ownerUserId, key: share.key });
-      return context.json({ id: share.id, name: object.name, size: object.size, contentType: object.contentType, access: share.access, expiresAt: share.expiresAt, requiresPasscode: share.access === "passcode" });
+      return context.json({ id: share.id, name: object.name, size: object.size, contentType: object.contentType, access: share.access, editable: Boolean(share.editable), expiresAt: share.expiresAt, requiresPasscode: share.access === "passcode", updatedAt: object.updatedAt });
     });
   }
+
+  app.post("/clusters/invitations", async (context) => {
+    const userId = await requireClusterOwner(context.req.raw, resolveActiveUser, auth);
+    if (!userId) return unauthorized(context);
+    const parsed = clusterInvitationSchema.safeParse(await context.req.json().catch(() => null));
+    if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Choose one Drive folder to share" } }, 400);
+    await storage.list({ userId, prefix: parsed.data.folder });
+    return context.json(await clusters.createInvitation({ ownerUserId: userId, folder: parsed.data.folder }), 201);
+  });
+
+  app.post("/cluster/invitations/accept", async (context) => {
+    const parsed = z.object({ inviteToken: z.string().min(20).max(256) }).safeParse(await context.req.json().catch(() => null));
+    if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Invalid cluster invitation" } }, 400);
+    const invitationId = invitationIdFromToken(parsed.data.inviteToken);
+    if (!invitationId) return context.json({ error: { code: "INVALID_REQUEST", message: "Invalid cluster invitation" } }, 400);
+    const accepted = await clusters.acceptInvitation({ id: invitationId, token: parsed.data.inviteToken });
+    return accepted ? context.json(accepted, 201) : context.json({ error: { code: "INVITATION_UNAVAILABLE", message: "This invitation was used or expired" } }, 410);
+  });
+
+  app.post("/clusters/mounts", async (context) => {
+    const userId = await requireClusterOwner(context.req.raw, resolveActiveUser, auth);
+    if (!userId) return unauthorized(context);
+    const parsed = clusterMountSchema.safeParse(await context.req.json().catch(() => null));
+    if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Enter a valid Zo Drive URL and cluster invitation" } }, 400);
+    const remoteUrl = normaliseRemoteUrl(parsed.data.remoteUrl);
+    if (!remoteUrl) return context.json({ error: { code: "INVALID_REQUEST", message: "Cluster peers must use an HTTP(S) URL" } }, 400);
+    const response = await fetch(`${remoteUrl}/cluster/invitations/accept`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ inviteToken: parsed.data.inviteToken }) });
+    if (!response.ok) return context.json({ error: { code: "PAIRING_FAILED", message: "The remote Zo Drive rejected this invitation" } }, 400);
+    const remote = await response.json() as { peerId: string; peerKey: string; folder: string };
+    return context.json(await clusters.addMount({ ownerUserId: userId, remoteUrl, remotePeerId: remote.peerId, remotePeerKey: remote.peerKey, folder: remote.folder }), 201);
+  });
+
+  app.get("/clusters/mounts", async (context) => {
+    const userId = await requireClusterOwner(context.req.raw, resolveActiveUser, auth);
+    return userId ? context.json({ mounts: await clusters.listMounts(userId) }) : unauthorized(context);
+  });
+
+  app.get("/clusters/mounts/:id/objects", async (context) => {
+    const userId = await requireClusterOwner(context.req.raw, resolveActiveUser, auth);
+    if (!userId) return unauthorized(context);
+    const mount = await clusters.findMount({ ownerUserId: userId, id: context.req.param("id") });
+    if (!mount) return context.json({ error: { code: "NOT_FOUND", message: "Cluster mount not found" } }, 404);
+    const response = await fetch(`${mount.remoteUrl}/cluster/peers/${mount.remotePeerId}/objects`, { headers: { authorization: `Bearer ${mount.remotePeerKey}` } });
+    if (!response.ok) return context.json({ error: { code: "REMOTE_UNAVAILABLE", message: "Could not read this cluster mount" } }, 502);
+    return context.json(await response.json());
+  });
+
+  app.get("/cluster/peers/:id/objects", async (context) => {
+    const key = context.req.header("authorization")?.match(/^Bearer (zcs_[A-Za-z0-9_-]+)$/)?.[1];
+    const peer = key ? await clusters.authorizePeer({ id: context.req.param("id"), key }) : null;
+    if (!peer) return unauthorized(context);
+    const objects = await storage.list({ userId: peer.ownerUserId, prefix: peer.folder });
+    const prefix = `${peer.folder}/`;
+    return context.json({ objects: objects.map((object) => ({ ...object, key: object.key.startsWith(prefix) ? object.key.slice(prefix.length) : object.key })) });
+  });
 
   app.get("/folders", async (context) => {
     const userId = await requireUser(context.req.raw, resolveActiveUser);
@@ -446,12 +548,20 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     return context.json(await databases.installEngine({ ownerUserId: userId, engine }));
   });
 
+  app.post("/databases/engines/:engine/update", async (context) => {
+    const userId = await requireDatabaseOwner(context.req.raw, resolveActiveUser, auth);
+    if (!userId) return unauthorized(context);
+    const engine = context.req.param("engine");
+    if (!isDatabaseEngineId(engine)) return context.json({ error: { code: "ENGINE_UNAVAILABLE", message: "This database engine is not in the catalog" } }, 404);
+    return context.json(await databases.updateEngine({ ownerUserId: userId, engine }));
+  });
+
   app.post("/databases", async (context) => {
     const userId = await requireDatabaseOwner(context.req.raw, resolveActiveUser, auth);
     if (!userId) return unauthorized(context);
     const parsed = createDatabaseSchema.safeParse(await context.req.json().catch(() => null));
     if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Enter a database name of up to 80 characters" } }, 400);
-    return context.json(await databases.create({ ownerUserId: userId, name: parsed.data.name }), 201);
+    return context.json(await databases.create({ ownerUserId: userId, name: parsed.data.name, engine: parsed.data.engine }), 201);
   });
 
   app.get("/databases/settings", async (context) => {
@@ -508,7 +618,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
   app.get("/databases/:id/api-keys", async (context) => {
     const userId = await requireDatabaseOwner(context.req.raw, resolveActiveUser, auth);
     if (!userId) return unauthorized(context);
-    await databases.listTables({ ownerUserId: userId, id: context.req.param("id") });
+    await databases.get({ ownerUserId: userId, id: context.req.param("id") });
     return context.json({ keys: await databaseApiKeys.list({ ownerUserId: userId, databaseId: context.req.param("id") }) });
   });
 
@@ -518,7 +628,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     const parsed = createDatabaseApiKeySchema.safeParse(await context.req.json().catch(() => null));
     if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Enter a key name, scope, and valid expiry" } }, 400);
     if (parsed.data.expiresAt && new Date(parsed.data.expiresAt).getTime() <= Date.now()) return context.json({ error: { code: "INVALID_REQUEST", message: "Expiry must be in the future" } }, 400);
-    await databases.listTables({ ownerUserId: userId, id: context.req.param("id") });
+    await databases.get({ ownerUserId: userId, id: context.req.param("id") });
     return context.json(await databaseApiKeys.create({ ownerUserId: userId, databaseId: context.req.param("id"), ...parsed.data, scopes: parsed.data.scopes as DatabaseApiKeyScope[] }), 201);
   });
 
@@ -549,6 +659,14 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     const userId = await requireDatabaseUser(context.req.raw, context.req.param("id"), databaseQueryScope(parsed.data.sql), resolveActiveUser, databaseApiKeys);
     if (!userId) return unauthorized(context);
     return context.json(await databases.query({ ownerUserId: userId, id: context.req.param("id"), ...parsed.data }));
+  });
+
+  app.post("/databases/:id/execute", async (context) => {
+    const parsed = databaseExecuteSchema.safeParse(await context.req.json().catch(() => null));
+    if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Provide a valid engine request of up to 1 MB" } }, 400);
+    const userId = await requireDatabaseUser(context.req.raw, context.req.param("id"), databaseExecuteScope(parsed.data), resolveActiveUser, databaseApiKeys);
+    if (!userId) return unauthorized(context);
+    return context.json(await databases.execute({ ownerUserId: userId, id: context.req.param("id"), request: parsed.data }));
   });
 
   app.post("/public/functions/:id/invoke", async (context) => {
@@ -806,6 +924,9 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     if (error instanceof TrashRestoreConflictError) {
       return context.json({ error: { code: "RESTORE_CONFLICT", message: error.message } }, 409);
     }
+    if (error instanceof NativeFileVersionConflictError) {
+      return context.json({ error: { code: "PASTE_VERSION_CONFLICT", message: error.message } }, 409);
+    }
     if (error instanceof StorageQuotaExceededError) {
       return context.json({ error: { code: "STORAGE_QUOTA_EXCEEDED", message: error.message } }, 413);
     }
@@ -842,6 +963,10 @@ async function requireBrowserUser(request: Request, auth: NonNullable<CreateAppO
   return userId && (await auth.store.findById(userId))?.id || null;
 }
 
+async function requireClusterOwner(request: Request, resolveUserId: UserResolver, auth: CreateAppOptions["auth"]): Promise<string | null> {
+  return auth ? requireBrowserUser(request, auth) : requireUser(request, resolveUserId);
+}
+
 async function requireDatabaseOwner(request: Request, resolveUserId: UserResolver, auth: CreateAppOptions["auth"]): Promise<string | null> {
   if (request.headers.has("authorization")) return null;
   if (auth) return requireBrowserUser(request, auth);
@@ -856,6 +981,32 @@ async function requireDatabaseUser(request: Request, databaseId: string, scope: 
 
 function databaseQueryScope(sql: string): DatabaseApiKeyScope {
   return /^\s*(select|explain)\b/i.test(sql) ? "read" : "write";
+}
+
+function databaseExecuteScope(request: Record<string, unknown>): DatabaseApiKeyScope {
+  if (typeof request.operation === "string" && ["get", "scan", "listTables", "search"].includes(request.operation)) return "read";
+  if (typeof request.command === "string" && ["BITCOUNT", "EXISTS", "GET", "HGET", "HGETALL", "HLEN", "HMGET", "HSCAN", "KEYS", "LLEN", "LRANGE", "MGET", "PING", "SCARD", "SCAN", "SMEMBERS", "STRLEN", "TTL", "TYPE", "XINFO", "XLEN", "XRANGE", "ZCARD", "ZRANGE", "ZSCORE"].includes(request.command.toUpperCase())) return "read";
+  if (typeof request.query === "string") {
+    const query = request.query.trim();
+    if (/^(select|show|describe|explain|return)\b/i.test(query)) return "read";
+    if (/^match\b/i.test(query) && !/\b(create|delete|drop|merge|remove|set)\b/i.test(query)) return "read";
+  }
+  return "write";
+}
+
+function invitationIdFromToken(token: string): string | null {
+  const compactId = token.match(/^zci_([a-f0-9]{32})_[A-Za-z0-9_-]+$/)?.[1];
+  return compactId ? `${compactId.slice(0, 8)}-${compactId.slice(8, 12)}-${compactId.slice(12, 16)}-${compactId.slice(16, 20)}-${compactId.slice(20)}` : null;
+}
+
+function normaliseRemoteUrl(value: string): string | null {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+    url.pathname = url.pathname.replace(/\/$/, "");
+    url.search = ""; url.hash = "";
+    return url.toString().replace(/\/$/, "");
+  } catch { return null; }
 }
 
 function unauthorized(context: Context) {
@@ -876,6 +1027,11 @@ function invalidDeviceKeyClient(request: Request, trustProxy: boolean): string |
   const forwardedFor = trustProxy ? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() : undefined;
   if (forwardedFor) return `ip:${forwardedFor}`;
   return `key:${createHash("sha256").update(apiKey).digest("hex")}`;
+}
+
+function pasteRevision(content: unknown): string {
+  const paste = content as Record<string, unknown>;
+  return createHash("sha256").update(JSON.stringify({ format: paste.format, type: paste.type, version: paste.version, language: paste.language, tags: paste.tags, text: paste.text })).digest("hex");
 }
 
 function objectKeyFromPath(path: string): string {
@@ -912,7 +1068,7 @@ function isDirectory(error: unknown): error is NodeJS.ErrnoException {
 async function describeShare(storage: LocalDriveStorage, share: StoredShare) {
   try {
     const object = await storage.read({ userId: share.ownerUserId, key: share.key });
-    return { id: share.id, key: share.key, name: object.name, size: object.size, contentType: object.contentType, access: share.access, kind: share.kind === "transfer" ? "transfer" : "share", expiresAt: share.expiresAt, createdAt: share.createdAt };
+    return { id: share.id, key: share.key, name: object.name, size: object.size, contentType: object.contentType, access: share.access, editable: Boolean(share.editable), kind: share.kind === "transfer" ? "transfer" : "share", expiresAt: share.expiresAt, createdAt: share.createdAt };
   } catch (error) {
     if (isNotFound(error)) return null;
     throw error;

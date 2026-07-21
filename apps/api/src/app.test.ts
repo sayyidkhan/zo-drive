@@ -45,6 +45,22 @@ describe("Zo Drive API", () => {
     await expect(response.json()).resolves.toMatchObject({ error: { code: "UNAUTHORIZED" } });
   });
 
+  it("pairs a one-time cluster invitation and exposes only its folder", async () => {
+    const app = await createTestApp();
+    const headers = { "content-type": "application/json", "x-test-user-id": "alice" };
+    await app.request("http://localhost/objects", { method: "POST", headers: { ...headers, "x-zo-drive-file-name": encodeURIComponent("inside.txt") }, body: "inside" });
+    await app.request("http://localhost/objects", { method: "POST", headers: { ...headers, "x-zo-drive-file-name": encodeURIComponent("outside.txt") }, body: "outside" });
+    const invitation = await app.request("http://localhost/clusters/invitations", { method: "POST", headers, body: JSON.stringify({ folder: "Shared" }) });
+    expect(invitation.status).toBe(201);
+    const invite = await invitation.json() as { token: string };
+    const accepted = await app.request("http://localhost/cluster/invitations/accept", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ inviteToken: invite.token }) });
+    expect(accepted.status).toBe(201);
+    const peer = await accepted.json() as { peerId: string; peerKey: string };
+    const objects = await app.request(`http://localhost/cluster/peers/${peer.peerId}/objects`, { headers: { authorization: `Bearer ${peer.peerKey}` } });
+    await expect(objects.json()).resolves.toEqual({ objects: [] });
+    expect((await app.request("http://localhost/cluster/invitations/accept", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ inviteToken: invite.token }) })).status).toBe(410);
+  });
+
   it("stores, runs, and publicly invokes owner-scoped functions", async () => {
     const app = await createTestApp();
     const created = await app.request("http://localhost/functions", {
@@ -83,9 +99,9 @@ describe("Zo Drive API", () => {
     const app = await createTestApp();
     const engines = await app.request("http://localhost/databases/engines", { headers: { "x-test-user-id": "alice" } });
     await expect(engines.json()).resolves.toMatchObject({ engines: expect.arrayContaining([
-      { engine: "sqlite", name: "SQLite", installed: false, installedAt: null, workspaceAvailable: true },
-      { engine: "redis", name: "Redis", installed: false, installedAt: null, workspaceAvailable: false },
-      { engine: "kuzu", name: "Kuzu", installed: false, installedAt: null, workspaceAvailable: false }
+      expect.objectContaining({ engine: "sqlite", name: "SQLite", installed: false, installedAt: null, installedVersion: null, updatedAt: null, updateAvailable: false, workspaceAvailable: true }),
+      expect.objectContaining({ engine: "redis", name: "Redis", installed: false, installedAt: null, installedVersion: null, updatedAt: null, updateAvailable: false, workspaceAvailable: false }),
+      expect.objectContaining({ engine: "kuzu", name: "Kuzu", installed: false, installedAt: null, installedVersion: null, updatedAt: null, updateAvailable: false, workspaceAvailable: false })
     ]) });
     const blockedBeforeInstall = await app.request("http://localhost/databases", {
       method: "POST",
@@ -183,6 +199,44 @@ describe("Zo Drive API", () => {
     expect(privateToOwner.status).toBe(404);
     const deleted = await app.request(`http://localhost/databases/${database.id}`, { method: "DELETE", headers: { "x-test-user-id": "alice" } });
     expect(deleted.status).toBe(204);
+  });
+
+  it("creates, updates, and exposes a non-SQLite engine without a table preview", async () => {
+    const app = await createTestApp();
+    const installed = await app.request("http://localhost/databases/engines/leveldb/install", { method: "POST", headers: { "x-test-user-id": "alice" } });
+    await expect(installed.json()).resolves.toMatchObject({ engine: "leveldb", installed: true, installedVersion: "3.0.0", protocol: "key-value", updateAvailable: false });
+    const updated = await app.request("http://localhost/databases/engines/leveldb/update", { method: "POST", headers: { "x-test-user-id": "alice" } });
+    await expect(updated.json()).resolves.toMatchObject({ engine: "leveldb", installedVersion: "3.0.0", updatedAt: expect.any(String) });
+
+    const created = await app.request("http://localhost/databases", { method: "POST", headers: { "content-type": "application/json", "x-test-user-id": "alice" }, body: JSON.stringify({ name: "cache", engine: "leveldb" }) });
+    expect(created.status).toBe(201);
+    const database = await created.json() as { id: string; engine: string };
+    expect(database.engine).toBe("leveldb");
+    expect((await app.request(`http://localhost/databases/${database.id}/tables`, { headers: { "x-test-user-id": "alice" } })).status).toBe(400);
+
+    const put = await app.request(`http://localhost/databases/${database.id}/execute`, { method: "POST", headers: { "content-type": "application/json", "x-test-user-id": "alice" }, body: JSON.stringify({ operation: "put", key: "customer:1", value: "Ada" }) });
+    await expect(put.json()).resolves.toEqual({ engine: "leveldb", result: { stored: true } });
+    const get = await app.request(`http://localhost/databases/${database.id}/execute`, { method: "POST", headers: { "content-type": "application/json", "x-test-user-id": "alice" }, body: JSON.stringify({ operation: "get", key: "customer:1" }) });
+    await expect(get.json()).resolves.toEqual({ engine: "leveldb", result: { value: "Ada" } });
+
+    const keyResponse = await app.request(`http://localhost/databases/${database.id}/api-keys`, { method: "POST", headers: { "content-type": "application/json", "x-test-user-id": "alice" }, body: JSON.stringify({ name: "reader", scopes: ["read"], expiresAt: null }) });
+    const key = await keyResponse.json() as { apiKey: string };
+    const readHeaders = { authorization: `Bearer ${key.apiKey}`, "content-type": "application/json" };
+    expect((await app.request(`http://localhost/databases/${database.id}/execute`, { method: "POST", headers: readHeaders, body: JSON.stringify({ operation: "get", key: "customer:1" }) })).status).toBe(200);
+    expect((await app.request(`http://localhost/databases/${database.id}/execute`, { method: "POST", headers: readHeaders, body: JSON.stringify({ operation: "put", key: "customer:2", value: "Lin" }) })).status).toBe(401);
+  });
+
+  it("rejects disguised write queries from read-only database keys", async () => {
+    const app = await createTestApp();
+    await app.request("http://localhost/databases/engines/libsql/install", { method: "POST", headers: { "x-test-user-id": "alice" } });
+    const created = await app.request("http://localhost/databases", { method: "POST", headers: { "content-type": "application/json", "x-test-user-id": "alice" }, body: JSON.stringify({ name: "guarded", engine: "libsql" }) });
+    const database = await created.json() as { id: string };
+    const keyResponse = await app.request(`http://localhost/databases/${database.id}/api-keys`, { method: "POST", headers: { "content-type": "application/json", "x-test-user-id": "alice" }, body: JSON.stringify({ name: "reader", scopes: ["read"], expiresAt: null }) });
+    const key = await keyResponse.json() as { apiKey: string };
+    const headers = { authorization: `Bearer ${key.apiKey}`, "content-type": "application/json" };
+
+    expect((await app.request(`http://localhost/databases/${database.id}/execute`, { method: "POST", headers, body: JSON.stringify({ query: "SELECT 1" }) })).status).toBe(200);
+    expect((await app.request(`http://localhost/databases/${database.id}/execute`, { method: "POST", headers, body: JSON.stringify({ query: "WITH changed AS (DELETE FROM records RETURNING *) SELECT * FROM changed" }) })).status).toBe(401);
   });
 
   it("issues database-scoped keys for external backends and enforces their access", async () => {
@@ -688,6 +742,46 @@ describe("Zo Drive API", () => {
 
     expect((await app.request(`http://localhost/shares/${publicBody.id}`, { method: "DELETE", headers: { cookie } })).status).toBe(204);
     expect((await app.request(`http://localhost/shared/${publicBody.id}`)).status).toBe(404);
+  });
+
+  it("lets anonymous guests edit only explicitly editable Zo Pastes", async () => {
+    const root = await mkdtemp(join(tmpdir(), "zo-drive-editable-paste-"));
+    roots.push(root);
+    const sessions = new SessionService("test-session-secret-that-is-more-than-thirty-two-characters");
+    const app = createApp({
+      storage: new LocalDriveStorage({ root }),
+      resolveUserId: (request) => sessions.userIdFromRequest(request),
+      auth: { store: new LocalAuthStore({ root }), sessions, secureCookies: false },
+      sharing: new LocalShareStore({ root })
+    });
+    const registration = await app.request("http://localhost/auth/register", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: "owner", password: "secret1" }) });
+    const cookie = registration.headers.get("set-cookie")!;
+    expect((await app.request("http://localhost/native-files", { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ name: "Sprint notes", type: "paste" }) })).status).toBe(201);
+    const created = await app.request("http://localhost/shares", { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ key: "Sprint notes", access: "public", editable: true }) });
+    expect(created.status).toBe(201);
+    const share = await created.json() as { id: string; editable: boolean };
+    expect(share.editable).toBe(true);
+
+    const opened = await app.request(`http://localhost/shared/${share.id}/paste`);
+    expect(opened.status).toBe(200);
+    const openedBody = await opened.json() as { content: { text: string }; revision: string };
+    expect(openedBody.content.text).toBe("");
+    const saved = await app.request(`http://localhost/shared/${share.id}/paste`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ expectedRevision: openedBody.revision, content: { format: "zo-native", type: "paste", version: 1, language: "plaintext", tags: [], text: "Ideas from the group" } }) });
+    expect(saved.status).toBe(200);
+    const savedBody = await saved.json() as { revision: string };
+    expect(savedBody.revision).not.toBe(openedBody.revision);
+    const staleSave = await app.request(`http://localhost/shared/${share.id}/paste`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ expectedRevision: openedBody.revision, content: { format: "zo-native", type: "paste", version: 1, language: "plaintext", tags: [], text: "Stale edit" } }) });
+    expect(staleSave.status).toBe(409);
+    await expect(staleSave.json()).resolves.toMatchObject({ error: { code: "PASTE_VERSION_CONFLICT" } });
+
+    const protectedShare = await app.request("http://localhost/shares", { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ key: "Sprint notes", access: "passcode", editable: true, passcode: "sprint-secret" }) });
+    const protectedBody = await protectedShare.json() as { id: string };
+    expect((await app.request(`http://localhost/shared/${protectedBody.id}/paste`)).status).toBe(401);
+    expect((await app.request(`http://localhost/shared/${protectedBody.id}/paste`, { headers: { "x-zo-drive-share-passcode": "sprint-secret" } })).status).toBe(200);
+
+    expect((await app.request("http://localhost/objects", { method: "POST", headers: { "content-type": "text/plain", cookie, "x-zo-drive-file-name": "readme.txt" }, body: "private" })).status).toBe(201);
+    const invalidEditable = await app.request("http://localhost/shares", { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ key: "readme.txt", access: "public", editable: true }) });
+    expect(invalidEditable.status).toBe(400);
   });
 
   it("publishes Zo Forms and records public responses", async () => {

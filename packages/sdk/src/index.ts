@@ -4,6 +4,7 @@ import {
   createdDatabaseApiKeySchema,
   databaseImportSettingsSchema,
   databaseEngineSchema,
+  databaseExecuteResultSchema,
   databaseQueryResultSchema,
   databaseRowsSchema,
   databaseTableSchema,
@@ -23,6 +24,7 @@ import {
   listSharesResponseSchema,
   publishedFormSchema,
   publicShareSchema,
+  sharedPasteSchema,
   driveFolderSchema,
   driveObjectSchema,
   healthSchema,
@@ -31,10 +33,13 @@ import {
   listObjectsResponseSchema,
   listTrashResponseSchema,
   listFunctionRunsResponseSchema,
+  clusterInvitationSchema,
+  clusterMountSchema,
+  listClusterMountsResponseSchema,
   functionRunSchema,
   storageUsageSchema
 } from "@zo-drive/types";
-import type { ApiKeyScope, AuthStatus, CreatedDatabaseApiKey, CreatedDriveApiKey, DatabaseApiKey, DatabaseApiKeyScope, DatabaseEngine, DatabaseEngineId, DatabaseImportSettings, DatabaseQueryResult, DatabaseRows, DatabaseTable, DriveApiKey, DriveDatabase, DriveFolder, DriveFunction, DriveFunctionRun, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, FunctionRuntime, FunctionVisibility, Health, NativeFileType, PublicShare, PublishedForm, ShareAccess, ShareKind, StorageUsage } from "@zo-drive/types";
+import type { ApiKeyScope, AuthStatus, ClusterInvitation, ClusterMount, CreatedDatabaseApiKey, CreatedDriveApiKey, DatabaseApiKey, DatabaseApiKeyScope, DatabaseEngine, DatabaseEngineId, DatabaseExecuteRequest, DatabaseExecuteResult, DatabaseImportSettings, DatabaseQueryResult, DatabaseRows, DatabaseTable, DriveApiKey, DriveDatabase, DriveFolder, DriveFunction, DriveFunctionRun, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, FunctionRuntime, FunctionVisibility, Health, NativeFileType, PublicShare, PublishedForm, ShareAccess, ShareKind, SharedPaste, StorageUsage } from "@zo-drive/types";
 
 type Fetcher = typeof fetch;
 
@@ -104,6 +109,26 @@ export class ZoDriveClient {
     if (options.modifiedBefore) params.set("modifiedBefore", options.modifiedBefore);
     const suffix = params.size > 0 ? `?${params.toString()}` : "";
     const response = await this.request(`/objects${suffix}`, { method: "GET" });
+    return listObjectsResponseSchema.parse(await response.json()).objects;
+  }
+
+  async createClusterInvitation(folder: string): Promise<ClusterInvitation> {
+    const response = await this.request("/clusters/invitations", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ folder }) });
+    return clusterInvitationSchema.parse(await response.json());
+  }
+
+  async createClusterMount({ remoteUrl, inviteToken }: { remoteUrl: string; inviteToken: string }): Promise<ClusterMount> {
+    const response = await this.request("/clusters/mounts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ remoteUrl, inviteToken }) });
+    return clusterMountSchema.parse(await response.json());
+  }
+
+  async listClusterMounts(): Promise<ClusterMount[]> {
+    const response = await this.request("/clusters/mounts", { method: "GET" });
+    return listClusterMountsResponseSchema.parse(await response.json()).mounts;
+  }
+
+  async listClusterObjects(id: string): Promise<DriveObject[]> {
+    const response = await this.request(`/clusters/mounts/${encodeURIComponent(id)}/objects`, { method: "GET" });
     return listObjectsResponseSchema.parse(await response.json()).objects;
   }
 
@@ -251,8 +276,13 @@ export class ZoDriveClient {
     return databaseEngineSchema.parse(await response.json());
   }
 
-  async createDatabase(name: string): Promise<DriveDatabase> {
-    const response = await this.request("/databases", { body: JSON.stringify({ name }), headers: { "content-type": "application/json" }, method: "POST" });
+  async updateDatabaseEngine(engine: DatabaseEngineId): Promise<DatabaseEngine> {
+    const response = await this.request(`/databases/engines/${engine}/update`, { method: "POST" });
+    return databaseEngineSchema.parse(await response.json());
+  }
+
+  async createDatabase(name: string, engine: DatabaseEngineId = "sqlite"): Promise<DriveDatabase> {
+    const response = await this.request("/databases", { body: JSON.stringify({ name, engine }), headers: { "content-type": "application/json" }, method: "POST" });
     return driveDatabaseSchema.parse(await response.json());
   }
 
@@ -297,6 +327,11 @@ export class ZoDriveClient {
   async queryDatabase({ id, sql, params = [] }: { id: string; sql: string; params?: Array<string | number | boolean | null> }): Promise<DatabaseQueryResult> {
     const response = await this.request(`/databases/${encodeURIComponent(id)}/query`, { body: JSON.stringify({ sql, params }), headers: { "content-type": "application/json" }, method: "POST" });
     return databaseQueryResultSchema.parse(await response.json());
+  }
+
+  async executeDatabase({ id, request }: { id: string; request: DatabaseExecuteRequest }): Promise<DatabaseExecuteResult> {
+    const response = await this.request(`/databases/${encodeURIComponent(id)}/execute`, { body: JSON.stringify(request), headers: { "content-type": "application/json" }, method: "POST" });
+    return databaseExecuteResultSchema.parse(await response.json());
   }
 
   async listDatabaseApiKeys(databaseId: string): Promise<DatabaseApiKey[]> {
@@ -413,9 +448,9 @@ export class ZoDriveClient {
     return listSharesResponseSchema.parse(await response.json()).shares;
   }
 
-  async createShare({ key, access, kind, passcode, expiresAt }: { key: string; access: ShareAccess; kind?: ShareKind; passcode?: string; expiresAt?: string | null }): Promise<DriveShare> {
+  async createShare({ key, access, editable = false, kind, passcode, expiresAt }: { key: string; access: ShareAccess; editable?: boolean; kind?: ShareKind; passcode?: string; expiresAt?: string | null }): Promise<DriveShare> {
     const response = await this.request("/shares", {
-      body: JSON.stringify({ key, access, kind, passcode, expiresAt }),
+      body: JSON.stringify({ key, access, editable, kind, passcode, expiresAt }),
       headers: { "content-type": "application/json" },
       method: "POST"
     });
@@ -470,6 +505,20 @@ export class ZoDriveClient {
 
   async downloadShared(id: string, passcode?: string): Promise<Response> {
     return this.request(`/shared/${encodeURIComponent(id)}/content`, { headers: passcode ? { "x-zo-drive-share-passcode": passcode } : undefined, method: "GET" });
+  }
+
+  async openSharedPaste(id: string, passcode?: string): Promise<SharedPaste> {
+    const response = await this.request(`/shared/${encodeURIComponent(id)}/paste`, { headers: passcode ? { "x-zo-drive-share-passcode": passcode } : undefined, method: "GET" });
+    return sharedPasteSchema.parse(await response.json());
+  }
+
+  async saveSharedPaste({ id, content, expectedRevision, passcode }: { id: string; content: SharedPaste["content"]; expectedRevision: string; passcode?: string }): Promise<SharedPaste> {
+    const response = await this.request(`/shared/${encodeURIComponent(id)}/paste`, {
+      body: JSON.stringify({ content, expectedRevision }),
+      headers: { "content-type": "application/json", ...(passcode ? { "x-zo-drive-share-passcode": passcode } : {}) },
+      method: "PUT"
+    });
+    return sharedPasteSchema.parse(await response.json());
   }
 
   private async request(path: string, init: RequestInit): Promise<Response> {
