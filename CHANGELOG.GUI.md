@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.23.2 - 2026-07-22
+
+### Changed
+
+- Cleaned up Zo Databases catalogue actions with aligned full-width primary
+  controls and compact update buttons.
+
 ## v1.23.1 - 2026-07-22
 
 ### Fixed

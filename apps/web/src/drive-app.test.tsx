@@ -428,6 +428,8 @@ describe("DriveApp", () => {
     await waitFor(() => expect(client.installDatabaseEngine).toHaveBeenCalledWith("redis"));
     expect(await screen.findByRole("button", { name: "Create Redis database" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Update Redis" })).toBeInTheDocument();
+    expect(screen.getByTestId("database-engine-actions-redis")).toHaveClass("grid", "grid-cols-[minmax(0,1fr)_2.75rem]");
+    expect(screen.getByTestId("database-engine-actions-duckdb").querySelector("button")).toHaveClass("w-full");
     fireEvent.click(screen.getByRole("button", { name: "Install SQLite" }));
     await waitFor(() => expect(client.installDatabaseEngine).toHaveBeenCalledWith("sqlite"));
     fireEvent.click(await screen.findByRole("button", { name: "Create SQLite database" }));
