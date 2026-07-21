@@ -4,6 +4,13 @@ All notable changes to the Zo Drive browser experience are recorded here.
 
 ## Unreleased
 
+## v1.16.1 - 2026-07-21
+
+### Fixed
+
+- Use a dedicated high-numbered local port for ZominAI, correct the Mac runtime
+  setup, and explain when another local service occupies the selected port.
+
 ## v1.16.0 - 2026-07-21
 
 ### Added

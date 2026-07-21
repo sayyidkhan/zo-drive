@@ -204,10 +204,15 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.16.0";
+const GUI_VERSION = "1.16.1";
 const CLI_VERSION = "1.2.1";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.16.1",
+    date: "2026-07-21",
+    changes: ["Fixed ZominAI local setup with a dedicated high-numbered port, a supported Mac runtime command, and clearer runtime verification errors."]
+  },
   {
     version: "v1.16.0",
     date: "2026-07-21",
@@ -749,21 +754,20 @@ function SettingsCard({ children, description, danger = false, icon, title }: { 
 const zominAiStorageKey = "zo-drive:zominai:v1";
 const defaultZominAiSettings: ZominAiSettings = {
   contextTokens: 4096,
-  endpoint: "http://127.0.0.1:8080",
+  endpoint: "http://127.0.0.1:57183",
   model: "Bonsai-27B-Q1_0.gguf"
 };
-const zominAiInstallCommand = `git clone https://github.com/PrismML-Eng/llama.cpp
-cd llama.cpp
-cmake -B build && cmake --build build -j
-hf download prism-ml/Bonsai-27B-gguf Bonsai-27B-Q1_0.gguf --local-dir ../zominai-model
-./build/bin/llama-server -m ../zominai-model/Bonsai-27B-Q1_0.gguf --host 127.0.0.1 --port 8080 -ngl 99`;
+const zominAiInstallCommand = `brew install llama.cpp
+llama-server --hf-repo prism-ml/Bonsai-27B-gguf --hf-file Bonsai-27B-Q1_0.gguf \\
+  --gpu-layers all --ctx-size 4096 --host 127.0.0.1 --port 57183 \\
+  --cors-origins https://public-apps-sayyidkhan.zocomputer.io --no-cors-credentials`;
 
 function readZominAiSettings(): ZominAiSettings {
   try {
     const saved = JSON.parse(window.localStorage.getItem(zominAiStorageKey) ?? "{}") as Partial<ZominAiSettings>;
     return {
       contextTokens: typeof saved.contextTokens === "number" && Number.isFinite(saved.contextTokens) ? Math.max(1024, Math.min(32768, Math.round(saved.contextTokens))) : defaultZominAiSettings.contextTokens,
-      endpoint: typeof saved.endpoint === "string" && saved.endpoint ? saved.endpoint : defaultZominAiSettings.endpoint,
+      endpoint: saved.endpoint === "http://127.0.0.1:8080" ? defaultZominAiSettings.endpoint : typeof saved.endpoint === "string" && saved.endpoint ? saved.endpoint : defaultZominAiSettings.endpoint,
       model: typeof saved.model === "string" && saved.model ? saved.model : defaultZominAiSettings.model
     };
   } catch {
@@ -813,7 +817,10 @@ async function verifyZominAiInstall(settings: ZominAiSettings): Promise<ZominAiV
   let runtime: ZominAiVerification["runtime"];
   try {
     const response = await fetch(modelsUrl, { headers: { Accept: "application/json" }, signal: controller.signal });
-    if (!response.ok) throw new Error(`Runtime returned ${response.status}`);
+    if (!response.ok) {
+      runtime = { ready: false, detail: `A local service responded at ${settings.endpoint}, but it is not the ZominAI runtime (HTTP ${response.status}). ZominAI uses port 57183 by default.` };
+      return { checkedAt: new Date().toISOString(), runtime, storage, webGpu };
+    }
     const body = await response.json() as { data?: Array<{ id?: unknown }> };
     const modelIds = (body.data ?? []).flatMap((model) => typeof model.id === "string" ? [model.id] : []);
     const bonsaiLoaded = modelIds.some((id) => /bonsai/i.test(id));
@@ -821,7 +828,7 @@ async function verifyZominAiInstall(settings: ZominAiSettings): Promise<ZominAiV
       ? { ready: true, detail: `Bonsai is available from ${settings.endpoint}.` }
       : { ready: false, detail: `The runtime responded, but it is not serving a Bonsai model yet.` };
   } catch {
-    runtime = { ready: false, detail: "Could not reach a local Bonsai runtime. Start it on this device and allow this Zo Drive origin in CORS." };
+    runtime = { ready: false, detail: `No local ZominAI runtime is listening at ${settings.endpoint}. If you just installed it, the first model download and start-up can take a few minutes.` };
   } finally {
     window.clearTimeout(timeout);
   }
@@ -885,7 +892,7 @@ function ZominAiWorkspace() {
     <div className="grid gap-5 xl:grid-cols-[17rem_minmax(0,1fr)]"><aside className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-sm"><p className="px-3 pb-2 pt-3 text-xs font-bold uppercase tracking-[0.16em] text-slate-400">ZominAI</p>{panes.map((pane) => <button aria-label={`ZominAI menu: ${pane.label}`} className={`mb-1 flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left transition ${activePane === pane.id ? "bg-cyan-950 text-white shadow-sm" : "text-slate-700 hover:bg-slate-50"}`} key={pane.id} onClick={() => { setActivePane(pane.id); setConfirmUninstall(false); }}><span className={`mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg ${activePane === pane.id ? "bg-white/15 text-cyan-100" : "bg-slate-100 text-slate-500"}`}>{pane.icon}</span><span><span className="block text-sm font-semibold">{pane.label}</span><span className={`mt-0.5 block text-xs leading-5 ${activePane === pane.id ? "text-cyan-100" : "text-slate-400"}`}>{pane.description}</span></span></button>)}</aside>
       <div className="min-w-0">
         {activePane === "verify" && <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-700">Readiness check</p><h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">Verify this device before downloading.</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">This checks browser WebGPU, estimated local storage, and the configured localhost runtime. It does not inspect or upload files from this Drive.</p></div><button aria-label="Verify ZominAI install" className="inline-flex items-center gap-2 rounded-lg bg-cyan-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-cyan-800 disabled:bg-slate-300" disabled={verifying} onClick={() => void verify()}>{verifying ? <LoaderCircle className="animate-spin" size={17} /> : <ShieldCheck size={17} />}{verifying ? "Checking…" : "Verify install"}</button></div>{verification ? <div className="mt-6 grid gap-3"><ZominAiCheck label="WebGPU" result={verification.webGpu} /><ZominAiCheck label="Browser storage" result={verification.storage} /><ZominAiCheck label="Local runtime" result={verification.runtime} /><p className="pt-1 text-xs text-slate-400">Last checked {new Date(verification.checkedAt).toLocaleString()}.</p></div> : <div className="mt-6 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">No verification has run in this browser yet.</div>}</section>}
-        {activePane === "install" && <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-700">Local installation</p><h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">Install Bonsai where you use it.</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Bonsai ships as GGUF weights and needs a local runtime such as the PrismML llama.cpp fork. Zo Drive cannot install a native runtime or a 3.9 GB model into this remote server on your behalf.</p><div className="mt-6 rounded-xl bg-slate-950 p-4"><pre className="overflow-x-auto text-xs leading-6 text-cyan-100"><code>{zominAiInstallCommand}</code></pre></div><div className="mt-5 flex flex-wrap gap-3"><button className="inline-flex items-center gap-2 rounded-lg bg-cyan-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-cyan-800" onClick={() => void copyInstallCommand()}><Copy size={17} /> Copy local setup</button><a className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="https://huggingface.co/prism-ml/Bonsai-27B-gguf" rel="noreferrer" target="_blank">Open Bonsai download <ExternalLink size={16} /></a><button className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-cyan-800 hover:bg-cyan-50" onClick={() => setActivePane("verify")}>Verify after setup <ArrowUpRight size={16} /></button></div></section>}
+        {activePane === "install" && <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-700">Local installation</p><h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">Install Bonsai where you use it.</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">ZominAI runs on your own Mac, not on the Zo server. This installs the Metal-enabled runtime and starts the model at a dedicated local address, <span className="font-mono text-slate-700">127.0.0.1:57183</span>. The first run downloads about 3.8 GB to your Mac.</p><div className="mt-6 rounded-xl bg-slate-950 p-4"><pre className="overflow-x-auto text-xs leading-6 text-cyan-100"><code>{zominAiInstallCommand}</code></pre></div><div className="mt-5 flex flex-wrap gap-3"><button className="inline-flex items-center gap-2 rounded-lg bg-cyan-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-cyan-800" onClick={() => void copyInstallCommand()}><Copy size={17} /> Copy local setup</button><a className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="https://huggingface.co/prism-ml/Bonsai-27B-gguf" rel="noreferrer" target="_blank">Open Bonsai download <ExternalLink size={16} /></a><button className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-cyan-800 hover:bg-cyan-50" onClick={() => setActivePane("verify")}>Verify after setup <ArrowUpRight size={16} /></button></div></section>}
         {activePane === "settings" && <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-700">Connection settings</p><h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">ZominAI settings</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">These values stay in this browser only. The endpoint must be local to protect Drive data from accidental remote inference routing.</p><div className="mt-6 grid gap-5 md:grid-cols-2"><label className="block text-sm font-semibold text-slate-700">Local runtime address<input aria-label="ZominAI runtime address" className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-mono text-sm outline-none focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100" value={settings.endpoint} onChange={(event) => { setUninstalled(false); setSettings((current) => ({ ...current, endpoint: event.target.value })); }} /></label><label className="block text-sm font-semibold text-slate-700">Model file<input aria-label="ZominAI model file" className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-mono text-sm outline-none focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100" value={settings.model} onChange={(event) => { setUninstalled(false); setSettings((current) => ({ ...current, model: event.target.value })); }} /></label><label className="block text-sm font-semibold text-slate-700">Context window<input aria-label="ZominAI context window" className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100" max={32768} min={1024} step={1024} type="number" value={settings.contextTokens} onChange={(event) => { setUninstalled(false); setSettings((current) => ({ ...current, contextTokens: Number(event.target.value) || 1024 })); }} /></label></div><div className="mt-6 flex flex-wrap items-center gap-3"><button className="inline-flex items-center gap-2 rounded-lg bg-cyan-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-cyan-800" onClick={() => void verify()}><Cpu size={17} /> Save and verify</button><p className="text-xs text-slate-400">Saved automatically in this browser.</p></div></section>}
         {activePane === "uninstall" && <section className="rounded-2xl border border-red-200 bg-white p-6 shadow-sm"><p className="text-xs font-bold uppercase tracking-[0.16em] text-red-600">Remove local settings</p><h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">Uninstall ZominAI from this browser</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">This clears ZominAI’s local endpoint, model preference, and verification record from this browser. It cannot remove the model or llama.cpp runtime from your Mac, iPhone, or another device.</p>{confirmUninstall ? <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4"><p className="text-sm font-medium text-red-900">Remove ZominAI browser settings now?</p><div className="mt-4 flex gap-3"><button aria-label="Confirm uninstall ZominAI" className="rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700" onClick={uninstall}>Remove settings</button><button className="rounded-lg border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-red-50" onClick={() => setConfirmUninstall(false)}>Cancel</button></div></div> : <button aria-label="Uninstall ZominAI browser settings" className="mt-6 inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-50" onClick={() => setConfirmUninstall(true)}><Trash2 size={17} /> Uninstall ZominAI</button>}</section>}
       </div>
