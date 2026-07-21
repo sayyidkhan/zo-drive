@@ -262,10 +262,15 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.23.0";
+const GUI_VERSION = "1.23.1";
 const CLI_VERSION = "1.2.1";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.23.1",
+    date: "2026-07-22",
+    changes: ["Made the desktop ZominAI drawer boundary and resize rail clearly visible, so it reads as a distinct workspace beside Drive content."]
+  },
   {
     version: "v1.23.0",
     date: "2026-07-22",
@@ -1318,8 +1323,8 @@ function ZominAiChatDrawer({ client, isOpen, onClose, settings }: { client: Driv
     }
   }
 
-  return <aside aria-label="ZominAI chat" aria-hidden={!isOpen} className={`fixed inset-y-0 right-0 z-[70] w-full max-w-[32rem] overflow-hidden border-l border-slate-200 bg-white pt-[4.5rem] shadow-2xl shadow-slate-950/20 transition-[transform,width,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none sm:w-[30rem] md:relative md:z-auto md:h-full md:max-w-none md:shrink-0 md:translate-x-0 md:border-l-0 md:bg-transparent md:pt-0 md:shadow-none ${isOpen ? "translate-x-0 md:w-[var(--zominai-drawer-width)] md:border-l md:border-slate-200 md:bg-white md:shadow-2xl md:shadow-slate-950/10" : "pointer-events-none translate-x-full md:w-0"}`} style={{ "--zominai-drawer-width": `${drawerWidth}px` } as React.CSSProperties}>
-    {isOpen && <button aria-label="Resize ZominAI chat" className={`absolute inset-y-0 left-0 z-10 hidden w-3 cursor-col-resize touch-none md:block ${resizing ? "bg-cyan-200/70" : "hover:bg-cyan-100/70"}`} onPointerDown={startResize} title="Drag to resize chat" type="button"><span className="mx-auto block h-10 w-px rounded bg-slate-300" /></button>}
+  return <aside aria-label="ZominAI chat" aria-hidden={!isOpen} className={`fixed inset-y-0 right-0 z-[70] w-full max-w-[32rem] overflow-hidden border-l border-slate-300 bg-white pt-[4.5rem] shadow-2xl shadow-slate-950/20 transition-[transform,width,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none sm:w-[30rem] md:relative md:z-auto md:h-full md:max-w-none md:shrink-0 md:translate-x-0 md:border-l-0 md:bg-transparent md:pt-0 md:shadow-none ${isOpen ? "translate-x-0 md:w-[var(--zominai-drawer-width)] md:border-l-2 md:border-slate-300 md:bg-white md:shadow-2xl md:shadow-slate-950/10" : "pointer-events-none translate-x-full md:w-0"}`} style={{ "--zominai-drawer-width": `${drawerWidth}px` } as React.CSSProperties}>
+    {isOpen && <button aria-label="Resize ZominAI chat" className={`absolute inset-y-0 left-0 z-10 hidden w-4 cursor-col-resize touch-none md:block ${resizing ? "bg-cyan-100" : "hover:bg-cyan-50"}`} onPointerDown={startResize} title="Drag to resize chat" type="button"><span aria-hidden="true" className={`absolute inset-y-0 left-1/2 w-px -translate-x-1/2 ${resizing ? "bg-cyan-500" : "bg-slate-300"}`} /><span aria-hidden="true" className={`absolute left-1/2 top-1/2 h-12 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full ${resizing ? "bg-cyan-600" : "bg-slate-400"}`} /></button>}
     <div className={`flex h-full w-full flex-col bg-white transition-[transform,opacity] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none md:w-[var(--zominai-drawer-width)] ${isOpen ? "translate-x-0 opacity-100" : "translate-x-8 opacity-0"}`}>
       <header className="flex items-center gap-3 border-b border-slate-200 px-4 py-3">
         <span className="grid size-9 place-items-center overflow-hidden rounded-xl bg-cyan-950 p-0.5"><img className="size-full rounded-[0.6rem] object-cover" src={zominAiButtonUrl} alt="ZominAI Pegasus" /></span>

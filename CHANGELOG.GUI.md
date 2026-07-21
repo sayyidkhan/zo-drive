@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.23.1 - 2026-07-22
+
+### Fixed
+
+- Made the desktop ZominAI drawer boundary and resize rail clearly visible, so
+  it reads as a distinct workspace beside Drive content.
+
 ## v1.23.0 - 2026-07-22
 
 ### Added
