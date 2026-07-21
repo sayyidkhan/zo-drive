@@ -183,11 +183,17 @@ const appBasePath = normalizeAppBasePath(
 );
 const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
+const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.14.0";
+const GUI_VERSION = "1.15.0";
 const CLI_VERSION = "1.2.1";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.15.0",
+    date: "2026-07-21",
+    changes: ["Added a ZominAI entry button to the private Zo Drive header."]
+  },
   {
     version: "v1.14.0",
     date: "2026-07-21",
@@ -1050,6 +1056,9 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
           />
         </label>
         <button aria-label="Advanced search" className={`rounded-lg p-2 transition ${advancedSearchActive ? "bg-blue-50 text-blue-700" : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"}`} onClick={() => { setAdvancedFilters(appliedAdvancedFilters); setAdvancedSearchOpen(true); }}><SlidersHorizontal size={21} /></button>
+        <button aria-label="ZominAI" className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-0.5 shadow-sm transition hover:border-blue-300 hover:bg-blue-50" onClick={() => toast.message("ZominAI is coming to Zo Drive.")} title="ZominAI">
+          <img className="size-full rounded-[0.65rem] object-cover" src={zominAiButtonUrl} alt="" />
+        </button>
         <div className="flex items-center gap-1 text-sm font-medium text-slate-500">
           <div className="relative">
             <button title="Account menu" aria-label="Account menu" aria-expanded={accountMenuOpen} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800" onClick={() => setAccountMenuOpen((open) => !open)}><MoreHorizontal size={21} /></button>

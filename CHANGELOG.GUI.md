@@ -4,6 +4,12 @@ All notable changes to the Zo Drive browser experience are recorded here.
 
 ## Unreleased
 
+## v1.15.0 - 2026-07-21
+
+### Added
+
+- Added a ZominAI entry button to the private Zo Drive header.
+
 ## v1.14.0 - 2026-07-21
 
 ### Added
