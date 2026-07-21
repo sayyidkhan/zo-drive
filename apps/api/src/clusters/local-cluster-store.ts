@@ -11,6 +11,7 @@ type Data = { invitations: Invitation[]; peers: Peer[]; mounts: Mount[] };
 
 export type ClusterMount = Omit<Mount, "ownerUserId" | "remotePeerKey">;
 export type ClusterPeer = Omit<Peer, "ownerUserId" | "secretHash">;
+export type ClusterPendingInvitation = Omit<Invitation, "ownerUserId" | "secretHash" | "claimedAt">;
 
 export class LocalClusterStore {
   private readonly file: string;
@@ -56,6 +57,20 @@ export class LocalClusterStore {
   }
 
   async listMounts(ownerUserId: string): Promise<ClusterMount[]> { return (await this.read()).mounts.filter((item) => item.ownerUserId === ownerUserId).map(publicMount); }
+  async listPendingInvitations(ownerUserId: string): Promise<ClusterPendingInvitation[]> {
+    const now = Date.now();
+    return (await this.read()).invitations.filter((item) => item.ownerUserId === ownerUserId && !item.claimedAt && Date.parse(item.expiresAt) > now).map(publicPendingInvitation);
+  }
+  async removeInvitation({ ownerUserId, id }: { ownerUserId: string; id: string }): Promise<boolean> {
+    return this.withWriteLock(async () => {
+      const data = await this.read();
+      const index = data.invitations.findIndex((item) => item.id === id && item.ownerUserId === ownerUserId && !item.claimedAt);
+      if (index < 0) return false;
+      data.invitations.splice(index, 1);
+      await this.write(data);
+      return true;
+    });
+  }
   async listPeers(ownerUserId: string): Promise<ClusterPeer[]> { return (await this.read()).peers.filter((item) => item.ownerUserId === ownerUserId).map(publicPeer); }
   async findMount({ ownerUserId, id }: { ownerUserId: string; id: string }): Promise<Mount | null> { return (await this.read()).mounts.find((item) => item.ownerUserId === ownerUserId && item.id === id) ?? null; }
   async removeMount({ ownerUserId, id }: { ownerUserId: string; id: string }): Promise<Mount | null> {
@@ -126,4 +141,5 @@ export class LocalClusterStore {
 function hash(value: string) { return createHash("sha256").update(value).digest("hex"); }
 function sameHash(left: string, right: string) { const a = Buffer.from(left); const b = Buffer.from(right); return a.length === b.length && timingSafeEqual(a, b); }
 function publicMount({ ownerUserId: _ownerUserId, remotePeerKey: _remotePeerKey, role = "editor", recipient = null, ...mount }: Mount): ClusterMount { return { ...mount, role, recipient }; }
+function publicPendingInvitation({ ownerUserId: _ownerUserId, secretHash: _secretHash, claimedAt: _claimedAt, ...invitation }: Invitation): ClusterPendingInvitation { return invitation; }
 function publicPeer({ ownerUserId: _ownerUserId, secretHash: _secretHash, role = "editor", recipient = null, ...peer }: Peer): ClusterPeer { return { ...peer, role, recipient }; }

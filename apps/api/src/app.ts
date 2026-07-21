@@ -473,6 +473,18 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     return context.json(await clusters.createInvitation({ ownerUserId: userId, folder: parsed.data.folder, role: parsed.data.role, recipient: parsed.data.recipient ?? null }), 201);
   });
 
+  app.get("/clusters/invitations", async (context) => {
+    const userId = await requireClusterOwner(context.req.raw, resolveActiveUser, auth);
+    return userId ? context.json({ invitations: await clusters.listPendingInvitations(userId) }) : unauthorized(context);
+  });
+
+  app.delete("/clusters/invitations/:id", async (context) => {
+    const userId = await requireClusterOwner(context.req.raw, resolveActiveUser, auth);
+    if (!userId) return unauthorized(context);
+    const removed = await clusters.removeInvitation({ ownerUserId: userId, id: context.req.param("id") });
+    return removed ? context.body(null, 204) : context.json({ error: { code: "NOT_FOUND", message: "Pending pairing key not found" } }, 404);
+  });
+
   app.post("/cluster/invitations/accept", async (context) => {
     const parsed = z.object({ inviteToken: z.string().min(20).max(256) }).safeParse(await context.req.json().catch(() => null));
     if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Invalid cluster invitation" } }, 400);

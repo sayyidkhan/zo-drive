@@ -62,10 +62,16 @@ surface and use JSON except for object upload/download.
 ### Authenticated routes
 
 - `GET|POST /folders` — list folders or create one.
-- `POST /clusters/invitations`, `POST|GET|DELETE /clusters/mounts`, and
-  `GET|POST /clusters/mounts/{id}/objects` — pair a trusted Zo Drive with a
-  one-time invitation, then list, upload, or disconnect a folder-scoped
-  remote mount. Use only with the owner's explicit instruction.
+- `GET|POST /clusters/invitations` and `DELETE /clusters/invitations/{id}` —
+  create, list, or cancel unclaimed one-time pairing keys. Listing never
+  returns a key secret; creation is the only time the key is returned.
+- `POST|GET|DELETE /clusters/mounts` and `GET|POST
+  /clusters/mounts/{id}/objects` — pair a trusted Zo Drive with a one-time
+  invitation, then list, upload, or disconnect a folder-scoped remote mount.
+  Use only with the owner's explicit instruction.
+- `GET /clusters/peers`, `PATCH /clusters/peers/{id}`, and
+  `DELETE /clusters/peers/{id}` — inspect, change, or revoke active remote
+  folder access. Revocation invalidates the recipient's peer credential.
 - `POST /clusters/mounts/{id}/folders` and
   `GET|PATCH|DELETE /clusters/mounts/{id}/objects/{key}` — create a folder or
   download, rename, and move a mounted peer file to the remote owner's Trash.

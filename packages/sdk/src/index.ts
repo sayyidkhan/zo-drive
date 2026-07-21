@@ -34,6 +34,7 @@ import {
   listTrashResponseSchema,
   listFunctionRunsResponseSchema,
   clusterInvitationSchema,
+  listClusterInvitationsResponseSchema,
   clusterMountSchema,
   clusterAccessSchema,
   clusterPeerSchema,
@@ -42,7 +43,7 @@ import {
   functionRunSchema,
   storageUsageSchema
 } from "@zo-drive/types";
-import type { ApiKeyScope, AuthStatus, ClusterInvitation, ClusterMount, ClusterPeer, ClusterRole, CreatedDatabaseApiKey, CreatedDriveApiKey, DatabaseApiKey, DatabaseApiKeyScope, DatabaseEngine, DatabaseEngineId, DatabaseExecuteRequest, DatabaseExecuteResult, DatabaseImportSettings, DatabaseQueryResult, DatabaseRows, DatabaseTable, DriveApiKey, DriveDatabase, DriveFolder, DriveFunction, DriveFunctionRun, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, FunctionRuntime, FunctionVisibility, Health, NativeFileType, PublicShare, PublishedForm, ShareAccess, ShareKind, SharedPaste, StorageUsage } from "@zo-drive/types";
+import type { ApiKeyScope, AuthStatus, ClusterInvitation, ClusterMount, ClusterPeer, ClusterPendingInvitation, ClusterRole, CreatedDatabaseApiKey, CreatedDriveApiKey, DatabaseApiKey, DatabaseApiKeyScope, DatabaseEngine, DatabaseEngineId, DatabaseExecuteRequest, DatabaseExecuteResult, DatabaseImportSettings, DatabaseQueryResult, DatabaseRows, DatabaseTable, DriveApiKey, DriveDatabase, DriveFolder, DriveFunction, DriveFunctionRun, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, FunctionRuntime, FunctionVisibility, Health, NativeFileType, PublicShare, PublishedForm, ShareAccess, ShareKind, SharedPaste, StorageUsage } from "@zo-drive/types";
 
 type Fetcher = typeof fetch;
 
@@ -123,6 +124,15 @@ export class ZoDriveClient {
   async createClusterMount({ remoteUrl, inviteToken }: { remoteUrl: string; inviteToken: string }): Promise<ClusterMount> {
     const response = await this.request("/clusters/mounts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ remoteUrl, inviteToken }) });
     return clusterMountSchema.parse(await response.json());
+  }
+
+  async listClusterInvitations(): Promise<ClusterPendingInvitation[]> {
+    const response = await this.request("/clusters/invitations", { method: "GET" });
+    return listClusterInvitationsResponseSchema.parse(await response.json()).invitations;
+  }
+
+  async deleteClusterInvitation(id: string): Promise<void> {
+    await this.request(`/clusters/invitations/${encodeURIComponent(id)}`, { method: "DELETE" });
   }
 
   async listClusterMounts(): Promise<ClusterMount[]> {

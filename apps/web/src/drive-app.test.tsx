@@ -40,9 +40,9 @@ describe("DriveApp", () => {
 
       expect(screen.getByRole("heading", { name: "Manage files in your private Drive." })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Share files on your terms" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 1.18.2" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 1.19.0" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI changelog version 1.18.2" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
+      expect(screen.getByRole("link", { name: "GUI changelog version 1.19.0" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
       expect(screen.getByText((_, element) => element?.tagName === "H3" && element.textContent === "GUI v1.17.0")).toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
@@ -77,7 +77,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.18.2")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.19.0")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();
@@ -205,11 +205,13 @@ describe("DriveApp", () => {
       createClusterInvitation: vi.fn().mockResolvedValue({ id: "11111111-1111-4111-8111-111111111111", folder: "Projects/Shared", role: "editor", recipient: null, createdAt: "2026-07-21T00:00:00.000Z", expiresAt: "2026-07-21T00:15:00.000Z", token: "zci_11111111111141118111111111111111_example" }),
       createClusterMount: vi.fn(),
       createClusterFolder: vi.fn(),
+      deleteClusterInvitation: vi.fn(),
       deleteClusterMount: vi.fn(),
       deleteClusterObject: vi.fn(),
       deleteClusterPeer: vi.fn(),
       downloadClusterObject: vi.fn(),
       getClusterMountAccess: vi.fn().mockResolvedValue({ role: "editor" }),
+      listClusterInvitations: vi.fn().mockResolvedValue([{ id: "22222222-2222-4222-8222-222222222222", folder: "Notes", role: "viewer", recipient: "Maya", createdAt: "2026-07-21T00:00:00.000Z", expiresAt: "2026-07-21T00:15:00.000Z" }]),
       listClusterMounts: vi.fn().mockResolvedValue([]),
       listClusterObjects: vi.fn().mockResolvedValue([]),
       listClusterPeers: vi.fn().mockResolvedValue([]),
@@ -281,6 +283,10 @@ describe("DriveApp", () => {
     expect(screen.getByRole("button", { name: "ZominAI settings" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "ZominAI settings" }));
     expect(await screen.findByRole("heading", { name: "ZominAI settings" })).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "ZominAI resources" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /PrismML overview/ })).toHaveAttribute("href", "https://prismml.com/");
+    expect(screen.getByRole("link", { name: /Bonsai model & licence/ })).toHaveAttribute("href", "https://huggingface.co/prism-ml/Bonsai-27B-gguf");
+    expect(screen.getByRole("link", { name: /Runtime installation docs/ })).toHaveAttribute("href", "https://github.com/ggml-org/llama.cpp/blob/master/docs/install.md");
     expect(screen.getByRole("button", { name: "ZominAI menu: Verify install" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "ZominAI menu: Install ZominAI" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "ZominAI menu: ZominAI settings" })).toBeInTheDocument();
@@ -328,6 +334,9 @@ describe("DriveApp", () => {
     expect(await screen.findByRole("heading", { name: "Create shared drives with people you trust." })).toBeInTheDocument();
     expect(screen.getByText("Recursive scope")).toBeInTheDocument();
     expect(screen.getByText("Shared with me")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Exposed folders" })).toBeInTheDocument();
+    expect(screen.getByText("Pending pairing keys")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel key" })).toBeInTheDocument();
     fireEvent.click(await screen.findByLabelText("Share folder Notes"));
     fireEvent.click(screen.getByRole("button", { name: "Create 1 pairing key" }));
     await waitFor(() => expect(client.createClusterInvitation).toHaveBeenCalledWith({ folder: "Notes", role: "editor", recipient: null }));

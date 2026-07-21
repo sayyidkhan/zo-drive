@@ -26,22 +26,28 @@ describe("ZoDriveClient", () => {
     expect(fetcher).toHaveBeenCalledWith("https://drive.example/health", expect.objectContaining({ method: "GET" }));
   });
 
-  it("creates and manages role-scoped shared folder access", async () => {
+  it("creates, lists, cancels, and manages role-scoped shared folder access", async () => {
     const peer = { id: "11111111-1111-4111-8111-111111111111", folder: "Clients/Maya", role: "viewer", recipient: "Maya", createdAt: "2026-01-01T00:00:00.000Z" };
     const invitation = { ...peer, expiresAt: "2026-01-01T00:15:00.000Z", token: "zci_11111111111141118111111111111111_example" };
     const fetcher = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify(invitation), { status: 201 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ invitations: [{ ...peer, expiresAt: invitation.expiresAt }] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ peers: [peer] }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ ...peer, role: "editor" }), { status: 200 }))
       .mockResolvedValueOnce(new Response(null, { status: 204 }));
     const client = new ZoDriveClient({ baseUrl: "https://drive.example", fetcher });
 
     await expect(client.createClusterInvitation({ folder: "Clients/Maya", role: "viewer", recipient: "Maya" })).resolves.toMatchObject({ role: "viewer", recipient: "Maya" });
+    await expect(client.listClusterInvitations()).resolves.toEqual([{ ...peer, expiresAt: invitation.expiresAt }]);
+    await expect(client.deleteClusterInvitation(peer.id)).resolves.toBeUndefined();
     await expect(client.listClusterPeers()).resolves.toEqual([peer]);
     await expect(client.updateClusterPeerRole({ id: peer.id, role: "editor" })).resolves.toMatchObject({ role: "editor" });
     await expect(client.deleteClusterPeer(peer.id)).resolves.toBeUndefined();
     expect(fetcher).toHaveBeenNthCalledWith(1, "https://drive.example/clusters/invitations", expect.objectContaining({ method: "POST" }));
-    expect(fetcher).toHaveBeenNthCalledWith(4, `https://drive.example/clusters/peers/${peer.id}`, expect.objectContaining({ method: "DELETE" }));
+    expect(fetcher).toHaveBeenNthCalledWith(2, "https://drive.example/clusters/invitations", expect.objectContaining({ method: "GET" }));
+    expect(fetcher).toHaveBeenNthCalledWith(3, `https://drive.example/clusters/invitations/${peer.id}`, expect.objectContaining({ method: "DELETE" }));
+    expect(fetcher).toHaveBeenNthCalledWith(6, `https://drive.example/clusters/peers/${peer.id}`, expect.objectContaining({ method: "DELETE" }));
   });
 
   it("sends advanced file search options through the list endpoint", async () => {

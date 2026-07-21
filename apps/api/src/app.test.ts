@@ -98,6 +98,21 @@ describe("Zo Drive API", () => {
     expect((await app.request(`http://localhost/cluster/peers/${peer.peerId}/access`, { headers: { authorization: `Bearer ${peer.peerKey}` } })).status).toBe(401);
   });
 
+  it("lists and cancels pending cluster pairing keys without returning their secret", async () => {
+    const app = await createTestApp();
+    const headers = { "content-type": "application/json", "x-test-user-id": "alice" };
+    const invitation = await app.request("http://localhost/clusters/invitations", { method: "POST", headers, body: JSON.stringify({ folder: "Clients/Maya", role: "viewer", recipient: "Maya" }) });
+    const created = await invitation.json() as { id: string; token: string };
+
+    const pending = await app.request("http://localhost/clusters/invitations", { headers });
+    expect(pending.status).toBe(200);
+    await expect(pending.json()).resolves.toEqual({ invitations: [expect.objectContaining({ id: created.id, folder: "Clients/Maya", role: "viewer", recipient: "Maya" })] });
+    expect((await app.request(`http://localhost/clusters/invitations/${created.id}`, { method: "DELETE", headers })).status).toBe(204);
+    const afterCancel = await app.request("http://localhost/clusters/invitations", { headers });
+    await expect(afterCancel.json()).resolves.toEqual({ invitations: [] });
+    expect((await app.request("http://localhost/cluster/invitations/accept", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ inviteToken: created.token }) })).status).toBe(410);
+  });
+
   it("proxies mounted folder writes without exposing the peer credential to the browser", async () => {
     const remote = await createTestApp();
     const local = await createTestApp();

@@ -69,7 +69,7 @@ import { create } from "zustand";
 import { ZoDriveClient } from "@zo-drive/sdk";
 import type { ApiKeyScope, AuthStatus, ClusterInvitation, ClusterMount, ClusterRole, DatabaseApiKey, DatabaseApiKeyScope, DatabaseEngine, DatabaseEngineId, DatabaseExecuteResult, DatabaseImportSettings, DatabaseRows, DriveApiKey, DriveDatabase, DriveFolder, DriveFunction, DriveFunctionRun, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, FunctionRuntime, FunctionVisibility, NativeFileType, PublicShare, PublishedForm, ShareAccess, StorageUsage } from "@zo-drive/types";
 
-type DriveClient = Pick<ZoDriveClient, "createApiKey" | "createFolder" | "createNativeFile" | "createShare" | "delete" | "download" | "emptyTrash" | "getUsage" | "list" | "listApiKeys" | "listFolders" | "listFormResponses" | "listShares" | "listStarred" | "listTrash" | "permanentlyDeleteTrash" | "publishForm" | "rename" | "restoreTrash" | "revokeApiKey" | "revokeShare" | "saveNativeFile" | "setQuota" | "star" | "unstar" | "updateSharePasscode" | "upload"> & Partial<Pick<ZoDriveClient, "createClusterFolder" | "createClusterInvitation" | "createClusterMount" | "deleteClusterMount" | "deleteClusterObject" | "deleteClusterPeer" | "downloadClusterObject" | "getClusterMountAccess" | "listClusterMounts" | "listClusterObjects" | "listClusterPeers" | "renameClusterObject" | "updateClusterPeerRole" | "uploadClusterObject" | "createDatabase" | "createDatabaseApiKey" | "deleteDatabase" | "executeDatabase" | "exportDatabase" | "getDatabaseImportSettings" | "importDatabase" | "installDatabaseEngine" | "listDatabaseApiKeys" | "listDatabaseEngines" | "listDatabases" | "listDatabaseRows" | "listDatabaseTables" | "queryDatabase" | "revokeDatabaseApiKey" | "setDatabaseImportLimit" | "updateDatabaseEngine" | "createFunction" | "deleteFunction" | "listFunctions" | "listFunctionRuns" | "runFunction" | "updateFunction">>;
+type DriveClient = Pick<ZoDriveClient, "createApiKey" | "createFolder" | "createNativeFile" | "createShare" | "delete" | "download" | "emptyTrash" | "getUsage" | "list" | "listApiKeys" | "listFolders" | "listFormResponses" | "listShares" | "listStarred" | "listTrash" | "permanentlyDeleteTrash" | "publishForm" | "rename" | "restoreTrash" | "revokeApiKey" | "revokeShare" | "saveNativeFile" | "setQuota" | "star" | "unstar" | "updateSharePasscode" | "upload"> & Partial<Pick<ZoDriveClient, "createClusterFolder" | "createClusterInvitation" | "createClusterMount" | "deleteClusterInvitation" | "deleteClusterMount" | "deleteClusterObject" | "deleteClusterPeer" | "downloadClusterObject" | "getClusterMountAccess" | "listClusterInvitations" | "listClusterMounts" | "listClusterObjects" | "listClusterPeers" | "renameClusterObject" | "updateClusterPeerRole" | "uploadClusterObject" | "createDatabase" | "createDatabaseApiKey" | "deleteDatabase" | "executeDatabase" | "exportDatabase" | "getDatabaseImportSettings" | "importDatabase" | "installDatabaseEngine" | "listDatabaseApiKeys" | "listDatabaseEngines" | "listDatabases" | "listDatabaseRows" | "listDatabaseTables" | "queryDatabase" | "revokeDatabaseApiKey" | "setDatabaseImportLimit" | "updateDatabaseEngine" | "createFunction" | "deleteFunction" | "listFunctions" | "listFunctionRuns" | "runFunction" | "updateFunction">>;
 type AuthClient = Pick<ZoDriveClient, "changePassword" | "deleteAccount" | "getAuthStatus" | "login" | "logout" | "registerInitialUser" | "updateProfile">;
 type SharedClient = Pick<ZoDriveClient, "downloadShared" | "getPublicShare" | "openSharedPaste" | "saveSharedPaste">;
 type PublicFormClient = Pick<ZoDriveClient, "getPublicForm" | "submitFormResponse">;
@@ -223,10 +223,15 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.18.2";
+const GUI_VERSION = "1.19.0";
 const CLI_VERSION = "1.2.1";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.19.0",
+    date: "2026-07-21",
+    changes: ["Added a persistent list of folders exposed through Shared Drives, with cancellation for unused pairing keys and revocation for active access.", "Moved PrismML, Bonsai model, and runtime documentation into the top ZominAI card so the resources are always available."]
+  },
   {
     version: "v1.18.2",
     date: "2026-07-21",
@@ -999,11 +1004,11 @@ function ZominAiWorkspace() {
   const selectedInstallGuide = zominAiInstallGuides[installPlatform];
 
   return <div className="space-y-5">
-    <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 via-cyan-950 to-slate-900 px-7 py-8 text-white shadow-sm md:px-9"><div className="absolute -right-20 -top-24 size-72 rounded-full bg-cyan-300/15 blur-3xl" /><div className="relative max-w-3xl"><span className="inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-cyan-200/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100"><Bot size={14} /> Local Bonsai runtime</span><h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">Run ZominAI beside your Drive.</h2><p className="mt-2 text-sm leading-6 text-slate-300">ZominAI stays on the device running the local model. The model weights and every inference stay on that device; Zo Drive stores only this browser’s local connection preferences, never model files, prompts, or Drive content.</p></div></section>
+    <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 via-cyan-950 to-slate-900 px-7 py-8 text-white shadow-sm md:px-9"><div className="absolute -right-20 -top-24 size-72 rounded-full bg-cyan-300/15 blur-3xl" /><div className="relative max-w-4xl"><span className="inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-cyan-200/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100"><Bot size={14} /> Local Bonsai runtime</span><h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">Run ZominAI beside your Drive.</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">ZominAI stays on the device running the local model. The model weights and every inference stay on that device; Zo Drive stores only this browser’s local connection preferences, never model files, prompts, or Drive content.</p><nav aria-label="ZominAI resources" className="mt-6 grid gap-2 sm:grid-cols-3"><a className="rounded-xl border border-cyan-100/20 bg-white/10 p-3 text-sm font-semibold text-cyan-50 transition hover:border-cyan-100/50 hover:bg-white/15" href="https://prismml.com/" rel="noreferrer" target="_blank">PrismML overview <ExternalLink className="ml-1 inline" size={14} /></a><a className="rounded-xl border border-cyan-100/20 bg-white/10 p-3 text-sm font-semibold text-cyan-50 transition hover:border-cyan-100/50 hover:bg-white/15" href="https://huggingface.co/prism-ml/Bonsai-27B-gguf" rel="noreferrer" target="_blank">Bonsai model &amp; licence <ExternalLink className="ml-1 inline" size={14} /></a><a className="rounded-xl border border-cyan-100/20 bg-white/10 p-3 text-sm font-semibold text-cyan-50 transition hover:border-cyan-100/50 hover:bg-white/15" href="https://github.com/ggml-org/llama.cpp/blob/master/docs/install.md" rel="noreferrer" target="_blank">Runtime installation docs <ExternalLink className="ml-1 inline" size={14} /></a></nav></div></section>
     <div className="grid gap-5 xl:grid-cols-[17rem_minmax(0,1fr)]"><aside className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-sm"><p className="px-3 pb-2 pt-3 text-xs font-bold uppercase tracking-[0.16em] text-slate-400">ZominAI</p>{panes.map((pane) => <button aria-label={`ZominAI menu: ${pane.label}`} className={`mb-1 flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left transition ${activePane === pane.id ? "bg-cyan-950 text-white shadow-sm" : "text-slate-700 hover:bg-slate-50"}`} key={pane.id} onClick={() => { setActivePane(pane.id); setConfirmUninstall(false); }}><span className={`mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg ${activePane === pane.id ? "bg-white/15 text-cyan-100" : "bg-slate-100 text-slate-500"}`}>{pane.icon}</span><span><span className="block text-sm font-semibold">{pane.label}</span><span className={`mt-0.5 block text-xs leading-5 ${activePane === pane.id ? "text-cyan-100" : "text-slate-400"}`}>{pane.description}</span></span></button>)}</aside>
       <div className="min-w-0">
         {activePane === "verify" && <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-700">Readiness check</p><h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">Verify this device before downloading.</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">This checks browser WebGPU, estimated local storage, and the configured localhost runtime. It does not inspect or upload files from this Drive.</p></div><button aria-label="Verify ZominAI install" className="inline-flex items-center gap-2 rounded-lg bg-cyan-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-cyan-800 disabled:bg-slate-300" disabled={verifying} onClick={() => void verify()}>{verifying ? <LoaderCircle className="animate-spin" size={17} /> : <ShieldCheck size={17} />}{verifying ? "Checking…" : "Verify install"}</button></div>{verification ? <div className="mt-6 grid gap-3"><ZominAiCheck label="WebGPU" result={verification.webGpu} /><ZominAiCheck label="Browser storage" result={verification.storage} /><ZominAiCheck label="Local runtime" result={verification.runtime} /><p className="pt-1 text-xs text-slate-400">Last checked {new Date(verification.checkedAt).toLocaleString()}.</p></div> : <div className="mt-6 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">No verification has run in this browser yet.</div>}</section>}
-        {activePane === "install" && <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-700">Local installation</p><h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">Install Bonsai where you use it.</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">ZominAI runs on your own device, not on the Zo server. The local runtime listens only at <span className="font-mono text-slate-700">127.0.0.1:57183</span>; the first run downloads about 3.8 GB locally.</p><div className="mt-6 flex flex-wrap gap-2" role="group" aria-label="ZominAI platform"><PlatformChoice active={installPlatform === "macos"} label="macOS" onClick={() => setInstallPlatform("macos")} /><PlatformChoice active={installPlatform === "linux"} label="Linux" onClick={() => setInstallPlatform("linux")} /><PlatformChoice active={installPlatform === "windows"} label="Windows" onClick={() => setInstallPlatform("windows")} /></div><div className="mt-5 rounded-xl border border-cyan-100 bg-cyan-50/60 p-4"><p className="text-sm font-semibold text-slate-900">{selectedInstallGuide.label} setup</p><p className="mt-1 text-sm leading-6 text-slate-600">{selectedInstallGuide.prerequisite}</p><p className="mt-2 text-sm leading-6 text-cyan-900">{selectedInstallGuide.support}</p></div>{installPlatform === "macos" ? <ZominAiDownloadProgress status={downloadStatus} unavailable={downloadStatusUnavailable} /> : <div className="mt-6 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-500">Persistent download tracking is bundled with the supported macOS installer. Linux and Windows need the ZominAI Local Agent before this tracker can be enabled; use Verify install after the model starts.</div>}<div className="mt-6 rounded-xl bg-slate-950 p-4"><pre className="overflow-x-auto text-xs leading-6 text-cyan-100"><code>{selectedInstallGuide.command}</code></pre></div><p className="mt-3 text-xs leading-5 text-slate-500">Run the command in any terminal after <span className="font-mono">llama-server</span> is installed on your command path. If you build it yourself, run the generated binary from its build folder or add that folder to your command path. The model is cached locally at <span className="font-mono text-slate-700">{selectedInstallGuide.modelLocation}</span>.</p><div className="mt-5 flex flex-wrap gap-3"><button className="inline-flex items-center gap-2 rounded-lg bg-cyan-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-cyan-800" onClick={() => void copyInstallCommand(selectedInstallGuide.command)}><Copy size={17} /> Copy {selectedInstallGuide.label} setup</button><a className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="https://huggingface.co/prism-ml/Bonsai-27B-gguf" rel="noreferrer" target="_blank">Open Bonsai download <ExternalLink size={16} /></a><button className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-cyan-800 hover:bg-cyan-50" onClick={() => setActivePane("verify")}>Verify after setup <ArrowUpRight size={16} /></button></div><div className="mt-6 grid gap-3 rounded-xl border border-cyan-100 bg-cyan-50/60 p-4 sm:grid-cols-3"><a className="rounded-lg bg-white p-3 text-sm font-semibold text-cyan-900 shadow-sm ring-1 ring-cyan-100 hover:ring-cyan-300" href="https://prismml.com/" rel="noreferrer" target="_blank">PrismML overview <ExternalLink className="ml-1 inline" size={14} /></a><a className="rounded-lg bg-white p-3 text-sm font-semibold text-cyan-900 shadow-sm ring-1 ring-cyan-100 hover:ring-cyan-300" href="https://huggingface.co/prism-ml/Bonsai-27B-gguf" rel="noreferrer" target="_blank">Bonsai model &amp; licence <ExternalLink className="ml-1 inline" size={14} /></a><a className="rounded-lg bg-white p-3 text-sm font-semibold text-cyan-900 shadow-sm ring-1 ring-cyan-100 hover:ring-cyan-300" href="https://github.com/ggml-org/llama.cpp/blob/master/docs/install.md" rel="noreferrer" target="_blank">Runtime installation docs <ExternalLink className="ml-1 inline" size={14} /></a></div></section>}
+        {activePane === "install" && <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-700">Local installation</p><h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">Install Bonsai where you use it.</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">ZominAI runs on your own device, not on the Zo server. The local runtime listens only at <span className="font-mono text-slate-700">127.0.0.1:57183</span>; the first run downloads about 3.8 GB locally.</p><div className="mt-6 flex flex-wrap gap-2" role="group" aria-label="ZominAI platform"><PlatformChoice active={installPlatform === "macos"} label="macOS" onClick={() => setInstallPlatform("macos")} /><PlatformChoice active={installPlatform === "linux"} label="Linux" onClick={() => setInstallPlatform("linux")} /><PlatformChoice active={installPlatform === "windows"} label="Windows" onClick={() => setInstallPlatform("windows")} /></div><div className="mt-5 rounded-xl border border-cyan-100 bg-cyan-50/60 p-4"><p className="text-sm font-semibold text-slate-900">{selectedInstallGuide.label} setup</p><p className="mt-1 text-sm leading-6 text-slate-600">{selectedInstallGuide.prerequisite}</p><p className="mt-2 text-sm leading-6 text-cyan-900">{selectedInstallGuide.support}</p></div>{installPlatform === "macos" ? <ZominAiDownloadProgress status={downloadStatus} unavailable={downloadStatusUnavailable} /> : <div className="mt-6 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-500">Persistent download tracking is bundled with the supported macOS installer. Linux and Windows need the ZominAI Local Agent before this tracker can be enabled; use Verify install after the model starts.</div>}<div className="mt-6 rounded-xl bg-slate-950 p-4"><pre className="overflow-x-auto text-xs leading-6 text-cyan-100"><code>{selectedInstallGuide.command}</code></pre></div><p className="mt-3 text-xs leading-5 text-slate-500">Run the command in any terminal after <span className="font-mono">llama-server</span> is installed on your command path. If you build it yourself, run the generated binary from its build folder or add that folder to your command path. The model is cached locally at <span className="font-mono text-slate-700">{selectedInstallGuide.modelLocation}</span>.</p><div className="mt-5 flex flex-wrap gap-3"><button className="inline-flex items-center gap-2 rounded-lg bg-cyan-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-cyan-800" onClick={() => void copyInstallCommand(selectedInstallGuide.command)}><Copy size={17} /> Copy {selectedInstallGuide.label} setup</button><a className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="https://huggingface.co/prism-ml/Bonsai-27B-gguf" rel="noreferrer" target="_blank">Open Bonsai download <ExternalLink size={16} /></a><button className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-cyan-800 hover:bg-cyan-50" onClick={() => setActivePane("verify")}>Verify after setup <ArrowUpRight size={16} /></button></div></section>}
         {activePane === "settings" && <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-700">Connection settings</p><h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">ZominAI settings</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">These values stay in this browser only. The endpoint must be local to protect Drive data from accidental remote inference routing.</p><div className="mt-6 grid gap-5 md:grid-cols-2"><label className="block text-sm font-semibold text-slate-700">Local runtime address<input aria-label="ZominAI runtime address" className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-mono text-sm outline-none focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100" value={settings.endpoint} onChange={(event) => { setUninstalled(false); setSettings((current) => ({ ...current, endpoint: event.target.value })); }} /></label><label className="block text-sm font-semibold text-slate-700">Model file<input aria-label="ZominAI model file" className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-mono text-sm outline-none focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100" value={settings.model} onChange={(event) => { setUninstalled(false); setSettings((current) => ({ ...current, model: event.target.value })); }} /></label><label className="block text-sm font-semibold text-slate-700">Context window<input aria-label="ZominAI context window" className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100" max={32768} min={1024} step={1024} type="number" value={settings.contextTokens} onChange={(event) => { setUninstalled(false); setSettings((current) => ({ ...current, contextTokens: Number(event.target.value) || 1024 })); }} /></label></div><div className="mt-6 flex flex-wrap items-center gap-3"><button className="inline-flex items-center gap-2 rounded-lg bg-cyan-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-cyan-800" onClick={() => void verify()}><Cpu size={17} /> Save and verify</button><p className="text-xs text-slate-400">Saved automatically in this browser.</p></div></section>}
         {activePane === "uninstall" && <section className="rounded-2xl border border-red-200 bg-white p-6 shadow-sm"><p className="text-xs font-bold uppercase tracking-[0.16em] text-red-600">Remove local settings</p><h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">Uninstall ZominAI from this browser</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">This clears ZominAI’s local endpoint, model preference, and verification record from this browser. It cannot remove the model or llama.cpp runtime from your Mac, iPhone, or another device.</p>{confirmUninstall ? <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4"><p className="text-sm font-medium text-red-900">Remove ZominAI browser settings now?</p><div className="mt-4 flex gap-3"><button aria-label="Confirm uninstall ZominAI" className="rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700" onClick={uninstall}>Remove settings</button><button className="rounded-lg border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-red-50" onClick={() => setConfirmUninstall(false)}>Cancel</button></div></div> : <button aria-label="Uninstall ZominAI browser settings" className="mt-6 inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-50" onClick={() => setConfirmUninstall(true)}><Trash2 size={17} /> Uninstall ZominAI</button>}</section>}
       </div>
@@ -1601,8 +1606,9 @@ function defaultFunctionSource(runtime: FunctionRuntime): string {
 function ClusterDatabases({ client }: { client: DriveClient }) {
   const queryClient = useQueryClient();
   const supported = Boolean(
-    client.createClusterInvitation &&
+      client.createClusterInvitation &&
       client.createClusterMount &&
+      client.deleteClusterInvitation &&
       client.listClusterMounts &&
       client.listClusterObjects &&
       client.createClusterFolder &&
@@ -1611,6 +1617,7 @@ function ClusterDatabases({ client }: { client: DriveClient }) {
       client.deleteClusterPeer &&
       client.downloadClusterObject &&
       client.getClusterMountAccess &&
+      client.listClusterInvitations &&
       client.listClusterPeers &&
       client.renameClusterObject &&
       client.updateClusterPeerRole &&
@@ -1634,6 +1641,11 @@ function ClusterDatabases({ client }: { client: DriveClient }) {
   const peersQuery = useQuery({
     queryKey: ["cluster-peers"],
     queryFn: () => client.listClusterPeers!(),
+    enabled: supported,
+  });
+  const invitationsQuery = useQuery({
+    queryKey: ["cluster-invitations"],
+    queryFn: () => client.listClusterInvitations!(),
     enabled: supported,
   });
   const shareFoldersQuery = useQuery({
@@ -1662,8 +1674,9 @@ function ClusterDatabases({ client }: { client: DriveClient }) {
           }),
         ),
       ),
-    onSuccess: (invites) => {
+    onSuccess: async (invites) => {
       setCreatedInvites(invites);
+      await queryClient.invalidateQueries({ queryKey: ["cluster-invitations"] });
       toast.success(
         `${invites.length} one-time pairing ${invites.length === 1 ? "key" : "keys"} created`,
       );
@@ -1798,6 +1811,20 @@ function ClusterDatabases({ client }: { client: DriveClient }) {
         error instanceof Error
           ? error.message
           : "Could not revoke folder access",
+      ),
+  });
+  const cancelInvitationMutation = useMutation({
+    mutationFn: (id: string) => client.deleteClusterInvitation!(id),
+    onSuccess: async (_result, id) => {
+      setCreatedInvites((current) => current.filter((invite) => invite.id !== id));
+      await queryClient.invalidateQueries({ queryKey: ["cluster-invitations"] });
+      toast.success("Unused pairing key cancelled");
+    },
+    onError: (error) =>
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not cancel the pairing key",
       ),
   });
   const canWrite = accessQuery.data?.role === "editor";
@@ -2126,14 +2153,29 @@ function ClusterDatabases({ client }: { client: DriveClient }) {
           </div>
         </aside>
       </section>
-      {(peersQuery.data ?? []).length > 0 && (
+      {((invitationsQuery.data ?? []).length > 0 || (peersQuery.data ?? []).length > 0) && (
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <header className="border-b border-slate-100 px-5 py-4">
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-700">Access you manage</p>
-            <h2 className="mt-1 font-semibold text-slate-900">Shared folder permissions</h2>
-            <p className="mt-1 text-sm text-slate-500">Change a recipient between Viewer and Editor, or revoke their pairing immediately.</p>
+            <h2 className="mt-1 font-semibold text-slate-900">Exposed folders</h2>
+            <p className="mt-1 text-sm text-slate-500">Cancel an unused pairing key, change active access between Viewer and Editor, or revoke it immediately.</p>
           </header>
-          <div className="divide-y divide-slate-100">
+          {(invitationsQuery.data ?? []).length > 0 && <div className="border-b border-slate-100">
+            <div className="bg-amber-50/70 px-5 py-3"><p className="text-xs font-bold uppercase tracking-[0.14em] text-amber-800">Pending pairing keys</p><p className="mt-1 text-xs text-amber-900">Keys are shown once at creation. Cancelled and expired keys cannot be used.</p></div>
+            <div className="divide-y divide-slate-100">
+              {invitationsQuery.data?.map((invite) => (
+                <div className="flex flex-wrap items-center gap-3 px-5 py-4" key={invite.id}>
+                  <span className="grid size-9 place-items-center rounded-lg bg-amber-100 text-amber-800"><Clock3 size={17} /></span>
+                  <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-800">{invite.recipient || "Unlabelled recipient"}</span><span className="block truncate text-xs text-slate-500">{invite.folder} · expires {new Date(invite.expiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span></span>
+                  <span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${invite.role === "editor" ? "bg-cyan-100 text-cyan-800" : "bg-slate-200 text-slate-600"}`}>{invite.role}</span>
+                  <button className="rounded-lg px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:text-red-300" disabled={cancelInvitationMutation.isPending} onClick={() => { if (window.confirm(`Cancel the unused pairing key for ${invite.recipient || invite.folder}?`)) cancelInvitationMutation.mutate(invite.id); }}>Cancel key</button>
+                </div>
+              ))}
+            </div>
+          </div>}
+          {(peersQuery.data ?? []).length > 0 && <div>
+            <div className="bg-cyan-50/70 px-5 py-3"><p className="text-xs font-bold uppercase tracking-[0.14em] text-cyan-800">Active folder access</p><p className="mt-1 text-xs text-cyan-900">These recipients already redeemed a key and can reach the listed folder.</p></div>
+            <div className="divide-y divide-slate-100">
             {peersQuery.data?.map((peer) => (
               <div className="flex flex-wrap items-center gap-3 px-5 py-4" key={peer.id}>
                 <span className="grid size-9 place-items-center rounded-lg bg-cyan-100 text-cyan-800"><UsersRound size={17} /></span>
@@ -2145,7 +2187,9 @@ function ClusterDatabases({ client }: { client: DriveClient }) {
                 <button className="rounded-lg px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:text-red-300" disabled={revokePeerMutation.isPending} onClick={() => { if (window.confirm(`Revoke ${peer.recipient || "this recipient"}'s access to ${peer.folder}?`)) revokePeerMutation.mutate(peer.id); }}>Revoke</button>
               </div>
             ))}
+            </div>
           </div>
+          }
         </section>
       )}
       {(mountsQuery.data ?? []).length > 0 && (

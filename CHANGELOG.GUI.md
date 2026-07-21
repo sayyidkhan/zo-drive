@@ -2,6 +2,18 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.19.0 - 2026-07-21
+
+### Added
+
+- Added a persistent Shared Drives list of exposed folders. Owners can cancel
+  unused pairing keys and revoke active recipients from the same view.
+
+### Changed
+
+- Moved the PrismML, Bonsai model and licence, and runtime documentation links
+  into the top ZominAI card so they are available throughout ZominAI.
+
 ## v1.18.2 - 2026-07-21
 
 ### Fixed
