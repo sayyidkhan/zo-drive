@@ -4,6 +4,12 @@ All notable changes to the Zo Drive browser experience are recorded here.
 
 ## Unreleased
 
+## v1.11.2 - 2026-07-21
+
+### Changed
+
+- Simplified the Zo Databases catalogue footer.
+
 ## v1.11.1 - 2026-07-21
 
 ### Fixed

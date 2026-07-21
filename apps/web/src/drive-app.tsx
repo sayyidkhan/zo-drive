@@ -184,10 +184,15 @@ const appBasePath = normalizeAppBasePath(
 const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.11.1";
+const GUI_VERSION = "1.11.2";
 const CLI_VERSION = "1.2.1";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.11.2",
+    date: "21 July 2026",
+    changes: ["Simplified the Zo Databases catalogue footer."]
+  },
   {
     version: "v1.11.1",
     date: "21 July 2026",
@@ -1510,7 +1515,7 @@ function DatabaseCatalog({ databaseCount, engineStates, installingEngine, updati
     <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6 xl:grid-cols-3">
       {catalog.map((engine) => { const Icon = engine.icon; const installation = engineStates.find((candidate) => candidate.engine === engine.engine); const installed = installation?.installed === true; const installing = installingEngine === engine.engine; const updating = updatingEngine === engine.engine; return <article className={`group flex min-h-72 flex-col rounded-2xl border p-5 transition ${installed ? "border-blue-300 bg-gradient-to-br from-blue-50 via-white to-white shadow-sm" : "border-slate-200 bg-white hover:border-slate-300"}`} key={engine.engine}><div className="flex items-start justify-between gap-3"><span className={`grid size-11 place-items-center rounded-xl ${installed ? "bg-blue-600 text-white shadow-sm" : "bg-slate-100 text-slate-500"}`}><Icon size={21} /></span><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${installed ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{installed ? "Installed" : "Ready to install"}</span></div><div className="mt-5"><p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">{engine.category}</p><h3 className="mt-1.5 text-xl font-semibold text-slate-900">{engine.name}</h3><p className="mt-2 text-sm leading-6 text-slate-600">{engine.description}</p></div><div className="mt-auto pt-5"><p className="text-xs font-medium text-slate-400">{engine.detail}</p><p className="mt-2 truncate font-mono text-[11px] text-slate-400" title={installation?.packageName}>{installation?.packageName ?? "Loading provider…"}{installed && ` · v${installation?.installedVersion ?? "legacy"}`}</p>{!installed ? <button aria-label={`Install ${engine.name}`} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:bg-slate-400" disabled={Boolean(installingEngine)} onClick={() => onInstallEngine(engine.engine)} type="button">{installing ? "Installing…" : `Install ${engine.name}`} <Download size={16} /></button> : <div className="mt-4 flex flex-wrap gap-2"><button aria-label={`Create ${engine.name} database`} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-blue-700" onClick={() => onCreateDatabase(engine.engine)} type="button">Create database <ArrowUpRight size={16} /></button><button aria-label={`Update ${engine.name}`} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:text-slate-300" disabled={Boolean(updatingEngine)} onClick={() => onUpdateEngine(engine.engine)} type="button">{updating ? "Updating…" : installation?.updateAvailable ? "Update available" : "Update"}</button></div>}</div></article>;})}
     </div>
-    <div className="border-t border-slate-100 bg-slate-50 px-6 py-4 text-sm leading-6 text-slate-500 sm:px-8">Every engine stores data privately under this Drive and is exposed only through database-scoped HTTPS keys. SQLite keeps its table browser; other engines use their native command contract without a fake preview.</div>
+    <div className="border-t border-slate-100 bg-slate-50 px-6 py-4 text-sm leading-6 text-slate-500 sm:px-8">Every engine stores data privately under this Drive and is exposed only through database-scoped HTTPS keys.</div>
   </section>;
 }
 
