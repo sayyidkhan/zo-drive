@@ -4,6 +4,13 @@ All notable changes to the Zo Drive browser experience are recorded here.
 
 ## Unreleased
 
+## v1.12.3 - 2026-07-21
+
+### Fixed
+
+- Keep the landing page and documentation public; visitors now see the landing
+  page before the private workspace sign-in screen.
+
 ## v1.12.2 - 2026-07-21
 
 ### Fixed

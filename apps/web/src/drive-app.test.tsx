@@ -21,7 +21,7 @@ describe("DriveApp", () => {
     expect(screen.getByRole("navigation", { name: "Choose Zo Drive mode" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "GUI" })).toHaveAttribute("href", expect.stringContaining("?app=1"));
     expect(screen.getByRole("link", { name: "CLI" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=cli"));
-    expect(screen.getByRole("link", { name: "Open Zo Drive" })).toHaveAttribute("href", expect.stringContaining("?app=1"));
+    expect(screen.getByRole("link", { name: "Sign in to Zo Drive" })).toHaveAttribute("href", expect.stringContaining("?login=1"));
     expect(screen.getByRole("link", { name: "Read the docs" })).toHaveAttribute("href", expect.stringContaining("?docs=1"));
     expect(screen.getByText("Zo Drive SaaS Killer Features")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open Zo Functions" })).toHaveAttribute("href", expect.stringContaining("section=functions"));
@@ -39,11 +39,11 @@ describe("DriveApp", () => {
 
       expect(screen.getByRole("heading", { name: "Manage files in your private Drive." })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Share files on your terms" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 1.12.2" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 1.12.3" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI changelog version 1.12.2" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
+      expect(screen.getByRole("link", { name: "GUI changelog version 1.12.3" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText((_, element) => element?.tagName === "H3" && element.textContent === "GUI v1.12.2")).toBeInTheDocument();
+      expect(screen.getByText((_, element) => element?.tagName === "H3" && element.textContent === "GUI v1.12.3")).toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
 
       cleanup();
@@ -76,7 +76,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.12.2")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.12.3")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();
@@ -111,6 +111,60 @@ describe("DriveApp", () => {
 
     expect(await screen.findByText("Create your owner account")).toBeInTheDocument();
     expect(screen.queryByText("My Drive")).not.toBeInTheDocument();
+  });
+
+  it("keeps the landing page public when an unauthenticated visitor opens the workspace URL", async () => {
+    const authClient = {
+      getAuthStatus: vi.fn().mockResolvedValue({ authenticated: false, registrationAllowed: false, user: null }),
+      login: vi.fn(),
+      logout: vi.fn(),
+      registerInitialUser: vi.fn(),
+      updateProfile: vi.fn(),
+      changePassword: vi.fn(),
+      deleteAccount: vi.fn()
+    };
+
+    window.history.pushState({}, "", "?app=1");
+    render(<DriveApp authClient={authClient} />);
+
+    expect(await screen.findByRole("heading", { name: "Your cloud should live with you." })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Sign in to Zo Drive" })).not.toBeInTheDocument();
+    expect(authClient.getAuthStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens the sign-in form only from the dedicated login route", async () => {
+    const authClient = {
+      getAuthStatus: vi.fn().mockResolvedValue({ authenticated: false, registrationAllowed: false, user: null }),
+      login: vi.fn(),
+      logout: vi.fn(),
+      registerInitialUser: vi.fn(),
+      updateProfile: vi.fn(),
+      changePassword: vi.fn(),
+      deleteAccount: vi.fn()
+    };
+
+    window.history.pushState({}, "", "?login=1");
+    render(<DriveApp authClient={authClient} />);
+
+    expect(await screen.findByRole("heading", { name: "Sign in to Zo Drive" })).toBeInTheDocument();
+  });
+
+  it("renders documentation without checking the visitor's sign-in session", () => {
+    const authClient = {
+      getAuthStatus: vi.fn(),
+      login: vi.fn(),
+      logout: vi.fn(),
+      registerInitialUser: vi.fn(),
+      updateProfile: vi.fn(),
+      changePassword: vi.fn(),
+      deleteAccount: vi.fn()
+    };
+
+    window.history.pushState({}, "", "?docs=1&mode=gui");
+    render(<DriveApp authClient={authClient} />);
+
+    expect(screen.getByRole("heading", { name: "Manage files in your private Drive." })).toBeInTheDocument();
+    expect(authClient.getAuthStatus).not.toHaveBeenCalled();
   });
 
   it("shows storage usage, folders, and files supplied by the shared SDK", async () => {

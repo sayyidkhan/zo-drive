@@ -184,10 +184,15 @@ const appBasePath = normalizeAppBasePath(
 const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.12.2";
+const GUI_VERSION = "1.12.3";
 const CLI_VERSION = "1.2.1";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.12.3",
+    date: "21 July 2026",
+    changes: ["Kept the landing page and documentation public, with sign-in only when opening the private Drive workspace."]
+  },
   {
     version: "v1.12.2",
     date: "21 July 2026",
@@ -418,13 +423,14 @@ export function DriveApp({ client, authClient }: { client?: DriveClient; authCli
   const shareId = query.get("share");
   const formId = query.get("form");
   const isDocs = query.get("docs") === "1";
+  const isLogin = query.get("login") === "1";
   // Supplying a client is only used by the embedded test harness. The hosted
   // app defaults to the public landing page until the user chooses Zo Drive.
   const isDrive = query.get("app") === "1" || Boolean(client || authClient);
 
   return (
     <QueryClientProvider client={queryClient}>
-      {formId ? <PublicFormPage client={defaultClient} formId={formId} /> : shareId ? <SharedFilePage client={defaultClient} shareId={shareId} /> : isDocs ? <DocsPage mode={query.get("mode") === "cli" ? "cli" : "gui"} page={query.get("page") === "changelog" ? "changelog" : "docs"} /> : isDrive ? <DriveGate client={driveClient} authClient={sessionClient} /> : <LandingPage />}
+      {formId ? <PublicFormPage client={defaultClient} formId={formId} /> : shareId ? <SharedFilePage client={defaultClient} shareId={shareId} /> : isDocs ? <DocsPage mode={query.get("mode") === "cli" ? "cli" : "gui"} page={query.get("page") === "changelog" ? "changelog" : "docs"} /> : isLogin ? <DriveGate client={driveClient} authClient={sessionClient} /> : isDrive ? <DriveGate client={driveClient} authClient={sessionClient} fallback={query.get("app") === "1" ? <LandingPage /> : undefined} /> : <LandingPage />}
       <Toaster position="bottom-right" richColors />
     </QueryClientProvider>
   );
@@ -469,7 +475,7 @@ function LandingPage() {
           <h1 className="mt-6 max-w-3xl text-5xl font-semibold leading-[1.02] tracking-[-0.05em] text-slate-950 sm:text-6xl lg:text-7xl">Your cloud should live with you.</h1>
           <p className="mt-6 max-w-xl text-lg leading-8 text-slate-600">Zo Drive is decentralised cloud storage for the files you own: a private workspace running on your Zo machine, with folders, native tools and sharing under your control.</p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <a className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:bg-blue-700" href={driveAppUrl()}><HardDrive size={18} /> Open Zo Drive</a>
+            <a className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:bg-blue-700" href={loginUrl()}><HardDrive size={18} /> Sign in to Zo Drive</a>
             <a className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50" href={docsUrl()}>Read the docs <ArrowUpRight size={17} /></a>
           </div>
           <div className="mt-10 flex flex-wrap gap-x-6 gap-y-3 text-sm font-medium text-slate-600"><span className="inline-flex items-center gap-2"><Check size={16} className="text-blue-600" /> Data stays on your Zo</span><span className="inline-flex items-center gap-2"><Check size={16} className="text-blue-600" /> Folder-preserving uploads</span><span className="inline-flex items-center gap-2"><Check size={16} className="text-blue-600" /> GUI, CLI and SDK access</span></div>
@@ -557,7 +563,7 @@ function CodeBlock({ code, label }: { code: string; label: string }) {
   return <section className="overflow-hidden rounded-xl border border-slate-800 bg-slate-950"><header className="flex items-center justify-between border-b border-white/10 px-4 py-3"><span className="text-xs font-semibold text-slate-300">{label}</span><Code2 size={16} className="text-cyan-300" /></header><pre className="overflow-x-auto p-4 text-xs leading-6 text-slate-200 sm:text-sm"><code>{code}</code></pre></section>;
 }
 
-function DriveGate({ client, authClient }: { client: DriveClient; authClient: AuthClient }) {
+function DriveGate({ client, authClient, fallback }: { client: DriveClient; authClient: AuthClient; fallback?: React.ReactNode }) {
   const queryClient = useQueryClient();
   const authQuery = useQuery({ queryKey: ["auth-status"], queryFn: () => authClient.getAuthStatus(), retry: false });
   const logoutMutation = useMutation({
@@ -573,6 +579,7 @@ function DriveGate({ client, authClient }: { client: DriveClient; authClient: Au
   if (authQuery.isPending) return <AuthLoading />;
   if (authQuery.isError || !authQuery.data) return <AuthUnavailable onRetry={() => void authQuery.refetch()} />;
   if (!authQuery.data.authenticated || !authQuery.data.user) {
+    if (fallback) return <>{fallback}</>;
     return <AuthScreen auth={authQuery.data} client={authClient} onAuthenticated={() => void authQuery.refetch()} />;
   }
   return <DriveScreen authClient={authClient} client={client} user={authQuery.data.user} onAccountDeleted={() => void authQuery.refetch()} onSignOut={() => logoutMutation.mutate()} />;
@@ -3096,6 +3103,10 @@ function landingUrl(): string {
 
 function driveAppUrl(): string {
   return `${driveHomeUrl()}?app=1`;
+}
+
+function loginUrl(): string {
+  return `${driveHomeUrl()}?login=1`;
 }
 
 function docsUrl(mode: "gui" | "cli" = "gui", page: "docs" | "changelog" = "docs"): string {
