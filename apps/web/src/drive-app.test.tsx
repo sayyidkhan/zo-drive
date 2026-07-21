@@ -39,11 +39,11 @@ describe("DriveApp", () => {
 
       expect(screen.getByRole("heading", { name: "Manage files in your private Drive." })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Share files on your terms" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 1.12.3" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 1.12.4" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI changelog version 1.12.3" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
+      expect(screen.getByRole("link", { name: "GUI changelog version 1.12.4" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText((_, element) => element?.tagName === "H3" && element.textContent === "GUI v1.12.3")).toBeInTheDocument();
+      expect(screen.getByText((_, element) => element?.tagName === "H3" && element.textContent === "GUI v1.12.4")).toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
 
       cleanup();
@@ -76,7 +76,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.12.3")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.12.4")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();
@@ -249,6 +249,7 @@ describe("DriveApp", () => {
     render(<DriveApp client={client} authClient={authClient} />);
 
     expect(await screen.findByRole("link", { name: "Back to Zo Drive landing page" })).toHaveAttribute("href", "/");
+    expect(screen.getByRole("button", { name: "Sign out" })).toHaveAttribute("title", "Sign out");
     fireEvent.click(screen.getByRole("button", { name: "Collapse navigation" }));
     expect(screen.getByRole("button", { name: "New" })).toHaveAttribute("title", "New");
     expect(screen.getByRole("button", { name: "My Drive" })).toHaveAttribute("title", "My Drive");
@@ -478,6 +479,8 @@ describe("DriveApp", () => {
     expect(screen.getByText("Permanently delete cache?")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Delete permanently" }));
     await waitFor(() => expect(client.deleteDatabase).toHaveBeenCalledWith("db-22222222-2222-4222-8222-222222222222"));
+    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    await waitFor(() => expect(authClient.logout).toHaveBeenCalledTimes(1));
   }, 15_000);
 
   it("keeps an upload progress bar visible until the upload finishes", async () => {

@@ -4,6 +4,12 @@ All notable changes to the Zo Drive browser experience are recorded here.
 
 ## Unreleased
 
+## v1.12.4 - 2026-07-21
+
+### Fixed
+
+- Added a direct logout icon in the authenticated Drive header.
+
 ## v1.12.3 - 2026-07-21
 
 ### Fixed
