@@ -243,10 +243,15 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.21.3";
+const GUI_VERSION = "1.21.4";
 const CLI_VERSION = "1.2.1";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.21.4",
+    date: "2026-07-22",
+    changes: ["Kept the Drive workspace within the browser viewport so navigation, file work, and ZominAI stay visible, with independent pane scrolling. When chat is open, Upload now sits beside the dashboard controls instead of floating over content."]
+  },
   {
     version: "v1.21.3",
     date: "2026-07-22",
@@ -1119,7 +1124,7 @@ function ZominAiChatDrawer({ isOpen, onClose, settings }: { isOpen: boolean; onC
     }
   }
 
-  return <aside aria-label="ZominAI chat" aria-hidden={!isOpen} className={`fixed inset-y-0 right-0 z-[70] w-full max-w-[32rem] overflow-hidden border-l border-slate-200 bg-white pt-[4.5rem] shadow-2xl shadow-slate-950/20 transition-[transform,width,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none sm:w-[30rem] md:static md:z-auto md:h-auto md:max-w-none md:shrink-0 md:translate-x-0 md:border-l-0 md:bg-transparent md:pt-0 md:shadow-none ${isOpen ? "translate-x-0 md:w-[30rem] md:border-l md:border-slate-200 md:bg-white md:shadow-2xl md:shadow-slate-950/10" : "pointer-events-none translate-x-full md:w-0"}`}>
+  return <aside aria-label="ZominAI chat" aria-hidden={!isOpen} className={`fixed inset-y-0 right-0 z-[70] w-full max-w-[32rem] overflow-hidden border-l border-slate-200 bg-white pt-[4.5rem] shadow-2xl shadow-slate-950/20 transition-[transform,width,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none sm:w-[30rem] md:static md:z-auto md:h-full md:max-w-none md:shrink-0 md:translate-x-0 md:border-l-0 md:bg-transparent md:pt-0 md:shadow-none ${isOpen ? "translate-x-0 md:w-[30rem] md:border-l md:border-slate-200 md:bg-white md:shadow-2xl md:shadow-slate-950/10" : "pointer-events-none translate-x-full md:w-0"}`}>
     <div className={`flex h-full w-full flex-col bg-white transition-[transform,opacity] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none md:w-[30rem] ${isOpen ? "translate-x-0 opacity-100" : "translate-x-8 opacity-0"}`}>
       <header className="flex items-center gap-3 border-b border-slate-200 px-4 py-3">
         <span className="grid size-9 place-items-center overflow-hidden rounded-xl bg-cyan-950 p-0.5"><img className="size-full rounded-[0.6rem] object-cover" src={zominAiButtonUrl} alt="ZominAI Pegasus" /></span>
@@ -1606,8 +1611,8 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
   }
 
   return (
-    <main className="min-h-screen bg-[#f8faff] text-slate-800" onDragOver={(event) => event.preventDefault()} onDrop={handleDrop}>
-      <header className="flex min-h-18 flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-3 py-3 sm:px-5 md:h-18 md:flex-nowrap md:gap-5 md:py-0">
+    <main data-testid="drive-workspace" className="flex h-dvh flex-col overflow-hidden bg-[#f8faff] text-slate-800" onDragOver={(event) => event.preventDefault()} onDrop={handleDrop}>
+      <header className="flex min-h-18 shrink-0 flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-3 py-3 sm:px-5 md:h-18 md:flex-nowrap md:gap-5 md:py-0">
         <button aria-controls="drive-navigation" aria-expanded={sidebarOpen} aria-label="Open navigation" className="grid size-10 shrink-0 place-items-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-800 md:hidden" onClick={() => setSidebarOpen(true)}>
           <PanelLeftOpen size={21} />
         </button>
@@ -1650,9 +1655,9 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
         </div>
       </header>
 
-      <div className="flex min-h-[calc(100dvh-4.5rem)] min-w-0 max-w-full">
+      <div className="flex min-h-0 min-w-0 max-w-full flex-1">
         {sidebarOpen && <button aria-label="Close navigation" className="fixed inset-0 z-30 bg-slate-950/25 md:hidden" onClick={() => setSidebarOpen(false)} />}
-        <aside id="drive-navigation" className={`${sidebarOpen ? "w-72 translate-x-0 overflow-y-auto px-3" : "w-16 -translate-x-full overflow-visible px-1.5 md:translate-x-0"} fixed inset-y-0 left-0 z-40 shrink-0 border-r border-slate-200 bg-white py-5 shadow-xl transition-[width,padding,transform] duration-200 md:static md:z-auto md:shadow-none ${sidebarOpen ? "md:w-64" : "md:w-16"}`}>
+        <aside id="drive-navigation" className={`${sidebarOpen ? "w-72 translate-x-0 overflow-y-auto px-3" : "w-16 -translate-x-full overflow-visible px-1.5 md:translate-x-0"} fixed inset-y-0 left-0 z-40 min-h-0 shrink-0 border-r border-slate-200 bg-white py-5 shadow-xl transition-[width,padding,transform] duration-200 md:static md:z-auto md:overflow-y-auto md:shadow-none ${sidebarOpen ? "md:w-64" : "md:w-16"}`}>
           <div className={`flex gap-2 ${sidebarOpen ? "items-center" : "flex-col items-center"}`}>
           {sidebarOpen ? <div className="relative flex-1">
             <button aria-expanded={newMenuOpen} className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700" onClick={() => setNewMenuOpen((open) => !open)}>
@@ -1691,7 +1696,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
           {sidebarOpen && <UsageCard usage={usageQuery.data} onOpenBreakdown={() => setStorageBreakdownOpen(true)} />}
         </aside>
 
-        <section className="min-w-0 max-w-full flex-1 overflow-x-hidden p-4 transition-[padding] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none sm:p-6 md:p-9">
+        <section className="min-h-0 min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto p-4 transition-[padding] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none sm:p-6 md:p-9">
           <div className="mb-7 flex flex-wrap items-center justify-between gap-4">
             <div>
               {section === "my-drive" && currentPath && <FolderNavigation currentPath={currentPath} onNavigate={setCurrentPath} />}
@@ -1708,6 +1713,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
               {section === "shared" && <p className="mt-1 text-sm text-slate-500">Access folders shared with you and manage links shared outside your Drive.</p>}
               {section === "trash" && <p className="mt-1 text-sm text-slate-500">Items are permanently deleted 30 days after being moved here.</p>}
             </div>
+            {zominAiChatOpen && section !== "cluster-databases" && section !== "databases" && section !== "functions" && section !== "zominai" && <button aria-label="Open upload menu" className="hidden self-start items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200 md:inline-flex" onClick={() => setUploadDialogOpen(true)}><Upload size={17} /> Upload</button>}
             {section === "trash" && trashItems.length > 0 ? <button className="rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50" onClick={() => void emptyTrash()}>Empty trash</button> : section === "pastes" ? <button className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800" onClick={() => startNativeFile("paste")}><Plus size={17} /> New paste</button> : section !== "home" && section !== "transfer" && section !== "api-keys" && section !== "cluster-databases" && section !== "databases" && section !== "functions" && section !== "profile" && section !== "zominai" && <div className="flex rounded-lg border border-slate-200 bg-white p-1">
               <button aria-label="List view" className={`rounded-md p-2 ${viewMode === "list" ? "bg-slate-100 text-slate-900" : "text-slate-400"}`} onClick={() => setViewMode("list")}><List size={18} /></button>
               <button aria-label="Grid view" className={`rounded-md p-2 ${viewMode === "grid" ? "bg-slate-100 text-slate-900" : "text-slate-400"}`} onClick={() => setViewMode("grid")}><Grid2X2 size={18} /></button>
@@ -1764,7 +1770,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
         return updatedUsage;
       }} />}
       {uploadDialogOpen && <UploadDialog onClose={() => setUploadDialogOpen(false)} onChooseFiles={() => { setUploadDialogOpen(false); fileInput.current?.click(); }} onChooseFolder={() => { setUploadDialogOpen(false); folderInput.current?.click(); }} onDrop={(dataTransfer) => { setUploadDialogOpen(false); return uploadDroppedItems(dataTransfer); }} />}
-      {uploads.length === 0 && section !== "cluster-databases" && section !== "databases" && section !== "functions" && section !== "zominai" && <button aria-label="Open upload menu" className={`fixed bottom-4 right-4 z-40 inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-900/25 transition-[right,background-color] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200 motion-reduce:transition-none sm:bottom-6 sm:right-6 sm:px-5 ${zominAiChatOpen ? "md:right-[calc(30rem+1.5rem)]" : ""}`} onClick={() => setUploadDialogOpen(true)}><Upload size={18} /> <span className="hidden sm:inline">Upload</span></button>}
+      {uploads.length === 0 && !zominAiChatOpen && section !== "cluster-databases" && section !== "databases" && section !== "functions" && section !== "zominai" && <button aria-label="Open upload menu" className="fixed bottom-4 right-4 z-40 inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-900/25 transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200 sm:bottom-6 sm:right-6 sm:px-5" onClick={() => setUploadDialogOpen(true)}><Upload size={18} /> <span className="hidden sm:inline">Upload</span></button>}
       {uploads.length > 0 && <UploadProgress uploads={uploads} />}
     </main>
   );

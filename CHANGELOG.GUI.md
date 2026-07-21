@@ -2,6 +2,15 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.21.4 - 2026-07-22
+
+### Fixed
+
+- Kept the Drive workspace inside the browser viewport. The file list,
+  navigation, and ZominAI conversation now scroll independently when needed.
+- Moved Upload into the dashboard controls while ZominAI is open, preventing it
+  from floating over the file list or chat.
+
 ## v1.21.3 - 2026-07-22
 
 ### Changed

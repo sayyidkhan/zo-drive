@@ -42,9 +42,9 @@ describe("DriveApp", () => {
 
       expect(screen.getByRole("heading", { name: "Manage files in your private Drive." })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Share files on your terms" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 1.21.3" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 1.21.4" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI changelog version 1.21.3" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
+      expect(screen.getByRole("link", { name: "GUI changelog version 1.21.4" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
       expect(screen.getByText((_, element) => element?.tagName === "H3" && element.textContent === "GUI v1.17.0")).toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
@@ -79,7 +79,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.21.3")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.21.4")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();
@@ -268,6 +268,7 @@ describe("DriveApp", () => {
     expect(screen.getByTestId("header-actions")).toContainElement(screen.getByRole("button", { name: "ZominAI" }));
     expect(screen.getByTestId("header-actions")).toContainElement(screen.getByRole("button", { name: "Account menu" }));
     expect(screen.getByTestId("header-actions")).toContainElement(screen.getByRole("button", { name: "Sign out" }));
+    expect(screen.getByTestId("drive-workspace")).toHaveClass("h-dvh", "overflow-hidden");
     fireEvent.click(screen.getByRole("button", { name: "Collapse navigation" }));
     expect(screen.getByRole("button", { name: "New" })).toHaveAttribute("title", "New");
     expect(screen.getByRole("button", { name: "My Drive" })).toHaveAttribute("title", "My Drive");
@@ -297,7 +298,7 @@ describe("DriveApp", () => {
     expect(screen.getByRole("button", { name: "New ZominAI chat" })).toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "ZominAI chat history" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Toggle ZominAI chat history" })).toHaveAttribute("aria-expanded", "false");
-    expect(screen.getByRole("button", { name: "Open upload menu" })).toHaveClass("md:right-[calc(30rem+1.5rem)]");
+    expect(screen.getByRole("button", { name: "Open upload menu" })).toHaveClass("md:inline-flex", "self-start");
     fireEvent.click(screen.getByRole("button", { name: "Toggle ZominAI chat history" }));
     expect(screen.getByRole("navigation", { name: "ZominAI chat history" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Toggle ZominAI chat history" })).toHaveAttribute("aria-expanded", "true");
