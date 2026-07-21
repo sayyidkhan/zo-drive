@@ -60,13 +60,13 @@ export type DatabaseImportSettings = {
 
 export const databaseEngineDefinitions = [
   { engine: "sqlite", name: "SQLite", packageName: "better-sqlite3", availableVersion: "12.11.1", protocol: "sql", workspaceAvailable: true },
-  { engine: "duckdb", name: "DuckDB", packageName: "@duckdb/node-api", availableVersion: "1.5.4-r.1", protocol: "sql", workspaceAvailable: false },
-  { engine: "libsql", name: "libSQL", packageName: "@libsql/client", availableVersion: "0.17.4", protocol: "sql", workspaceAvailable: false },
-  { engine: "pglite", name: "PGlite", packageName: "@electric-sql/pglite", availableVersion: "0.5.4", protocol: "sql", workspaceAvailable: false },
-  { engine: "lancedb", name: "LanceDB", packageName: "@lancedb/lancedb", availableVersion: "0.31.0", protocol: "vector", workspaceAvailable: false },
-  { engine: "leveldb", name: "LevelDB", packageName: "classic-level", availableVersion: "3.0.0", protocol: "key-value", workspaceAvailable: false },
-  { engine: "redis", name: "Redis", packageName: "redis + redis-server", availableVersion: "7.0.15", protocol: "redis", workspaceAvailable: false },
-  { engine: "kuzu", name: "Kuzu", packageName: "kuzu", availableVersion: "0.11.3", protocol: "cypher", workspaceAvailable: false }
+  { engine: "duckdb", name: "DuckDB", packageName: "@duckdb/node-api", availableVersion: "1.5.4-r.1", protocol: "sql", workspaceAvailable: true },
+  { engine: "libsql", name: "libSQL", packageName: "@libsql/client", availableVersion: "0.17.4", protocol: "sql", workspaceAvailable: true },
+  { engine: "pglite", name: "PGlite", packageName: "@electric-sql/pglite", availableVersion: "0.5.4", protocol: "sql", workspaceAvailable: true },
+  { engine: "lancedb", name: "LanceDB", packageName: "@lancedb/lancedb", availableVersion: "0.31.0", protocol: "vector", workspaceAvailable: true },
+  { engine: "leveldb", name: "LevelDB", packageName: "classic-level", availableVersion: "3.0.0", protocol: "key-value", workspaceAvailable: true },
+  { engine: "redis", name: "Redis", packageName: "redis + redis-server", availableVersion: "7.0.15", protocol: "redis", workspaceAvailable: true },
+  { engine: "kuzu", name: "Kuzu", packageName: "kuzu", availableVersion: "0.11.3", protocol: "cypher", workspaceAvailable: true }
 ] as const;
 
 export type DatabaseEngineId = typeof databaseEngineDefinitions[number]["engine"];

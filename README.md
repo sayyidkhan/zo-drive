@@ -15,7 +15,7 @@ authentication, or workflow change.
 
 - Hono REST API for upload, list, download/preview, delete, search, and owner-complete storage usage across files, Trash, databases, functions, and Zo Originals data
 - Persistent runtimes for SQLite, DuckDB, libSQL, PGlite, LanceDB, LevelDB, Redis, and Kuzu, with versioned installation, updates, private database creation, and per-database read/write credentials for external backends
-- SQLite table browsing and validated `.sqlite` import/export with owner-configurable limits; other engines expose native SQL, vector, key-value, Redis, or Cypher requests without a fake preview
+- SQLite table browsing and validated `.sqlite` import/export with owner-configurable limits; every installed engine also has a native in-Drive request workspace and scoped HTTPS connection
 - Zo Functions: owner-scoped JavaScript and Python handlers with private or public invocation, UTC cron schedules, and run history
 - Owner-account authentication: signed HttpOnly sessions and one-time registration
 - Account controls for username, password, sign-out, and permanent account/data deletion
@@ -108,7 +108,7 @@ folder.
 
 #### GUI versioning
 
-The browser GUI has its own release track, currently `GUI v1.11.2`. GUI changes
+The browser GUI has its own release track, currently `GUI v1.12.0`. GUI changes
 are deployed to Zo Drive directly; browser users receive the current version by
 loading the page. Use `gui-v*` Git tags to trace a deployed GUI release. CLI
 releases are separate and do not change the GUI version.

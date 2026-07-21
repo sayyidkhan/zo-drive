@@ -63,7 +63,7 @@ import { toast, Toaster } from "sonner";
 import { create } from "zustand";
 
 import { ZoDriveClient } from "@zo-drive/sdk";
-import type { ApiKeyScope, AuthStatus, ClusterMount, DatabaseApiKey, DatabaseApiKeyScope, DatabaseEngine, DatabaseEngineId, DatabaseImportSettings, DatabaseRows, DriveApiKey, DriveDatabase, DriveFolder, DriveFunction, DriveFunctionRun, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, FunctionRuntime, FunctionVisibility, NativeFileType, PublicShare, PublishedForm, ShareAccess, StorageUsage } from "@zo-drive/types";
+import type { ApiKeyScope, AuthStatus, ClusterMount, DatabaseApiKey, DatabaseApiKeyScope, DatabaseEngine, DatabaseEngineId, DatabaseExecuteResult, DatabaseImportSettings, DatabaseRows, DriveApiKey, DriveDatabase, DriveFolder, DriveFunction, DriveFunctionRun, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, FunctionRuntime, FunctionVisibility, NativeFileType, PublicShare, PublishedForm, ShareAccess, StorageUsage } from "@zo-drive/types";
 
 type DriveClient = Pick<ZoDriveClient, "createApiKey" | "createFolder" | "createNativeFile" | "createShare" | "delete" | "download" | "emptyTrash" | "getUsage" | "list" | "listApiKeys" | "listFolders" | "listFormResponses" | "listShares" | "listStarred" | "listTrash" | "permanentlyDeleteTrash" | "publishForm" | "rename" | "restoreTrash" | "revokeApiKey" | "revokeShare" | "saveNativeFile" | "setQuota" | "star" | "unstar" | "updateSharePasscode" | "upload"> & Partial<Pick<ZoDriveClient, "createClusterFolder" | "createClusterInvitation" | "createClusterMount" | "deleteClusterMount" | "deleteClusterObject" | "downloadClusterObject" | "listClusterMounts" | "listClusterObjects" | "renameClusterObject" | "uploadClusterObject" | "createDatabase" | "createDatabaseApiKey" | "deleteDatabase" | "executeDatabase" | "exportDatabase" | "getDatabaseImportSettings" | "importDatabase" | "installDatabaseEngine" | "listDatabaseApiKeys" | "listDatabaseEngines" | "listDatabases" | "listDatabaseRows" | "listDatabaseTables" | "queryDatabase" | "revokeDatabaseApiKey" | "setDatabaseImportLimit" | "updateDatabaseEngine" | "createFunction" | "deleteFunction" | "listFunctions" | "listFunctionRuns" | "runFunction" | "updateFunction">>;
 type AuthClient = Pick<ZoDriveClient, "changePassword" | "deleteAccount" | "getAuthStatus" | "login" | "logout" | "registerInitialUser" | "updateProfile">;
@@ -71,7 +71,7 @@ type SharedClient = Pick<ZoDriveClient, "downloadShared" | "getPublicShare" | "o
 type PublicFormClient = Pick<ZoDriveClient, "getPublicForm" | "submitFormResponse">;
 type ViewMode = "grid" | "list";
 type DriveSection = "api-keys" | "cluster-databases" | "databases" | "functions" | "home" | "my-drive" | "pastes" | "profile" | "shared" | "starred" | "transfer" | "trash";
-type DatabasePanel = "data" | "sql" | "access";
+type DatabasePanel = "data" | "run" | "sql" | "access";
 type DatabaseView = "catalog" | "instances";
 type AdvancedFileType = "document" | "spreadsheet" | "presentation" | "form" | "paste" | "image" | "video" | "audio" | "pdf" | "other";
 type AdvancedFilters = {
@@ -118,7 +118,7 @@ const defaultRecentFilters: RecentFilters = {
 };
 
 const driveSections: DriveSection[] = ["api-keys", "cluster-databases", "databases", "functions", "home", "my-drive", "pastes", "profile", "shared", "starred", "transfer", "trash"];
-const databasePanels: DatabasePanel[] = ["data", "sql", "access"];
+const databasePanels: DatabasePanel[] = ["data", "run", "sql", "access"];
 const databaseViews: DatabaseView[] = ["catalog", "instances"];
 
 function currentDriveSection(): DriveSection {
@@ -184,10 +184,15 @@ const appBasePath = normalizeAppBasePath(
 const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.11.2";
+const GUI_VERSION = "1.12.0";
 const CLI_VERSION = "1.2.1";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.12.0",
+    date: "21 July 2026",
+    changes: ["Added native in-Drive run workspaces for every installed database engine, alongside their scoped HTTPS connections."]
+  },
   {
     version: "v1.11.2",
     date: "21 July 2026",
@@ -1307,7 +1312,7 @@ function Databases({ client }: { client: DriveClient }) {
   const [sql, setSql] = useState("SELECT name, sql FROM sqlite_master WHERE type = 'table' ORDER BY name");
   const [queryResult, setQueryResult] = useState<DatabaseRows | null>(null);
   const importInput = useRef<HTMLInputElement>(null);
-  const supported = Boolean(client.listDatabases && client.createDatabase && client.deleteDatabase && client.exportDatabase && client.getDatabaseImportSettings && client.importDatabase && client.installDatabaseEngine && client.listDatabaseApiKeys && client.listDatabaseEngines && client.listDatabaseTables && client.listDatabaseRows && client.queryDatabase && client.setDatabaseImportLimit && client.updateDatabaseEngine);
+  const supported = Boolean(client.listDatabases && client.createDatabase && client.deleteDatabase && client.executeDatabase && client.exportDatabase && client.getDatabaseImportSettings && client.importDatabase && client.installDatabaseEngine && client.listDatabaseApiKeys && client.listDatabaseEngines && client.listDatabaseTables && client.listDatabaseRows && client.queryDatabase && client.setDatabaseImportLimit && client.updateDatabaseEngine);
   const enginesQuery = useQuery({ queryKey: ["database-engines"], queryFn: () => client.listDatabaseEngines!(), enabled: supported });
   const sqliteEngine = enginesQuery.data?.find((engine) => engine.engine === "sqlite");
   const sqliteInstalled = sqliteInstalledLocally || sqliteEngine?.installed === true;
@@ -1334,7 +1339,7 @@ function Databases({ client }: { client: DriveClient }) {
   const activeTable = tables.find((table) => table.name === selectedTable) ?? tables[0] ?? null;
 
   useEffect(() => {
-    if (activeDatabase && activeDatabase.engine !== "sqlite" && activePanel !== "access") setActivePanel("access");
+    if (activeDatabase && activeDatabase.engine !== "sqlite" && activePanel !== "run" && activePanel !== "access") setActivePanel("run");
   }, [activeDatabase, activePanel]);
 
   useEffect(() => {
@@ -1368,6 +1373,7 @@ function Databases({ client }: { client: DriveClient }) {
       setName("");
       setSelectedId(database.id);
       setSelectedTable(null);
+      setActivePanel(database.engine === "sqlite" ? "data" : "run");
       setDatabaseView("instances");
       await queryClient.invalidateQueries({ queryKey: ["databases"] });
       toast.success(`${database.name} created`);
@@ -1468,7 +1474,10 @@ function Databases({ client }: { client: DriveClient }) {
     { id: "data" as const, label: "Data" },
     { id: "sql" as const, label: "SQL editor" },
     { id: "access" as const, label: "Backend access" }
-  ] : [{ id: "access" as const, label: "Backend access" }];
+  ] : [
+    { id: "run" as const, label: databaseRunnerLabel(activeDatabase?.engine) },
+    { id: "access" as const, label: "Backend access" }
+  ];
 
   const showWorkspace = databaseView === "instances" && anyEngineInstalled;
 
@@ -1481,19 +1490,108 @@ function Databases({ client }: { client: DriveClient }) {
         <input accept=".db,.sqlite,.sqlite3,application/vnd.sqlite3,application/x-sqlite3" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) importMutation.mutate(file); event.target.value = ""; }} ref={importInput} type="file" />
         {sqliteInstalled && <><button className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:text-slate-400" disabled={importMutation.isPending} onClick={() => importInput.current?.click()} type="button"><Upload size={16} />{importMutation.isPending ? "Importing…" : "Import SQLite file"}</button><button className="mt-2 w-full text-center text-xs font-medium text-slate-500 hover:text-blue-600" onClick={() => setImportSettingsOpen(true)} type="button">Import limit: {formatBytes(importSettingsQuery.data?.importLimitBytes ?? 0)}</button></>}
       </div>
-      {databasesQuery.isPending ? <p className="p-5 text-sm text-slate-500">Loading databases…</p> : databases.length === 0 ? <p className="p-5 text-sm leading-6 text-slate-500">Choose an installed engine and create a private database.</p> : <div className="p-2">{databases.map((database) => <button className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${activeDatabase?.id === database.id ? "bg-blue-600 text-white shadow-sm" : "text-slate-700 hover:bg-slate-50"}`} key={database.id} onClick={() => { setSelectedId(database.id); setSelectedEngine(database.engine); setSelectedTable(null); setQueryResult(null); setActivePanel(database.engine === "sqlite" ? "data" : "access"); setDatabaseView("instances"); }}><span className={`grid size-9 place-items-center rounded-lg ${activeDatabase?.id === database.id ? "bg-white/15 text-white" : "bg-slate-100 text-slate-500"}`}><Database size={18} /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{database.name}</span><span className={`mt-0.5 block text-xs font-medium ${activeDatabase?.id === database.id ? "text-blue-100" : "text-slate-400"}`}>{database.engine} · {formatBytes(database.sizeBytes)}</span></span></button>)}</div>}
+      {databasesQuery.isPending ? <p className="p-5 text-sm text-slate-500">Loading databases…</p> : databases.length === 0 ? <p className="p-5 text-sm leading-6 text-slate-500">Choose an installed engine and create a private database.</p> : <div className="p-2">{databases.map((database) => <button className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${activeDatabase?.id === database.id ? "bg-blue-600 text-white shadow-sm" : "text-slate-700 hover:bg-slate-50"}`} key={database.id} onClick={() => { setSelectedId(database.id); setSelectedEngine(database.engine); setSelectedTable(null); setQueryResult(null); setActivePanel(database.engine === "sqlite" ? "data" : "run"); setDatabaseView("instances"); }}><span className={`grid size-9 place-items-center rounded-lg ${activeDatabase?.id === database.id ? "bg-white/15 text-white" : "bg-slate-100 text-slate-500"}`}><Database size={18} /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{database.name}</span><span className={`mt-0.5 block text-xs font-medium ${activeDatabase?.id === database.id ? "text-blue-100" : "text-slate-400"}`}>{database.engine} · {formatBytes(database.sizeBytes)}</span></span></button>)}</div>}
     </aside>
 
     <div className="min-w-0">
       {!activeDatabase ? <section className="grid min-h-96 place-items-center rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center"><div><span className="mx-auto grid size-12 place-items-center rounded-2xl bg-blue-50 text-blue-600"><Database size={24} /></span><h2 className="mt-4 text-xl font-semibold text-slate-900">Build with data you control.</h2><p className="mt-2 max-w-sm text-sm leading-6 text-slate-500">Create a database with any installed engine, then expose it securely through Zo Drive’s authenticated HTTPS API.</p></div></section> : <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <header className="flex flex-wrap items-center justify-between gap-4 px-5 py-5 sm:px-6"><div className="flex min-w-0 items-center gap-3"><span className="grid size-11 shrink-0 place-items-center rounded-xl bg-blue-600 text-white shadow-sm"><Database size={21} /></span><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="truncate text-xl font-semibold text-slate-900">{activeDatabase.name}</h2><span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">Private</span></div><p className="mt-1 text-sm capitalize text-slate-500">{activeDatabase.engine} · {formatBytes(activeDatabase.sizeBytes)}{activeDatabase.engine === "sqlite" ? ` · ${tables.length} table${tables.length === 1 ? "" : "s"}` : " · HTTPS access"}</p></div></div><div className="flex items-center gap-1">{activeDatabase.engine === "sqlite" && <button className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 disabled:text-slate-400" disabled={exportMutation.isPending} onClick={() => exportMutation.mutate()} type="button"><Download size={16} />{exportMutation.isPending ? "Exporting…" : "Export"}</button>}<button aria-label="Delete database" className="rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600" disabled={deleteMutation.isPending} onClick={() => { if (window.confirm(`Delete ${activeDatabase.name}? This permanently removes its database data.`)) deleteMutation.mutate(activeDatabase.id); }}><X size={18} /></button></div></header>
+        <header className="flex flex-wrap items-center justify-between gap-4 px-5 py-5 sm:px-6"><div className="flex min-w-0 items-center gap-3"><span className="grid size-11 shrink-0 place-items-center rounded-xl bg-blue-600 text-white shadow-sm"><Database size={21} /></span><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="truncate text-xl font-semibold text-slate-900">{activeDatabase.name}</h2><span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">Private</span></div><p className="mt-1 text-sm capitalize text-slate-500">{activeDatabase.engine} · {formatBytes(activeDatabase.sizeBytes)}{activeDatabase.engine === "sqlite" ? ` · ${tables.length} table${tables.length === 1 ? "" : "s"}` : " · Native workspace · HTTPS access"}</p></div></div><div className="flex items-center gap-1">{activeDatabase.engine === "sqlite" && <button className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 disabled:text-slate-400" disabled={exportMutation.isPending} onClick={() => exportMutation.mutate()} type="button"><Download size={16} />{exportMutation.isPending ? "Exporting…" : "Export"}</button>}<button aria-label="Delete database" className="rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600" disabled={deleteMutation.isPending} onClick={() => { if (window.confirm(`Delete ${activeDatabase.name}? This permanently removes its database data.`)) deleteMutation.mutate(activeDatabase.id); }}><X size={18} /></button></div></header>
         <nav aria-label="Database workspace" className="flex gap-1 border-y border-slate-100 bg-slate-50 px-3 py-2 sm:px-4">{panels.map((panel) => <button aria-current={activePanel === panel.id ? "page" : undefined} className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${activePanel === panel.id ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200" : "text-slate-500 hover:text-slate-900"}`} key={panel.id} onClick={() => setActivePanel(panel.id)} type="button">{panel.label}</button>)}</nav>
         {activePanel === "data" && <div className="grid min-h-[30rem] md:grid-cols-[13.5rem_minmax(0,1fr)]"><aside className="border-b border-slate-100 bg-slate-50/70 p-3 md:border-b-0 md:border-r"><div className="flex items-center justify-between px-2 pb-2"><p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Tables</p><span className="text-xs font-semibold text-slate-400">{tables.length}</span></div>{tablesQuery.isPending ? <p className="px-2 py-3 text-sm text-slate-500">Loading…</p> : tables.length === 0 ? <div className="px-2 py-4"><p className="text-sm leading-5 text-slate-500">No tables yet.</p><button className="mt-3 text-sm font-semibold text-blue-600 hover:text-blue-700" onClick={() => setActivePanel("sql")}>Create with SQL</button></div> : tables.map((table) => <button className={`mb-1 flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm font-medium ${activeTable?.name === table.name ? "bg-white text-blue-700 shadow-sm ring-1 ring-slate-200" : "text-slate-600 hover:bg-white"}`} key={table.name} onClick={() => { setSelectedTable(table.name); setQueryResult(null); }}><span className="truncate">{table.name}</span><span className="size-1.5 shrink-0 rounded-full bg-current opacity-50" /></button>)}</aside><div className="min-w-0 p-5 sm:p-6">{activeTable ? <DatabaseTableGrid data={rowsQuery.data} isLoading={rowsQuery.isPending} tableName={activeTable.name} total={rowsQuery.data?.total ?? 0} /> : <div className="grid h-full min-h-56 place-items-center text-center"><div><Database className="mx-auto text-slate-300" size={28} /><p className="mt-3 text-sm text-slate-500">Create a table, then select it here to browse its rows.</p></div></div>}</div></div>}
         {activePanel === "sql" && <section className="bg-slate-950"><header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-5 py-4 sm:px-6"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-300">SQL editor</p><p className="mt-1 text-sm text-slate-300">One parameterised SQL statement at a time.</p></div><button className="rounded-lg bg-cyan-300 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-200 disabled:bg-slate-600 disabled:text-slate-300" disabled={queryMutation.isPending || !sql.trim()} onClick={() => queryMutation.mutate()}>{queryMutation.isPending ? "Running…" : "Run query"}</button></header><textarea aria-label="SQL query" className="min-h-72 w-full resize-y border-0 bg-slate-950 p-5 font-mono text-sm leading-6 text-slate-100 outline-none placeholder:text-slate-500 sm:p-6" spellCheck={false} value={sql} onChange={(event) => setSql(event.target.value)} />{queryResult && <div className="border-t border-white/10 bg-slate-900 p-5 sm:p-6"><DatabaseTableGrid data={queryResult} isLoading={false} tableName="Query results" total={queryResult.total} dark /></div>}</section>}
+        {activePanel === "run" && <DatabaseRunner client={client} database={activeDatabase} />}
         {activePanel === "access" && <div className="p-4 sm:p-6"><DatabaseConnection client={client} database={activeDatabase} /></div>}
       </section>}
     </div>
   </div>}{importSettingsOpen && importSettingsQuery.data && <DatabaseImportSettingsDialog isSaving={updateImportLimitMutation.isPending} onClose={() => setImportSettingsOpen(false)} onSave={(importLimitBytes) => updateImportLimitMutation.mutate(importLimitBytes)} settings={importSettingsQuery.data} />}</>;
+}
+
+type DatabaseRunnerConfig = {
+  description: string;
+  examples: Array<{ label: string; request: Record<string, unknown> }>;
+  label: string;
+};
+
+function databaseRunnerLabel(engine: DatabaseEngineId | undefined): string {
+  if (engine === "duckdb" || engine === "libsql" || engine === "pglite") return "SQL workspace";
+  if (engine === "kuzu") return "Cypher workspace";
+  return "Native workspace";
+}
+
+function databaseRunnerConfig(engine: DatabaseEngineId): DatabaseRunnerConfig {
+  if (engine === "duckdb" || engine === "libsql" || engine === "pglite") return {
+    label: "SQL workspace",
+    description: "Run one SQL statement using this engine's native dialect. Parameters are an optional JSON array.",
+    examples: [{ label: "Check connection", request: { query: "SELECT 1 AS ready", params: [] } }]
+  };
+  if (engine === "kuzu") return {
+    label: "Cypher workspace",
+    description: "Run one Cypher statement. Parameters are an optional JSON object keyed by parameter name.",
+    examples: [
+      { label: "Check connection", request: { query: "RETURN 1 AS ready", params: {} } },
+      { label: "Browse graph", request: { query: "MATCH (n) RETURN n LIMIT 25", params: {} } }
+    ]
+  };
+  if (engine === "redis") return {
+    label: "Redis workspace",
+    description: "Run an enabled Redis command with its arguments. Commands run only inside this private database.",
+    examples: [
+      { label: "Ping", request: { command: "PING", args: [] } },
+      { label: "Scan keys", request: { command: "SCAN", args: ["0"] } }
+    ]
+  };
+  if (engine === "leveldb") return {
+    label: "LevelDB workspace",
+    description: "Read, write, delete, or scan the key-value entries in this database.",
+    examples: [
+      { label: "Scan entries", request: { operation: "scan", limit: 100 } },
+      { label: "Read a key", request: { operation: "get", key: "customer:1" } }
+    ]
+  };
+  return {
+    label: "LanceDB workspace",
+    description: "List tables, create a table, add records, or run a vector search using LanceDB's native request contract.",
+    examples: [
+      { label: "List tables", request: { operation: "listTables" } },
+      { label: "Vector search", request: { operation: "search", table: "documents", vector: [0.1, 0.2, 0.3], limit: 10 } }
+    ]
+  };
+}
+
+function formatDatabaseRequest(request: Record<string, unknown>): string {
+  return JSON.stringify(request, null, 2);
+}
+
+function DatabaseRunner({ client, database }: { client: DriveClient; database: DriveDatabase }) {
+  const config = databaseRunnerConfig(database.engine);
+  const [requestText, setRequestText] = useState(() => formatDatabaseRequest(config.examples[0]!.request));
+  const [result, setResult] = useState<DatabaseExecuteResult | null>(null);
+
+  useEffect(() => {
+    const nextConfig = databaseRunnerConfig(database.engine);
+    setRequestText(formatDatabaseRequest(nextConfig.examples[0]!.request));
+    setResult(null);
+  }, [database.engine, database.id]);
+
+  const executeMutation = useMutation({
+    mutationFn: () => {
+      let request: unknown;
+      try {
+        request = JSON.parse(requestText);
+      } catch {
+        throw new Error("Enter a valid JSON request");
+      }
+      if (!request || typeof request !== "object" || Array.isArray(request)) throw new Error("The request must be a JSON object");
+      return client.executeDatabase!({ id: database.id, request: request as Record<string, unknown> });
+    },
+    onSuccess: (response) => {
+      setResult(response);
+      toast.success(`${config.label} completed`);
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not run the database request")
+  });
+
+  return <section className="bg-slate-950 text-slate-100"><header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-5 py-4 sm:px-6"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-300">{config.label} · {database.engine}</p><p className="mt-1 max-w-2xl text-sm leading-6 text-slate-300">{config.description}</p></div><button className="rounded-lg bg-cyan-300 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-200 disabled:bg-slate-600 disabled:text-slate-300" disabled={executeMutation.isPending} onClick={() => executeMutation.mutate()} type="button">{executeMutation.isPending ? "Running…" : "Run request"}</button></header><div className="p-5 sm:p-6"><div className="flex flex-wrap gap-2">{config.examples.map((example) => <button className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:border-cyan-300/50 hover:bg-white/10 hover:text-cyan-100" key={example.label} onClick={() => setRequestText(formatDatabaseRequest(example.request))} type="button">{example.label}</button>)}</div><label className="mt-4 block text-sm font-semibold text-slate-200">Native request JSON<textarea aria-label={`${config.label} request`} className="mt-2 min-h-72 w-full resize-y rounded-xl border border-white/10 bg-slate-900 p-4 font-mono text-sm leading-6 text-slate-100 outline-none focus:border-cyan-300 focus:ring-4 focus:ring-cyan-300/15" spellCheck={false} value={requestText} onChange={(event) => setRequestText(event.target.value)} /></label></div>{result && <div className="border-t border-white/10 bg-slate-900 p-5 sm:p-6"><div className="flex items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-300">Live result</p><p className="mt-1 text-sm text-slate-300">Returned from {result.engine} in this private database.</p></div><button aria-label="Copy database result" className="rounded-lg border border-white/15 p-2 text-slate-300 hover:bg-white/10 hover:text-white" onClick={() => void copyText(JSON.stringify(result.result, null, 2), "Database result copied")}><Copy size={16} /></button></div><pre aria-label="Database request result" className="mt-4 max-h-[32rem] overflow-auto rounded-xl border border-white/10 bg-slate-950 p-4 text-xs leading-6 text-slate-100"><code>{JSON.stringify(result.result, null, 2)}</code></pre></div>}</section>;
 }
 
 function DatabaseCatalog({ databaseCount, engineStates, installingEngine, updatingEngine, onCreateDatabase, onInstallEngine, onUpdateEngine, onViewDatabases }: { databaseCount: number; engineStates: DatabaseEngine[]; installingEngine: DatabaseEngineId | null | undefined; updatingEngine: DatabaseEngineId | null | undefined; onCreateDatabase: (engine: DatabaseEngineId) => void; onInstallEngine: (engine: DatabaseEngineId) => void; onUpdateEngine: (engine: DatabaseEngineId) => void; onViewDatabases: () => void }) {

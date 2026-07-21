@@ -4,6 +4,13 @@ All notable changes to the Zo Drive browser experience are recorded here.
 
 ## Unreleased
 
+## v1.12.0 - 2026-07-21
+
+### Added
+
+- Added native in-Drive run workspaces for every installed database engine,
+  alongside scoped HTTPS endpoint and key management.
+
 ## v1.11.2 - 2026-07-21
 
 ### Changed

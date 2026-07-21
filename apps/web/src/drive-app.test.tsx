@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { DatabaseEngineId } from "@zo-drive/types";
+import type { DatabaseEngine, DatabaseEngineId, DriveDatabase } from "@zo-drive/types";
 
 import { DriveApp, formulaDisplay } from "./drive-app.js";
 
@@ -39,11 +39,11 @@ describe("DriveApp", () => {
 
       expect(screen.getByRole("heading", { name: "Manage files in your private Drive." })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Share files on your terms" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 1.11.2" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 1.12.0" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI changelog version 1.11.2" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
+      expect(screen.getByRole("link", { name: "GUI changelog version 1.12.0" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText((_, element) => element?.tagName === "H3" && element.textContent === "GUI v1.11.2")).toBeInTheDocument();
+      expect(screen.getByText((_, element) => element?.tagName === "H3" && element.textContent === "GUI v1.12.0")).toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
 
       cleanup();
@@ -76,7 +76,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.11.2")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.12.0")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();
@@ -157,8 +157,8 @@ describe("DriveApp", () => {
       listClusterObjects: vi.fn().mockResolvedValue([]),
       renameClusterObject: vi.fn(),
       uploadClusterObject: vi.fn(),
-      listDatabases: vi.fn().mockResolvedValue([{ id: "db-11111111-1111-4111-8111-111111111111", name: "app-data", engine: "sqlite", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", sizeBytes: 4096 }]),
-      listDatabaseEngines: vi.fn(() => Promise.resolve([{ engine: "sqlite" as const, name: "SQLite", packageName: "sqlite", availableVersion: "3.0.0", installedVersion: sqliteInstalled ? "3.0.0" : null, protocol: "sql" as const, installed: sqliteInstalled, installedAt: sqliteInstalled ? "2026-07-20T00:00:00.000Z" : null, updatedAt: null, updateAvailable: false, workspaceAvailable: true }])),
+      listDatabases: vi.fn<() => Promise<DriveDatabase[]>>().mockResolvedValue([{ id: "db-11111111-1111-4111-8111-111111111111", name: "app-data", engine: "sqlite", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", sizeBytes: 4096 }]),
+      listDatabaseEngines: vi.fn<() => Promise<DatabaseEngine[]>>(() => Promise.resolve([{ engine: "sqlite", name: "SQLite", packageName: "sqlite", availableVersion: "3.0.0", installedVersion: sqliteInstalled ? "3.0.0" : null, protocol: "sql", installed: sqliteInstalled, installedAt: sqliteInstalled ? "2026-07-20T00:00:00.000Z" : null, updatedAt: null, updateAvailable: false, workspaceAvailable: true }])),
       installDatabaseEngine: vi.fn((engine: DatabaseEngineId) => { if (engine === "sqlite") sqliteInstalled = true; return Promise.resolve({ engine, name: engine === "sqlite" ? "SQLite" : "Redis", packageName: engine, availableVersion: "3.0.0", installedVersion: "3.0.0", protocol: "sql" as const, installed: true, installedAt: "2026-07-20T00:00:00.000Z", updatedAt: null, updateAvailable: false, workspaceAvailable: engine === "sqlite" }); }),
       updateDatabaseEngine: vi.fn((engine: DatabaseEngineId) => Promise.resolve({ engine, name: engine === "sqlite" ? "SQLite" : "Redis", packageName: engine, availableVersion: "3.0.0", installedVersion: "3.0.0", protocol: "sql" as const, installed: true, installedAt: "2026-07-20T00:00:00.000Z", updatedAt: "2026-07-21T00:00:00.000Z", updateAvailable: false, workspaceAvailable: engine === "sqlite" })),
       createDatabase: vi.fn(),
@@ -173,6 +173,7 @@ describe("DriveApp", () => {
       listDatabaseTables: vi.fn().mockResolvedValue([{ name: "tasks", schema: "CREATE TABLE tasks (id INTEGER PRIMARY KEY, title TEXT)" }]),
       listDatabaseRows: vi.fn().mockResolvedValue({ columns: ["id", "title"], rows: [{ id: 1, title: "Ship Database Engines" }], total: 1 }),
       queryDatabase: vi.fn().mockResolvedValue({ columns: ["title"], rows: [{ title: "Ship Database Engines" }], changes: 0, lastInsertRowid: null }),
+      executeDatabase: vi.fn().mockResolvedValue({ engine: "redis", result: "PONG" }),
       listFunctions: vi.fn().mockResolvedValue([{ id: "fn-11111111-1111-4111-8111-111111111111", name: "greet", runtime: "javascript", source: "export default async function handler(input) { return input; }", visibility: "private", cron: null, enabled: true, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", lastRunAt: null, lastRunStatus: null }]),
       createFunction: vi.fn(),
       updateFunction: vi.fn(),
@@ -399,6 +400,20 @@ describe("DriveApp", () => {
     expect(restoredRoute.get("section")).toBe("databases");
     expect(restoredRoute.get("database")).toBe("db-11111111-1111-4111-8111-111111111111");
     expect(restoredRoute.get("databasePanel")).toBe("access");
+
+    client.listDatabases.mockResolvedValue([{ id: "db-22222222-2222-4222-8222-222222222222", name: "cache", engine: "redis", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", sizeBytes: 1024 }]);
+    client.listDatabaseEngines.mockResolvedValue([{ engine: "redis", name: "Redis", packageName: "redis", availableVersion: "7.0.15", installedVersion: "7.0.15", protocol: "redis", installed: true, installedAt: "2026-01-01T00:00:00.000Z", updatedAt: null, updateAvailable: false, workspaceAvailable: true }]);
+    window.history.pushState({}, "", "?section=databases&database=db-22222222-2222-4222-8222-222222222222&databasePanel=run");
+    cleanup();
+    render(<DriveApp client={client} authClient={authClient} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Zo Databases" }));
+    expect(await screen.findByRole("button", { name: "Native workspace" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByText("Native request JSON")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Run request" }));
+    await waitFor(() => expect(client.executeDatabase).toHaveBeenCalledWith({ id: "db-22222222-2222-4222-8222-222222222222", request: { command: "PING", args: [] } }));
+    expect(await screen.findByLabelText("Database request result")).toHaveTextContent('"PONG"');
+    fireEvent.click(screen.getByRole("button", { name: "Backend access" }));
+    expect(await screen.findByRole("heading", { name: "Connect from your backend" })).toBeInTheDocument();
   }, 15_000);
 
   it("keeps an upload progress bar visible until the upload finishes", async () => {

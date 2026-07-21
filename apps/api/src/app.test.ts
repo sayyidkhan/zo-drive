@@ -132,8 +132,8 @@ describe("Zo Drive API", () => {
     const engines = await app.request("http://localhost/databases/engines", { headers: { "x-test-user-id": "alice" } });
     await expect(engines.json()).resolves.toMatchObject({ engines: expect.arrayContaining([
       expect.objectContaining({ engine: "sqlite", name: "SQLite", installed: false, installedAt: null, installedVersion: null, updatedAt: null, updateAvailable: false, workspaceAvailable: true }),
-      expect.objectContaining({ engine: "redis", name: "Redis", installed: false, installedAt: null, installedVersion: null, updatedAt: null, updateAvailable: false, workspaceAvailable: false }),
-      expect.objectContaining({ engine: "kuzu", name: "Kuzu", installed: false, installedAt: null, installedVersion: null, updatedAt: null, updateAvailable: false, workspaceAvailable: false })
+      expect.objectContaining({ engine: "redis", name: "Redis", installed: false, installedAt: null, installedVersion: null, updatedAt: null, updateAvailable: false, workspaceAvailable: true }),
+      expect.objectContaining({ engine: "kuzu", name: "Kuzu", installed: false, installedAt: null, installedVersion: null, updatedAt: null, updateAvailable: false, workspaceAvailable: true })
     ]) });
     const blockedBeforeInstall = await app.request("http://localhost/databases", {
       method: "POST",
@@ -144,7 +144,7 @@ describe("Zo Drive API", () => {
     await expect(blockedBeforeInstall.json()).resolves.toMatchObject({ error: { code: "DATABASE_ENGINE_NOT_INSTALLED" } });
     const redisInstalled = await app.request("http://localhost/databases/engines/redis/install", { method: "POST", headers: { "x-test-user-id": "alice" } });
     expect(redisInstalled.status).toBe(200);
-    await expect(redisInstalled.json()).resolves.toMatchObject({ engine: "redis", name: "Redis", installed: true, installedAt: expect.any(String), workspaceAvailable: false });
+    await expect(redisInstalled.json()).resolves.toMatchObject({ engine: "redis", name: "Redis", installed: true, installedAt: expect.any(String), workspaceAvailable: true });
     const installed = await app.request("http://localhost/databases/engines/sqlite/install", { method: "POST", headers: { "x-test-user-id": "alice" } });
     expect(installed.status).toBe(200);
     await expect(installed.json()).resolves.toMatchObject({ engine: "sqlite", name: "SQLite", installed: true, installedAt: expect.any(String), workspaceAvailable: true });
