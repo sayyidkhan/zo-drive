@@ -2,6 +2,15 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.23.0 - 2026-07-22
+
+### Added
+
+- Connected ZominAI to the signed-in Drive through local, read-only tools.
+  ZominAI can browse and search Drive files, read supported text and Zo-native
+  content, inspect database schemas, and run read-only database queries. Tool
+  results are sent only to the local Bonsai runtime.
+
 ## v1.22.0 - 2026-07-22
 
 ### Changed

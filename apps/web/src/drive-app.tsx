@@ -129,6 +129,25 @@ type ZominAiChatMessage = {
   role: "assistant" | "user";
 };
 
+type ZominAiToolName = "describe_database" | "list_databases" | "list_drive" | "query_database" | "read_drive_file" | "search_drive";
+
+type ZominAiToolCall = {
+  function: { arguments: string; name: ZominAiToolName };
+  id: string;
+};
+
+type ZominAiRuntimeMessage = ZominAiChatMessage | {
+  content: string;
+  role: "assistant";
+  tool_calls: ZominAiToolCall[];
+} | {
+  content: string;
+  role: "tool";
+  tool_call_id: string;
+};
+
+type ZominAiToolRunner = (name: ZominAiToolName, argumentsJson: string) => Promise<string>;
+
 type ZominAiChatSession = {
   createdAt: string;
   id: string;
@@ -243,10 +262,15 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.22.0";
+const GUI_VERSION = "1.23.0";
 const CLI_VERSION = "1.2.1";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.23.0",
+    date: "2026-07-22",
+    changes: ["Connected ZominAI to read-only Drive and database tools, so the local model can search files, read supported content, inspect schemas, and run read-only queries."]
+  },
   {
     version: "v1.22.0",
     date: "2026-07-22",
@@ -987,26 +1011,146 @@ function localRuntimeChatUrl(endpoint: string): string | null {
   }
 }
 
-async function sendZominAiMessage(settings: ZominAiSettings, messages: ZominAiChatMessage[]): Promise<string> {
+const zominAiTools = [
+  { type: "function", function: { name: "list_drive", description: "List files in the user's private Zo Drive. Use this to browse the Drive or a folder before reading a file.", parameters: { type: "object", properties: { prefix: { type: "string", description: "Optional folder path to list." } } } } },
+  { type: "function", function: { name: "search_drive", description: "Find files by filename or supported text content in the user's private Zo Drive.", parameters: { type: "object", properties: { query: { type: "string", description: "Words to search for." }, prefix: { type: "string", description: "Optional folder path to search within." } }, required: ["query"] } } },
+  { type: "function", function: { name: "read_drive_file", description: "Read a supported text or Zo-native file from the user's private Zo Drive. Use list_drive or search_drive first to obtain its exact key.", parameters: { type: "object", properties: { key: { type: "string", description: "Exact Drive file key." } }, required: ["key"] } } },
+  { type: "function", function: { name: "list_databases", description: "List the user's private Zo Drive databases.", parameters: { type: "object", properties: {} } } },
+  { type: "function", function: { name: "describe_database", description: "List tables and schemas for one private Zo Drive database. Use list_databases first to obtain its id.", parameters: { type: "object", properties: { database_id: { type: "string", description: "Database id." } }, required: ["database_id"] } } },
+  { type: "function", function: { name: "query_database", description: "Run a read-only SELECT, PRAGMA, or EXPLAIN query against a private Zo Drive SQL database. Never use write statements.", parameters: { type: "object", properties: { database_id: { type: "string", description: "Database id." }, sql: { type: "string", description: "Read-only SQL query." } }, required: ["database_id", "sql"] } } }
+] as const;
+
+function zominAiToolCalls(value: unknown): ZominAiToolCall[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item, index): ZominAiToolCall[] => {
+    if (!item || typeof item !== "object") return [];
+    const call = item as { function?: { arguments?: unknown; name?: unknown }; id?: unknown };
+    const name = call.function?.name;
+    if (!["describe_database", "list_databases", "list_drive", "query_database", "read_drive_file", "search_drive"].includes(name as string)) return [];
+    return [{ id: typeof call.id === "string" && call.id ? call.id : `zominai-tool-${index}`, function: { name: name as ZominAiToolName, arguments: typeof call.function?.arguments === "string" ? call.function.arguments : "{}" } }];
+  });
+}
+
+async function sendZominAiMessage(settings: ZominAiSettings, messages: ZominAiChatMessage[], toolRunner?: ZominAiToolRunner): Promise<string> {
   const url = localRuntimeChatUrl(settings.endpoint);
   if (!url) throw new Error("Use a localhost or 127.0.0.1 runtime address.");
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { Accept: "application/json", "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: settings.model,
-      messages: [
-        { role: "system", content: "You are ZominAI, a helpful private local assistant. Do not claim access to Zo Drive files unless the user has explicitly pasted their contents into this conversation." },
-        ...messages
-      ],
-      stream: false
-    })
-  });
-  if (!response.ok) throw new Error(`ZominAI could not reply (HTTP ${response.status}). Check that the local Bonsai runtime is ready.`);
-  const body = await response.json() as { choices?: Array<{ message?: { content?: unknown } }> };
-  const content = body.choices?.[0]?.message?.content;
-  if (typeof content !== "string" || !content.trim()) throw new Error("The local runtime returned an empty response.");
-  return content.trim();
+  const runtimeMessages: ZominAiRuntimeMessage[] = [...messages];
+  const systemPrompt = toolRunner
+    ? "You are ZominAI, a helpful private local assistant. You have read-only tools for the current user's Zo Drive and databases. Use the tools whenever the user asks about their Drive, files, or databases. Never claim you accessed data unless a tool returned it. Do not use or suggest write operations. Tool results are private context for this conversation and are sent only to this local runtime."
+    : "You are ZominAI, a helpful private local assistant. Do not claim access to Zo Drive files unless the user has explicitly pasted their contents into this conversation.";
+
+  for (let turn = 0; turn < 6; turn += 1) {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: settings.model,
+        messages: [{ role: "system", content: systemPrompt }, ...runtimeMessages],
+        ...(toolRunner ? { tool_choice: "auto", tools: zominAiTools } : {}),
+        stream: false
+      })
+    });
+    if (!response.ok) throw new Error(`ZominAI could not reply (HTTP ${response.status}). Check that the local Bonsai runtime is ready.`);
+    const body = await response.json() as { choices?: Array<{ message?: { content?: unknown; tool_calls?: unknown } }> };
+    const message = body.choices?.[0]?.message;
+    const content = typeof message?.content === "string" ? message.content.trim() : "";
+    const toolCalls = toolRunner ? zominAiToolCalls(message?.tool_calls) : [];
+    if (toolCalls.length === 0) {
+      if (!content) throw new Error("The local runtime returned an empty response.");
+      return content;
+    }
+
+    runtimeMessages.push({ role: "assistant", content, tool_calls: toolCalls });
+    for (const toolCall of toolCalls) {
+      let toolResult: string;
+      try {
+        toolResult = await toolRunner!(toolCall.function.name, toolCall.function.arguments);
+      } catch (error) {
+        toolResult = JSON.stringify({ error: error instanceof Error ? error.message : "The requested Drive tool could not run." });
+      }
+      runtimeMessages.push({ role: "tool", tool_call_id: toolCall.id, content: toolResult });
+    }
+  }
+  throw new Error("ZominAI requested too many Drive tools without returning an answer.");
+}
+
+function zominAiJson(value: unknown): string {
+  const json = JSON.stringify(value);
+  return json.length > 60_000 ? `${json.slice(0, 60_000)}\n[Truncated for the local model.]` : json;
+}
+
+function zominAiArguments(argumentsJson: string): Record<string, unknown> {
+  try {
+    const value = JSON.parse(argumentsJson) as unknown;
+    return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
+}
+
+function zominAiString(value: unknown, label: string): string {
+  if (typeof value !== "string" || !value.trim()) throw new Error(`Provide a valid ${label}.`);
+  return value.trim();
+}
+
+function zominAiObjectSummary(object: DriveObject) {
+  return { contentType: object.contentType, key: object.key, name: object.name, nativeType: object.nativeType, size: object.size, starred: object.starred, updatedAt: object.updatedAt };
+}
+
+function isZominAiTextFile(contentType: string): boolean {
+  return contentType.startsWith("text/") || /(?:json|javascript|xml|csv|yaml)/i.test(contentType);
+}
+
+function isZominAiReadOnlySql(sql: string): boolean {
+  const statement = sql.replace(/--[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "").trim().toLowerCase();
+  return /^(select|pragma|explain)\b/.test(statement) && !/;\s*\S/.test(statement);
+}
+
+function createZominAiToolRunner(client: DriveClient): ZominAiToolRunner {
+  return async (name, argumentsJson) => {
+    const args = zominAiArguments(argumentsJson);
+    if (name === "list_drive") {
+      const prefix = typeof args.prefix === "string" ? args.prefix.trim() : undefined;
+      const objects = await client.list({ prefix });
+      return zominAiJson({ files: objects.slice(0, 100).map(zominAiObjectSummary), shown: Math.min(objects.length, 100), total: objects.length });
+    }
+    if (name === "search_drive") {
+      const query = zominAiString(args.query, "search query");
+      const prefix = typeof args.prefix === "string" ? args.prefix.trim() : undefined;
+      const [nameMatches, contentMatches] = await Promise.all([client.list({ prefix, query }), client.list({ contentQuery: query, prefix })]);
+      const matches = [...nameMatches, ...contentMatches].filter((object, index, all) => all.findIndex((candidate) => candidate.key === object.key) === index);
+      return zominAiJson({ files: matches.slice(0, 50).map(zominAiObjectSummary), query, shown: Math.min(matches.length, 50), total: matches.length });
+    }
+    if (name === "read_drive_file") {
+      const key = zominAiString(args.key, "Drive file key");
+      const response = await client.download(key);
+      const contentType = response.headers.get("content-type") ?? "";
+      const size = Number(response.headers.get("content-length") ?? 0);
+      if (!isZominAiTextFile(contentType)) return zominAiJson({ error: "This file is not a supported text or Zo-native format. I can list it but cannot read its content yet.", key, contentType });
+      if (Number.isFinite(size) && size > 120_000) return zominAiJson({ error: "This text file is too large to load into the local chat at once. Search it or use a smaller file.", key, size });
+      const text = await response.text();
+      return zominAiJson({ content: text.slice(0, 120_000), contentType, key, truncated: text.length > 120_000 });
+    }
+    if (name === "list_databases") {
+      if (!client.listDatabases) throw new Error("Database tools are not available in this Drive client.");
+      const databases = await client.listDatabases();
+      return zominAiJson({ databases: databases.map((database) => ({ engine: database.engine, id: database.id, name: database.name, sizeBytes: database.sizeBytes, updatedAt: database.updatedAt })) });
+    }
+    if (name === "describe_database") {
+      if (!client.listDatabaseTables) throw new Error("Database schema tools are not available in this Drive client.");
+      const databaseId = zominAiString(args.database_id, "database id");
+      return zominAiJson({ databaseId, tables: await client.listDatabaseTables(databaseId) });
+    }
+    if (name === "query_database") {
+      if (!client.queryDatabase) throw new Error("Database query tools are not available in this Drive client.");
+      const databaseId = zominAiString(args.database_id, "database id");
+      const sql = zominAiString(args.sql, "SQL query");
+      if (!isZominAiReadOnlySql(sql)) throw new Error("ZominAI can only run one read-only SELECT, PRAGMA, or EXPLAIN statement.");
+      const result = await client.queryDatabase({ id: databaseId, sql });
+      return zominAiJson({ columns: result.columns, databaseId, rows: result.rows.slice(0, 200), rowsShown: Math.min(result.rows.length, 200), truncated: result.rows.length > 200 });
+    }
+    throw new Error("Unknown ZominAI Drive tool.");
+  };
 }
 
 async function getZominAiDownloadStatus(signal?: AbortSignal): Promise<ZominAiDownloadStatus> {
@@ -1105,7 +1249,7 @@ function ZominAiChat({ settings }: { settings: ZominAiSettings }) {
   </section>;
 }
 
-function ZominAiChatDrawer({ isOpen, onClose, settings }: { isOpen: boolean; onClose: () => void; settings: ZominAiSettings }) {
+function ZominAiChatDrawer({ client, isOpen, onClose, settings }: { client: DriveClient; isOpen: boolean; onClose: () => void; settings: ZominAiSettings }) {
   const [sessions, setSessions] = useState<ZominAiChatSession[]>(readZominAiChatSessions);
   const [activeSessionId, setActiveSessionId] = useState(() => sessions[0]!.id);
   const [draft, setDraft] = useState("");
@@ -1164,7 +1308,7 @@ function ZominAiChatDrawer({ isOpen, onClose, settings }: { isOpen: boolean; onC
     setDraft("");
     setSending(true);
     try {
-      const reply = await sendZominAiMessage(settings, nextMessages);
+      const reply = await sendZominAiMessage(settings, nextMessages, createZominAiToolRunner(client));
       setSessions((current) => current.map((session) => session.id === activeSession.id ? { ...session, messages: [...nextMessages, { role: "assistant", content: reply }], updatedAt: new Date().toISOString() } : session));
     } catch (error) {
       const detail = error instanceof Error ? error.message : "The local runtime could not be reached.";
@@ -1179,7 +1323,7 @@ function ZominAiChatDrawer({ isOpen, onClose, settings }: { isOpen: boolean; onC
     <div className={`flex h-full w-full flex-col bg-white transition-[transform,opacity] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none md:w-[var(--zominai-drawer-width)] ${isOpen ? "translate-x-0 opacity-100" : "translate-x-8 opacity-0"}`}>
       <header className="flex items-center gap-3 border-b border-slate-200 px-4 py-3">
         <span className="grid size-9 place-items-center overflow-hidden rounded-xl bg-cyan-950 p-0.5"><img className="size-full rounded-[0.6rem] object-cover" src={zominAiButtonUrl} alt="ZominAI Pegasus" /></span>
-        <div className="min-w-0 flex-1"><p className="text-sm font-semibold text-slate-900">ZominAI</p><p className="truncate text-xs text-slate-500">Private local chat</p></div>
+        <div className="min-w-0 flex-1"><p className="text-sm font-semibold text-slate-900">ZominAI</p><p className="truncate text-xs text-slate-500">Local chat with read-only Drive tools</p></div>
         <button aria-label="New ZominAI chat" className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-700 px-2.5 py-2 text-xs font-semibold text-white transition hover:bg-cyan-800" onClick={createChat}><Plus size={15} /> <span className="hidden sm:inline">New chat</span></button>
         <button aria-controls="zominai-chat-history" aria-expanded={historyOpen} aria-label="Toggle ZominAI chat history" className={`rounded-lg p-2 transition ${historyOpen ? "bg-cyan-50 text-cyan-800" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`} onClick={() => setHistoryOpen((open) => !open)} title="Chat history"><History size={18} /></button>
         <button aria-label="Close ZominAI chat" className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900" onClick={onClose}><X size={19} /></button>
@@ -1190,7 +1334,7 @@ function ZominAiChatDrawer({ isOpen, onClose, settings }: { isOpen: boolean; onC
           <div className="mt-2 min-h-0 flex-1 space-y-1 overflow-y-auto">{sessions.slice().sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)).map((session) => <button aria-current={session.id === activeSession.id ? "page" : undefined} className={`w-full truncate rounded-lg px-2 py-2 text-left text-xs leading-4 ${session.id === activeSession.id ? "bg-white font-semibold text-cyan-900 shadow-sm" : "text-slate-600 hover:bg-white"}`} key={session.id} onClick={() => { setActiveSessionId(session.id); setDraft(""); }}>{session.title}</button>)}</div>
         </nav>}
         <section className="flex min-w-0 flex-1 flex-col">
-          <div aria-label="ZominAI conversation" className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-slate-50/70 p-4" ref={transcriptRef}>{activeSession.messages.length === 0 ? <div className="grid h-full min-h-56 place-items-center text-center"><div className="max-w-60"><img className="mx-auto size-12 rounded-2xl object-cover shadow-sm" src={zominAiButtonUrl} alt="ZominAI Pegasus" /><p className="mt-4 text-sm font-semibold text-slate-900">Start a new chat</p><p className="mt-2 text-xs leading-5 text-slate-500">Your chats stay only in this browser. Open history whenever you want to switch conversations.</p></div></div> : activeSession.messages.map((message, index) => <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`} key={`${message.role}-${index}`}><div className={`max-w-[88%] whitespace-pre-wrap rounded-2xl px-3 py-2.5 text-sm leading-6 ${message.role === "user" ? "rounded-br-md bg-cyan-800 text-white" : "rounded-bl-md border border-slate-200 bg-white text-slate-700"}`}>{message.content}</div></div>)}{sending && <div className="flex justify-start"><div className="inline-flex items-center gap-2 rounded-2xl rounded-bl-md border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-500"><LoaderCircle className="animate-spin" size={15} /> Thinking…</div></div>}</div>
+          <div aria-label="ZominAI conversation" className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-slate-50/70 p-4" ref={transcriptRef}>{activeSession.messages.length === 0 ? <div className="grid h-full min-h-56 place-items-center text-center"><div className="max-w-60"><img className="mx-auto size-12 rounded-2xl object-cover shadow-sm" src={zominAiButtonUrl} alt="ZominAI Pegasus" /><p className="mt-4 text-sm font-semibold text-slate-900">Ask about your Drive</p><p className="mt-2 text-xs leading-5 text-slate-500">ZominAI can search and read supported Drive files, inspect databases, and run read-only queries. Results stay with this local model.</p></div></div> : activeSession.messages.map((message, index) => <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`} key={`${message.role}-${index}`}><div className={`max-w-[88%] whitespace-pre-wrap rounded-2xl px-3 py-2.5 text-sm leading-6 ${message.role === "user" ? "rounded-br-md bg-cyan-800 text-white" : "rounded-bl-md border border-slate-200 bg-white text-slate-700"}`}>{message.content}</div></div>)}{sending && <div className="flex justify-start"><div className="inline-flex items-center gap-2 rounded-2xl rounded-bl-md border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-500"><LoaderCircle className="animate-spin" size={15} /> Thinking…</div></div>}</div>
           <form className="border-t border-slate-200 bg-white p-3" onSubmit={(event) => { event.preventDefault(); void send(); }}><label className="sr-only" htmlFor="zominai-drawer-message">Message ZominAI</label><div className="flex items-end gap-2 rounded-xl border border-slate-300 p-1.5 focus-within:border-cyan-600 focus-within:ring-4 focus-within:ring-cyan-100"><textarea aria-label="Message ZominAI" className="min-h-10 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-slate-400" disabled={sending} id="zominai-drawer-message" onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder="Ask ZominAI…" rows={1} value={draft} /><button aria-label="Send message to ZominAI" className="grid size-9 place-items-center rounded-lg bg-cyan-700 text-white hover:bg-cyan-800 disabled:bg-slate-300" disabled={!draft.trim() || sending} type="submit"><Send size={17} /></button></div></form>
         </section>
       </div>
@@ -1280,7 +1424,7 @@ function ZominAiWorkspace({ initialPane = "verify" }: { initialPane?: ZominAiPan
   const selectedInstallGuide = zominAiInstallGuides[installPlatform];
 
   return <div className="space-y-5">
-    <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 via-cyan-950 to-slate-900 px-7 py-8 text-white shadow-sm md:px-9"><div className="absolute -right-20 -top-24 size-72 rounded-full bg-cyan-300/15 blur-3xl" /><div className="relative max-w-4xl"><span className="inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-cyan-200/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100"><img className="size-4 rounded object-cover" src={zominAiButtonUrl} alt="" /> Local Bonsai runtime</span><h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">Run ZominAI beside your Drive.</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">ZominAI stays on the device running the local model. The model weights and every inference stay on that device; Zo Drive stores only this browser’s local connection preferences, never model files, prompts, or Drive content.</p><nav aria-label="ZominAI resources" className="mt-6 grid gap-2 sm:grid-cols-3"><a className="rounded-xl border border-cyan-100/20 bg-white/10 p-3 text-sm font-semibold text-cyan-50 transition hover:border-cyan-100/50 hover:bg-white/15" href="https://prismml.com/" rel="noreferrer" target="_blank">PrismML overview <ExternalLink className="ml-1 inline" size={14} /></a><a className="rounded-xl border border-cyan-100/20 bg-white/10 p-3 text-sm font-semibold text-cyan-50 transition hover:border-cyan-100/50 hover:bg-white/15" href="https://huggingface.co/prism-ml/Bonsai-27B-gguf" rel="noreferrer" target="_blank">Bonsai model &amp; licence <ExternalLink className="ml-1 inline" size={14} /></a><a className="rounded-xl border border-cyan-100/20 bg-white/10 p-3 text-sm font-semibold text-cyan-50 transition hover:border-cyan-100/50 hover:bg-white/15" href="https://github.com/ggml-org/llama.cpp/blob/master/docs/install.md" rel="noreferrer" target="_blank">Runtime installation docs <ExternalLink className="ml-1 inline" size={14} /></a></nav></div></section>
+    <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 via-cyan-950 to-slate-900 px-7 py-8 text-white shadow-sm md:px-9"><div className="absolute -right-20 -top-24 size-72 rounded-full bg-cyan-300/15 blur-3xl" /><div className="relative max-w-4xl"><span className="inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-cyan-200/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100"><img className="size-4 rounded object-cover" src={zominAiButtonUrl} alt="" /> Local Bonsai runtime</span><h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">Run ZominAI beside your Drive.</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">ZominAI stays on the device running the local model. When you ask about your Drive, authenticated read-only tools can supply supported file content and database results to this local runtime. Nothing is sent to a hosted model.</p><nav aria-label="ZominAI resources" className="mt-6 grid gap-2 sm:grid-cols-3"><a className="rounded-xl border border-cyan-100/20 bg-white/10 p-3 text-sm font-semibold text-cyan-50 transition hover:border-cyan-100/50 hover:bg-white/15" href="https://prismml.com/" rel="noreferrer" target="_blank">PrismML overview <ExternalLink className="ml-1 inline" size={14} /></a><a className="rounded-xl border border-cyan-100/20 bg-white/10 p-3 text-sm font-semibold text-cyan-50 transition hover:border-cyan-100/50 hover:bg-white/15" href="https://huggingface.co/prism-ml/Bonsai-27B-gguf" rel="noreferrer" target="_blank">Bonsai model &amp; licence <ExternalLink className="ml-1 inline" size={14} /></a><a className="rounded-xl border border-cyan-100/20 bg-white/10 p-3 text-sm font-semibold text-cyan-50 transition hover:border-cyan-100/50 hover:bg-white/15" href="https://github.com/ggml-org/llama.cpp/blob/master/docs/install.md" rel="noreferrer" target="_blank">Runtime installation docs <ExternalLink className="ml-1 inline" size={14} /></a></nav></div></section>
     <div className="grid gap-5 xl:grid-cols-[17rem_minmax(0,1fr)]"><aside className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-sm"><p className="px-3 pb-2 pt-3 text-xs font-bold uppercase tracking-[0.16em] text-slate-400">ZominAI</p>{panes.map((pane) => <button aria-label={`ZominAI menu: ${pane.label}`} className={`mb-1 flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left transition ${activePane === pane.id ? "bg-cyan-950 text-white shadow-sm" : "text-slate-700 hover:bg-slate-50"}`} key={pane.id} onClick={() => { setActivePane(pane.id); setConfirmUninstall(false); }}><span className={`mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg ${activePane === pane.id ? "bg-white/15 text-cyan-100" : "bg-slate-100 text-slate-500"}`}>{pane.icon}</span><span><span className="block text-sm font-semibold">{pane.label}</span><span className={`mt-0.5 block text-xs leading-5 ${activePane === pane.id ? "text-cyan-100" : "text-slate-400"}`}>{pane.description}</span></span></button>)}</aside>
       <div className="min-w-0">
         {activePane === "verify" && <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-700">Readiness check</p><h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">Verify this device before downloading.</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">This checks browser WebGPU, estimated local storage, and the configured localhost runtime. It does not inspect or upload files from this Drive.</p></div><button aria-label="Verify ZominAI install" className="inline-flex items-center gap-2 rounded-lg bg-cyan-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-cyan-800 disabled:bg-slate-300" disabled={verifying} onClick={() => void verify()}>{verifying ? <LoaderCircle className="animate-spin" size={17} /> : <ShieldCheck size={17} />}{verifying ? "Checking…" : "Verify install"}</button></div>{verification ? <div className="mt-6 grid gap-3"><ZominAiCheck label="WebGPU" result={verification.webGpu} /><ZominAiCheck label="Browser storage" result={verification.storage} /><ZominAiCheck label="Local runtime" result={verification.runtime} /><p className="pt-1 text-xs text-slate-400">Last checked {new Date(verification.checkedAt).toLocaleString()}.</p></div> : <div className="mt-6 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">No verification has run in this browser yet.</div>}</section>}
@@ -1805,7 +1949,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
             />
           )}
         </section>
-        <ZominAiChatDrawer isOpen={zominAiChatOpen} onClose={() => setZominAiChatOpen(false)} settings={zominAiChatSettings} />
+        <ZominAiChatDrawer client={client} isOpen={zominAiChatOpen} onClose={() => setZominAiChatOpen(false)} settings={zominAiChatSettings} />
       </div>
       {preview && <PreviewDialog preview={preview} onClose={closePreview} />}
       {nativeEditor && <NativeEditor key={nativeEditor.object.key} content={nativeEditor.content} fileName={nativeEditor.object.name} onClose={() => setNativeEditor(null)} onListResponses={(id) => client.listFormResponses(id)} onPublish={publishNativeForm} onRename={renameNativeFile} onSave={saveNativeFile} onShare={(settings) => { setShareSettings(settings ?? null); setShareFile(nativeEditor.object); }} />}
