@@ -184,10 +184,15 @@ const appBasePath = normalizeAppBasePath(
 const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.12.4";
+const GUI_VERSION = "1.12.5";
 const CLI_VERSION = "1.2.1";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.12.5",
+    date: "21 July 2026",
+    changes: ["Made the sidebar count active Drive files only, excluding folders, Trash, databases, functions, and internal data."]
+  },
   {
     version: "v1.12.4",
     date: "21 July 2026",
@@ -1956,15 +1961,21 @@ function UploadProgress({ uploads }: { uploads: UploadTask[] }) {
 function UsageCard({ usage, onOpenBreakdown }: { usage?: StorageUsage; onOpenBreakdown: () => void }) {
   const used = usage?.usedBytes ?? 0;
   const quota = usage?.quotaBytes ?? 0;
+  const fileCount = activeDriveFileCount(usage);
   const percentage = quota > 0 ? Math.min(100, (used / quota) * 100) : 0;
   return (
     <div className="mt-8 rounded-xl bg-slate-50 p-4">
-      <div className="flex items-center justify-between text-sm font-medium text-slate-700"><span>Storage</span><span>{usage?.fileCount ?? 0} {(usage?.fileCount ?? 0) === 1 ? "item" : "items"}</span></div>
+      <div className="flex items-center justify-between text-sm font-medium text-slate-700"><span>Storage</span><span>{fileCount} {fileCount === 1 ? "file" : "files"}</span></div>
       <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-blue-600" style={{ width: `${Math.max(percentage, used > 0 ? 1 : 0)}%` }} /></div>
       <p className="mt-2 text-xs text-slate-500">{formatBytes(used)} used of {formatBytes(quota)}</p>
       <button className="mt-3 flex items-center gap-1 text-xs font-semibold text-blue-700 hover:text-blue-800" onClick={onOpenBreakdown}><Info size={14} /> View storage breakdown</button>
     </div>
   );
+}
+
+function activeDriveFileCount(usage?: StorageUsage): number {
+  const fileCategories = new Set(["photos", "videos", "documents", "audio", "archives", "other"]);
+  return (usage?.categories ?? []).filter((category) => fileCategories.has(category.id)).reduce((total, category) => total + category.fileCount, 0);
 }
 
 const storageCategoryMeta = {
@@ -1994,6 +2005,7 @@ function StorageBreakdownDialog({ usage, onClose, onSetQuota }: { usage?: Storag
   const maxQuota = usage?.maxQuotaBytes ?? Math.floor(total * 0.8);
   const otherMachineData = Math.max(0, systemUsed - driveUsed);
   const categories = (usage?.categories ?? []).filter((category) => category.bytes > 0);
+  const fileCount = activeDriveFileCount(usage);
   const [customQuotaGb, setCustomQuotaGb] = useState("");
   const [quotaError, setQuotaError] = useState<string | null>(null);
   const [savingQuota, setSavingQuota] = useState(false);
@@ -2093,7 +2105,7 @@ function StorageBreakdownDialog({ usage, onClose, onSetQuota }: { usage?: Storag
             <p className="mt-3 text-xs leading-5 text-slate-500"><span className="font-medium text-slate-700">Zo system files & other machine data:</span> {formatBytes(otherMachineData)} outside Zo Drive, including the Zo runtime, Drive application code, and other platform files.</p>
           </section>
           <section className="overflow-hidden rounded-xl border border-slate-200">
-            <div className="border-b border-slate-100 px-4 py-3"><h3 className="font-semibold text-slate-800">Your Zo Drive data</h3><p className="mt-0.5 text-sm text-slate-500">{usage?.fileCount ?? 0} stored items, grouped by storage type</p></div>
+            <div className="border-b border-slate-100 px-4 py-3"><h3 className="font-semibold text-slate-800">Your Zo Drive data</h3><p className="mt-0.5 text-sm text-slate-500">{fileCount} active Drive {fileCount === 1 ? "file" : "files"}, grouped by storage type</p></div>
             <div className="divide-y divide-slate-100">{categories.length > 0 ? categories.map((category) => { const meta = storageCategoryMeta[category.id]; return <div className="flex items-center gap-3 px-4 py-3" key={category.id}><span className={`size-3 rounded-full ${meta.color}`} /><span className="flex-1 text-sm font-medium text-slate-700">{meta.label}</span><span className="text-right text-sm tabular-nums text-slate-600">{formatBytes(category.bytes)}<span className="ml-2 text-xs text-slate-400">{category.fileCount} {category.fileCount === 1 ? meta.unit : `${meta.unit}s`}</span></span></div>; }) : <p className="px-4 py-6 text-sm text-slate-500">Your Drive is empty.</p>}</div>
           </section>
         </div>

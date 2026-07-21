@@ -4,6 +4,13 @@ All notable changes to the Zo Drive browser experience are recorded here.
 
 ## Unreleased
 
+## v1.12.5 - 2026-07-21
+
+### Fixed
+
+- Count only active Drive files in the sidebar, excluding folders, Trash, and
+  internal database, function, and Zo Originals records.
+
 ## v1.12.4 - 2026-07-21
 
 ### Fixed
