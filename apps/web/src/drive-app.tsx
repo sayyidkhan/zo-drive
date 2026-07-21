@@ -184,10 +184,15 @@ const appBasePath = normalizeAppBasePath(
 const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.11.0";
-const CLI_VERSION = "1.2.0";
+const GUI_VERSION = "1.11.1";
+const CLI_VERSION = "1.2.1";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.11.1",
+    date: "21 July 2026",
+    changes: ["Added clearer separation between the Zo Databases view tabs and catalogue workspace."]
+  },
   {
     version: "v1.11.0",
     date: "21 July 2026",
@@ -1499,7 +1504,7 @@ function DatabaseCatalog({ databaseCount, engineStates, installingEngine, updati
   ];
   const anyInstalled = engineStates.some((engine) => engine.installed);
 
-  return <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+  return <section className="mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
     <div className="relative overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 px-7 py-9 text-white md:px-10"><div className="absolute -right-28 -top-32 size-80 rounded-full bg-cyan-400/15 blur-3xl" /><div className="absolute -bottom-36 left-1/3 size-72 rounded-full bg-blue-500/10 blur-3xl" /><div className="relative flex flex-wrap items-start justify-between gap-5"><div><span className="inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-cyan-200/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100"><Database size={14} /> Real runtimes, private data</span><h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">Build with Zo Databases</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300 md:text-base">Install a vetted engine runtime, create a persistent database, then connect through a database-scoped HTTPS key.</p><p className="mt-4 text-xs font-medium text-cyan-100/80">Inspired by DBeaver + Cloud Hosting.</p></div>{anyInstalled && databaseCount > 0 && <button className="rounded-lg border border-white/15 bg-white/10 px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-white/20" onClick={onViewDatabases} type="button">View your databases <span className="ml-1.5 rounded-full bg-white/15 px-1.5 py-0.5 text-xs text-cyan-50">{databaseCount}</span></button>}</div></div>
     <div className="border-b border-slate-100 bg-slate-50 px-6 py-4 sm:px-8"><p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Open-source database catalog</p><p className="mt-1 text-sm text-slate-600">Install provisions and verifies the actual runtime. Update rechecks the bundled provider and records its active version.</p></div>
     <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6 xl:grid-cols-3">

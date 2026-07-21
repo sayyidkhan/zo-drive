@@ -4,6 +4,13 @@ All notable changes to the Zo Drive browser experience are recorded here.
 
 ## Unreleased
 
+## v1.11.1 - 2026-07-21
+
+### Fixed
+
+- Added clearer vertical separation between the Zo Databases view tabs and the
+  catalogue workspace.
+
 ## v1.11.0 - 2026-07-21
 
 ### Added
