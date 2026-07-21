@@ -39,11 +39,11 @@ describe("DriveApp", () => {
 
       expect(screen.getByRole("heading", { name: "Manage files in your private Drive." })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Share files on your terms" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 1.7.2" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 1.7.3" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI changelog version 1.7.2" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
+      expect(screen.getByRole("link", { name: "GUI changelog version 1.7.3" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("GUI v1.7.2")).toBeInTheDocument();
+      expect(screen.getByText("GUI v1.7.3")).toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
 
       cleanup();
@@ -76,7 +76,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.7.2")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.7.3")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();
@@ -219,6 +219,7 @@ describe("DriveApp", () => {
     expect(screen.getByText("Save changes to activate this endpoint publicly.")).toBeInTheDocument();
     expect(screen.getByLabelText("Public function request body")).toHaveTextContent('"input": {');
     expect(screen.getByText(/Send parameters inside/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open crontab.guru cron helper" })).toHaveAttribute("href", "https://crontab.guru/");
 
     fireEvent.click(screen.getByRole("button", { name: "Zo Databases" }));
     expect(await screen.findByRole("heading", { name: "Zo Databases" })).toBeInTheDocument();

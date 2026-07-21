@@ -4,6 +4,12 @@ All notable changes to the Zo Drive browser experience are recorded here.
 
 ## Unreleased
 
+## v1.7.3 - 2026-07-21
+
+### Added
+
+- Added a direct crontab.guru helper link beside the UTC cron schedule in Zo Functions.
+
 ## v1.7.2 - 2026-07-21
 
 ### Changed
