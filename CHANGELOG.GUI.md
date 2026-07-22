@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.24.4 - 2026-07-22
+
+### Changed
+
+- Grouped the GUI documentation list menu into Zo Drive, Zo Originals, and
+  More from Zo.
+
 ## v1.24.3 - 2026-07-22
 
 ### Changed
