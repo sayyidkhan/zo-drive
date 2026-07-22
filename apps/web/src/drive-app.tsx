@@ -77,7 +77,7 @@ type UserAccessClient = Pick<ZoDriveClient, "createAccountMember" | "deleteAccou
 type SharedClient = Pick<ZoDriveClient, "downloadShared" | "getPublicShare" | "openSharedPaste" | "saveSharedPaste">;
 type PublicFormClient = Pick<ZoDriveClient, "getPublicForm" | "submitFormResponse">;
 type ViewMode = "grid" | "list";
-type DriveSection = "api-keys" | "cluster-databases" | "databases" | "functions" | "home" | "my-drive" | "pastes" | "profile" | "shared" | "starred" | "transfer" | "trash" | "user-access" | "zominai";
+type DriveSection = "api-keys" | "cluster-databases" | "databases" | "functions" | "home" | "my-drive" | "pastes" | "profile" | "shared" | "starred" | "theme" | "transfer" | "trash" | "user-access" | "zominai";
 type DatabasePanel = "data" | "run" | "sql" | "access";
 type DatabaseView = "catalog" | "instances";
 type FunctionWorkspaceTab = "editor" | "runs" | "logs";
@@ -111,6 +111,8 @@ type ZominAiSettings = {
   endpoint: string;
   model: string;
 };
+
+type DriveTheme = "zo-computer" | "zo-drive";
 
 type ZominAiVerification = {
   checkedAt: string;
@@ -205,7 +207,7 @@ const defaultRecentFilters: RecentFilters = {
   type: "any"
 };
 
-const driveSections: DriveSection[] = ["api-keys", "cluster-databases", "databases", "functions", "home", "my-drive", "pastes", "profile", "shared", "starred", "transfer", "trash", "user-access", "zominai"];
+const driveSections: DriveSection[] = ["api-keys", "cluster-databases", "databases", "functions", "home", "my-drive", "pastes", "profile", "shared", "starred", "theme", "transfer", "trash", "user-access", "zominai"];
 const databasePanels: DatabasePanel[] = ["data", "run", "sql", "access"];
 const databaseViews: DatabaseView[] = ["catalog", "instances"];
 
@@ -273,11 +275,16 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.26.2";
+const GUI_VERSION = "1.27.0";
 const CLI_VERSION = "1.3.0";
 const ZOMINAI_VERSION = "1.1.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.27.0",
+    date: "2026-07-22",
+    changes: ["Added a browser-local Theme page with the existing Zo Drive appearance and a Zo Computer brand theme."]
+  },
   {
     version: "v1.26.2",
     date: "2026-07-22",
@@ -1128,6 +1135,45 @@ function SettingsCard({ children, description, danger = false, icon, title }: { 
   return <section className={`rounded-xl border bg-white p-5 shadow-sm ${danger ? "border-red-200" : "border-slate-200"}`}><div className={`flex items-start gap-3 ${danger ? "text-red-600" : "text-blue-600"}`}><span className="rounded-lg bg-current/10 p-2">{icon}</span><div><h2 className="font-semibold text-slate-900">{title}</h2><p className="mt-1 text-sm leading-5 text-slate-500">{description}</p></div></div><div className="mt-5">{children}</div></section>;
 }
 
+const driveThemeStorageKey = "zo-drive:theme:v1";
+
+function readDriveTheme(): DriveTheme {
+  return window.localStorage.getItem(driveThemeStorageKey) === "zo-computer" ? "zo-computer" : "zo-drive";
+}
+
+function ThemeScreen({ onThemeChange, theme }: { onThemeChange: (theme: DriveTheme) => void; theme: DriveTheme }) {
+  const options: Array<{ description: string; id: DriveTheme; label: string }> = [
+    { id: "zo-drive", label: "Zo Drive", description: "Keep the familiar blue workspace built for organising files and running Drive tools." },
+    { id: "zo-computer", label: "Zo Computer", description: "Use Zo's black-and-white Pegasus direction with serif display type and an ink-forward workspace." }
+  ];
+
+  return <div className="w-full space-y-6">
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="relative overflow-hidden bg-[#171512] px-6 py-8 text-[#f8f3e9]"><div className="absolute -right-12 -top-16 size-56 rounded-full border border-white/15" /><div className="absolute right-16 top-16 size-24 rounded-full border border-white/10" /><div className="relative max-w-2xl"><span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-stone-200"><Palette size={14} /> Appearance</span><h2 className="mt-4 font-serif text-4xl font-semibold tracking-tight">Choose your Drive theme.</h2><p className="mt-2 text-sm leading-6 text-stone-300">Your choice changes this browser only. It does not affect account access, files, or other people using this Drive.</p></div></div>
+      <div className="grid gap-5 p-5 lg:grid-cols-2">{options.map((option) => {
+        const selected = theme === option.id;
+        const zoComputer = option.id === "zo-computer";
+        return <article className={`overflow-hidden rounded-2xl border-2 transition ${selected ? "border-slate-900 shadow-lg shadow-slate-950/10" : "border-slate-200 hover:border-slate-400"}`} key={option.id}><div className={`min-h-52 p-5 ${zoComputer ? "bg-[#f5f0e7] text-[#171512]" : "bg-[#f8faff] text-slate-800"}`}><div className={`flex items-center gap-2 border-b pb-3 text-sm font-semibold ${zoComputer ? "border-stone-300 font-mono" : "border-slate-200"}`}><span className={`grid size-8 place-items-center rounded-lg ${zoComputer ? "bg-[#171512] text-white" : "bg-blue-600 text-white"}`}>{zoComputer ? <span className="font-serif text-lg leading-none">Z</span> : <img className="size-5 object-contain" src={drivePegasusLogoUrl} alt="" />}</span>{zoComputer ? "Zo Computer" : "Zo Drive"}</div><div className="mt-5 grid grid-cols-[4.5rem_1fr] gap-3"><div className={`space-y-2 border-r pr-3 ${zoComputer ? "border-stone-300" : "border-slate-200"}`}><span className={`block h-2 rounded-full ${zoComputer ? "bg-[#171512]" : "bg-blue-600"}`} /><span className={`block h-2 w-4/5 rounded-full ${zoComputer ? "bg-stone-300" : "bg-slate-200"}`} /><span className={`block h-2 w-3/5 rounded-full ${zoComputer ? "bg-stone-300" : "bg-slate-200"}`} /></div><div><div className={`rounded-xl border p-3 ${zoComputer ? "border-stone-300 bg-[#fffdf8]" : "border-slate-200 bg-white"}`}><p className={`text-sm font-semibold ${zoComputer ? "font-serif text-lg" : "text-slate-800"}`}>{zoComputer ? "Run your life on Zo." : "Your files, your way."}</p><div className={`mt-3 h-2 w-3/4 rounded-full ${zoComputer ? "bg-stone-200" : "bg-slate-100"}`} /><div className={`mt-2 h-2 w-1/2 rounded-full ${zoComputer ? "bg-stone-200" : "bg-slate-100"}`} /></div></div></div></div><div className="p-5"><div className="flex items-start justify-between gap-4"><div><h3 className="text-lg font-semibold text-slate-900">{option.label}</h3><p className="mt-1 text-sm leading-6 text-slate-500">{option.description}</p></div>{selected && <span className="grid size-7 shrink-0 place-items-center rounded-full bg-slate-900 text-white"><Check size={16} /></span>}</div><button aria-pressed={selected} className={`mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition ${selected ? "bg-slate-100 text-slate-600" : "bg-slate-900 text-white hover:bg-slate-700"}`} onClick={() => onThemeChange(option.id)} type="button">{selected ? "Current theme" : `Use ${option.label}`}</button></div></article>;
+      })}</div>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-5 py-4 text-xs leading-5 text-slate-500"><span>Zo Computer styling follows the Pegasus, black-and-white, serif-heading, and MonoLisa-oriented direction.</span><a className="inline-flex items-center gap-1 font-semibold text-slate-700 hover:text-slate-950" href="https://www.zo.computer/brand" rel="noreferrer" target="_blank">View Zo Computer brand guide <ExternalLink size={13} /></a></div>
+    </section>
+  </div>;
+}
+
+function DriveThemeStyles({ theme }: { theme: DriveTheme }) {
+  if (theme !== "zo-computer") return null;
+  return <style>{`
+    [data-drive-theme="zo-computer"] { background: #f5f0e7; color: #171512; font-family: "MonoLisa Text", "SFMono-Regular", ui-monospace, monospace; }
+    [data-drive-theme="zo-computer"] h1, [data-drive-theme="zo-computer"] h2, [data-drive-theme="zo-computer"] h3 { font-family: "EB Garamond", Georgia, serif; letter-spacing: -0.02em; }
+    [data-drive-theme="zo-computer"] .bg-white { background-color: #fffdf8 !important; }
+    [data-drive-theme="zo-computer"] .bg-slate-50, [data-drive-theme="zo-computer"] .bg-slate-100, [data-drive-theme="zo-computer"] .bg-blue-50, [data-drive-theme="zo-computer"] .bg-\\[\#f8faff\\] { background-color: #f2ede4 !important; }
+    [data-drive-theme="zo-computer"] .border-slate-100, [data-drive-theme="zo-computer"] .border-slate-200, [data-drive-theme="zo-computer"] .border-slate-300 { border-color: #ded7cb !important; }
+    [data-drive-theme="zo-computer"] .bg-blue-600, [data-drive-theme="zo-computer"] .bg-blue-700, [data-drive-theme="zo-computer"] .bg-cyan-700, [data-drive-theme="zo-computer"] .bg-cyan-800 { background-color: #171512 !important; }
+    [data-drive-theme="zo-computer"] .text-blue-600, [data-drive-theme="zo-computer"] .text-blue-700, [data-drive-theme="zo-computer"] .text-cyan-700, [data-drive-theme="zo-computer"] .text-cyan-800 { color: #171512 !important; }
+    [data-drive-theme="zo-computer"] .hover\\:bg-blue-50:hover, [data-drive-theme="zo-computer"] .hover\\:bg-slate-50:hover { background-color: #ebe4d8 !important; }
+  `}</style>;
+}
+
 const zominAiStorageKey = "zo-drive:zominai:v1";
 const zominAiChatsStorageKey = "zo-drive:zominai:chats:v1";
 const zominAiDrawerWidthStorageKey = "zo-drive:zominai:drawer-width:v1";
@@ -1805,6 +1851,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
   const { currentPath, setCurrentPath, viewMode, setViewMode } = useDriveUi();
   const [section, setSection] = useState<DriveSection>(currentDriveSection);
   const canManageUserAccess = user.role === "super";
+  const [driveTheme, setDriveTheme] = useState<DriveTheme>(readDriveTheme);
   const [zominAiPane, setZominAiPane] = useState<ZominAiPane>("verify");
   const [zominAiChatOpen, setZominAiChatOpen] = useState(false);
   const [zominAiChatSettings, setZominAiChatSettings] = useState<ZominAiSettings>(readZominAiSettings);
@@ -1877,6 +1924,10 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
   }, [currentPath, section]);
 
   useEffect(() => {
+    window.localStorage.setItem(driveThemeStorageKey, driveTheme);
+  }, [driveTheme]);
+
+  useEffect(() => {
     if (section === "user-access" && !canManageUserAccess) {
       setSection("my-drive");
       setCurrentPath("");
@@ -1899,7 +1950,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
       modifiedAfter: isRecent ? recentDateRange?.after : advancedDateRange?.after,
       modifiedBefore: isRecent ? recentDateRange?.before : advancedDateRange?.before
     }),
-    enabled: section !== "api-keys" && section !== "cluster-databases" && section !== "databases" && section !== "functions" && section !== "shared" && section !== "starred" && section !== "transfer" && section !== "trash" && section !== "user-access" && section !== "zominai"
+    enabled: section !== "api-keys" && section !== "cluster-databases" && section !== "databases" && section !== "functions" && section !== "shared" && section !== "starred" && section !== "theme" && section !== "transfer" && section !== "trash" && section !== "user-access" && section !== "zominai"
   });
   const foldersQuery = useQuery({
     queryKey: ["folders", currentPath],
@@ -2180,7 +2231,8 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
   }
 
   return (
-    <main data-testid="drive-workspace" className="flex h-dvh flex-col overflow-hidden bg-[#f8faff] text-slate-800" onDragOver={(event) => event.preventDefault()} onDrop={handleDrop}>
+    <main data-drive-theme={driveTheme} data-testid="drive-workspace" className={`flex h-dvh flex-col overflow-hidden ${driveTheme === "zo-computer" ? "bg-[#f5f0e7] text-[#171512]" : "bg-[#f8faff] text-slate-800"}`} onDragOver={(event) => event.preventDefault()} onDrop={handleDrop}>
+      <DriveThemeStyles theme={driveTheme} />
       <header className="flex min-h-18 shrink-0 flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-3 py-3 sm:px-5 md:h-18 md:flex-nowrap md:gap-5 md:py-0">
         <button aria-controls="drive-navigation" aria-expanded={sidebarOpen} aria-label="Open navigation" className="grid size-10 shrink-0 place-items-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-800 md:hidden" onClick={() => setSidebarOpen(true)}>
           <PanelLeftOpen size={21} />
@@ -2190,7 +2242,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
             <img className="absolute inset-0 h-full w-full" src={driveCloudLogoUrl} alt="" />
             <img className="absolute left-[5.94%] top-0 h-[88.44%] w-[88.44%]" src={drivePegasusLogoUrl} alt="" />
           </span>
-          <span className="hidden sm:inline">Zo Drive</span>
+          <span className="hidden sm:inline">{driveTheme === "zo-computer" ? "Zo Computer" : "Zo Drive"}</span>
         </a>
         <div data-testid="search-controls" className="order-3 flex min-w-0 basis-full items-center gap-1.5 md:order-none md:basis-auto md:flex-1">
           <label className="relative min-w-0 flex-1">
@@ -2219,6 +2271,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
               {canManageUserAccess && <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={() => { setAccountMenuOpen(false); setSection("user-access"); setCurrentPath(""); }}><UsersRound size={17} /> User access</button>}
               <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={() => { setAccountMenuOpen(false); setSection("profile"); setCurrentPath(""); }}><UserRound size={17} /> Profile & controls</button>
               <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={() => { setAccountMenuOpen(false); setZominAiPane("settings"); setSection("zominai"); setCurrentPath(""); }}><Settings2 size={17} /> ZominAI settings</button>
+              <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={() => { setAccountMenuOpen(false); setSection("theme"); setCurrentPath(""); }}><Palette size={17} /> Theme</button>
             </div>}
           </div>
           <button title="Sign out" aria-label="Sign out" className="rounded-lg p-2 text-slate-500 transition hover:bg-rose-50 hover:text-rose-700" onClick={() => { setAccountMenuOpen(false); onSignOut(); }}><LogOut size={21} /></button>
@@ -2270,9 +2323,10 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
           <div className="mb-7 flex flex-wrap items-center justify-between gap-4">
             <div>
               {section === "my-drive" && currentPath && <FolderNavigation currentPath={currentPath} onNavigate={setCurrentPath} />}
-              <h1 className={`${section === "my-drive" && currentPath ? "mt-3" : ""} text-2xl font-semibold tracking-tight text-slate-900`}>{section === "zominai" ? <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1">ZominAI <span className="text-sm font-medium tracking-normal text-slate-500">Pronounced ZOH-min A.I.</span></span> : search || advancedSearchActive ? "Search results" : section === "api-keys" ? "API Keys" : section === "user-access" ? "User access" : section === "cluster-databases" ? "Zo Shared Drives" : section === "databases" ? "Zo Databases" : section === "functions" ? "Zo Functions" : section === "profile" ? "Profile & controls" : section === "home" ? "Recent" : section === "pastes" ? "Zo Paste" : section === "transfer" ? "Zo Transfer" : section === "shared" ? "Shared with others" : section === "starred" ? "Starred" : section === "trash" ? "Trash" : currentPath ? currentPath.split("/").at(-1) : "Files"}</h1>
+              <h1 className={`${section === "my-drive" && currentPath ? "mt-3" : ""} text-2xl font-semibold tracking-tight text-slate-900`}>{section === "zominai" ? <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1">ZominAI <span className="text-sm font-medium tracking-normal text-slate-500">Pronounced ZOH-min A.I.</span></span> : search || advancedSearchActive ? "Search results" : section === "api-keys" ? "API Keys" : section === "user-access" ? "User access" : section === "theme" ? "Theme" : section === "cluster-databases" ? "Zo Shared Drives" : section === "databases" ? "Zo Databases" : section === "functions" ? "Zo Functions" : section === "profile" ? "Profile & controls" : section === "home" ? "Recent" : section === "pastes" ? "Zo Paste" : section === "transfer" ? "Zo Transfer" : section === "shared" ? "Shared with others" : section === "starred" ? "Starred" : section === "trash" ? "Trash" : currentPath ? currentPath.split("/").at(-1) : "Files"}</h1>
               {section === "api-keys" && <p className="mt-1 text-sm text-slate-500">Provision and revoke scoped access for local computers and automations.</p>}
               {section === "user-access" && <p className="mt-1 text-sm text-slate-500">Create, update, and revoke people’s access to this Drive.</p>}
+              {section === "theme" && <p className="mt-1 text-sm text-slate-500">Choose the visual style for this browser.</p>}
               {section === "cluster-databases" && <p className="mt-1 text-sm text-slate-500">Choose exactly which Drive folders each trusted person can access.</p>}
               {section === "databases" && <p className="mt-1 text-sm text-slate-500">Choose a lightweight open-source database, then keep its data private in your Drive.</p>}
               {section === "functions" && <p className="mt-1 text-sm text-slate-500">Store, run, and schedule small JavaScript or Python functions.</p>}
@@ -2285,8 +2339,8 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
               {section === "trash" && <p className="mt-1 text-sm text-slate-500">Items are permanently deleted 30 days after being moved here.</p>}
             </div>
             <div className="ml-auto flex shrink-0 items-center gap-3" data-testid="dashboard-actions">
-              {zominAiChatOpen && section !== "cluster-databases" && section !== "databases" && section !== "functions" && section !== "zominai" && <button aria-label="Open upload menu" className="hidden items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200 md:inline-flex" onClick={() => setUploadDialogOpen(true)}><Upload size={17} /> Upload</button>}
-              {section === "trash" && trashItems.length > 0 ? <button className="rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50" onClick={() => void emptyTrash()}>Empty trash</button> : section === "pastes" ? <button className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800" onClick={() => startNativeFile("paste")}><Plus size={17} /> New paste</button> : section !== "home" && section !== "transfer" && section !== "api-keys" && section !== "user-access" && section !== "cluster-databases" && section !== "databases" && section !== "functions" && section !== "profile" && section !== "zominai" && <div className="flex rounded-lg border border-slate-200 bg-white p-1">
+              {zominAiChatOpen && section !== "cluster-databases" && section !== "databases" && section !== "functions" && section !== "theme" && section !== "zominai" && <button aria-label="Open upload menu" className="hidden items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200 md:inline-flex" onClick={() => setUploadDialogOpen(true)}><Upload size={17} /> Upload</button>}
+              {section === "trash" && trashItems.length > 0 ? <button className="rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50" onClick={() => void emptyTrash()}>Empty trash</button> : section === "pastes" ? <button className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800" onClick={() => startNativeFile("paste")}><Plus size={17} /> New paste</button> : section !== "home" && section !== "theme" && section !== "transfer" && section !== "api-keys" && section !== "user-access" && section !== "cluster-databases" && section !== "databases" && section !== "functions" && section !== "profile" && section !== "zominai" && <div className="flex rounded-lg border border-slate-200 bg-white p-1">
               <button aria-label="List view" className={`rounded-md p-2 ${viewMode === "list" ? "bg-slate-100 text-slate-900" : "text-slate-400"}`} onClick={() => setViewMode("list")}><List size={18} /></button>
               <button aria-label="Grid view" className={`rounded-md p-2 ${viewMode === "grid" ? "bg-slate-100 text-slate-900" : "text-slate-400"}`} onClick={() => setViewMode("grid")}><Grid2X2 size={18} /></button>
             </div>}
@@ -2295,7 +2349,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
 
           {section === "home" && <RecentFiltersBar filters={recentFilters} onChange={setRecentFilters} />}
 
-          {section === "api-keys" ? <ApiKeys client={client} /> : section === "user-access" && canManageUserAccess ? <UserAccessScreen client={authClient as unknown as UserAccessClient} currentUser={user} /> : section === "cluster-databases" ? <ClusterDatabases client={client} /> : section === "databases" ? <Databases client={client} /> : section === "functions" ? <Functions client={client} /> : section === "profile" ? <AccountScreen client={authClient} onAccountDeleted={onAccountDeleted} user={user} /> : section === "zominai" ? <ZominAiWorkspace initialPane={zominAiPane} /> : section === "transfer" ? <ZoTransfer client={client} onCreated={async () => { await refresh(); await queryClient.invalidateQueries({ queryKey: ["shares"] }); }} /> : section === "pastes" ? <ZoPaste files={displayedFiles} isError={filesQuery.isError} isLoading={isLoading} onCreate={() => startNativeFile("paste")} onDelete={(key) => deleteMutation.mutate(key)} onPreview={openPreview} onRetry={() => void filesQuery.refetch()} onShare={(file) => { setShareSettings(null); setShareFile(file); }} onToggleStar={(file) => starMutation.mutate({ key: file.key, starred: file.starred })} /> : isLoading ? (
+          {section === "api-keys" ? <ApiKeys client={client} /> : section === "user-access" && canManageUserAccess ? <UserAccessScreen client={authClient as unknown as UserAccessClient} currentUser={user} /> : section === "theme" ? <ThemeScreen onThemeChange={setDriveTheme} theme={driveTheme} /> : section === "cluster-databases" ? <ClusterDatabases client={client} /> : section === "databases" ? <Databases client={client} /> : section === "functions" ? <Functions client={client} /> : section === "profile" ? <AccountScreen client={authClient} onAccountDeleted={onAccountDeleted} user={user} /> : section === "zominai" ? <ZominAiWorkspace initialPane={zominAiPane} /> : section === "transfer" ? <ZoTransfer client={client} onCreated={async () => { await refresh(); await queryClient.invalidateQueries({ queryKey: ["shares"] }); }} /> : section === "pastes" ? <ZoPaste files={displayedFiles} isError={filesQuery.isError} isLoading={isLoading} onCreate={() => startNativeFile("paste")} onDelete={(key) => deleteMutation.mutate(key)} onPreview={openPreview} onRetry={() => void filesQuery.refetch()} onShare={(file) => { setShareSettings(null); setShareFile(file); }} onToggleStar={(file) => starMutation.mutate({ key: file.key, starred: file.starred })} /> : isLoading ? (
             <div className="grid h-64 place-items-center text-sm text-slate-500"><LoaderCircle className="mr-2 animate-spin" size={20} /> Loading your drive…</div>
           ) : (section === "shared" ? sharesQuery.isError : section === "starred" ? starredQuery.isError : section === "trash" ? trashQuery.isError : filesQuery.isError) ? (
             <EmptyState

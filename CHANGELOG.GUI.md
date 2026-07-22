@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.27.0 - 2026-07-22
+
+### Added
+
+- Added a browser-local Theme page with the existing Zo Drive appearance and a
+  Zo Computer brand theme.
+
 ## v1.26.2 - 2026-07-22
 
 ### Fixed
