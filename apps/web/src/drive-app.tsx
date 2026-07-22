@@ -136,6 +136,7 @@ type ZominAiConnection = {
 type ZominAiChatMessage = {
   content: string;
   elapsedMs?: number;
+  failed?: boolean;
   role: "assistant" | "user";
 };
 
@@ -265,11 +266,16 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.30.0";
+const GUI_VERSION = "1.31.0";
 const CLI_VERSION = "1.3.0";
-const ZOMINAI_VERSION = "1.3.0";
+const ZOMINAI_VERSION = "1.4.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.31.0",
+    date: "2026-07-22",
+    changes: ["Added one-click retry for failed ZominAI replies without duplicating the user's prompt.", "Kept the ZominAI header, context meter, and composer fixed while the conversation pane scrolls independently.", "Made the main search field filter Zo Transfer, Functions, Databases, and Shared Drives, including files across every connected Shared Drive.", "Limited the Drive Upload button to Recent, My Drive, Starred, Shared with others, and Trash."]
+  },
   {
     version: "v1.30.0",
     date: "2026-07-22",
@@ -754,6 +760,11 @@ const CLI_CHANGELOG = [
 ];
 
 const ZOMINAI_CHANGELOG = [
+  {
+    version: "v1.4.0",
+    date: "2026-07-22",
+    changes: ["Added a Try again action that resends the original prompt after a failed reply, replaces the error in place, and keeps failed error text out of future model context."]
+  },
   {
     version: "v1.3.0",
     date: "2026-07-22",
@@ -1312,14 +1323,16 @@ function zominAiElapsedLabel(elapsedMs: number): string {
 }
 
 function zominAiContextSummary(messages: ZominAiChatMessage[]): string | null {
-  const olderMessages = messages.slice(0, -zominAiRecentMessageCount);
+  const contextMessages = messages.filter((message) => !message.failed);
+  const olderMessages = contextMessages.slice(0, -zominAiRecentMessageCount);
   if (olderMessages.length === 0) return null;
   const notes = olderMessages.slice(-12).map((message) => `${message.role === "user" ? "User" : "ZominAI"}: ${message.content.replace(/\s+/g, " ").slice(0, 280)}`);
   return `Conversation notes from ${olderMessages.length} earlier message${olderMessages.length === 1 ? "" : "s"}:\n${notes.join("\n")}`;
 }
 
 function zominAiContextMessages(session: ZominAiChatSession, messages: ZominAiChatMessage[]): ZominAiChatMessage[] {
-  return session.contextSummary ? messages.slice(-zominAiRecentMessageCount) : messages;
+  const contextMessages = messages.filter((message) => !message.failed);
+  return session.contextSummary ? contextMessages.slice(-zominAiRecentMessageCount) : contextMessages;
 }
 
 function zominAiEstimatedContextTokens(messages: ZominAiChatMessage[], summary?: string): number {
@@ -1342,7 +1355,10 @@ function readZominAiChatSessions(): ZominAiChatSession[] {
       const messages = session.messages.flatMap((message): ZominAiChatMessage[] => {
         if (!message || typeof message !== "object" || (message as { role?: unknown }).role === "system" || !["assistant", "user"].includes((message as { role?: unknown }).role as string) || typeof (message as { content?: unknown }).content !== "string") return [];
         const elapsedMs = (message as { elapsedMs?: unknown }).elapsedMs;
-        return [{ role: (message as ZominAiChatMessage).role, content: (message as ZominAiChatMessage).content, ...(typeof elapsedMs === "number" && Number.isFinite(elapsedMs) && elapsedMs >= 0 ? { elapsedMs } : {}) }];
+        const role = (message as ZominAiChatMessage).role;
+        const content = (message as ZominAiChatMessage).content;
+        const failed = (message as { failed?: unknown }).failed === true || (role === "assistant" && content.startsWith("I could not connect to ZominAI."));
+        return [{ role, content, ...(typeof elapsedMs === "number" && Number.isFinite(elapsedMs) && elapsedMs >= 0 ? { elapsedMs } : {}), ...(failed ? { failed: true } : {}) }];
       });
       const compactedAt = typeof session.compactedAt === "string" ? session.compactedAt : undefined;
       const contextSummary = typeof session.contextSummary === "string" ? session.contextSummary.slice(0, 6_000) : undefined;
@@ -1821,6 +1837,31 @@ function ZominAiChatDrawer({ client, connection, isOpen, onClose, onConnectionCh
     window.addEventListener("pointercancel", stop, { once: true });
   }
 
+  async function requestReply(sessionId: string, nextMessages: ZominAiChatMessage[], contextSummary?: string) {
+    setElapsedMs(0);
+    setStreamingReply("");
+    setSending(true);
+    const startedAt = performance.now();
+    const timer = window.setInterval(() => setElapsedMs(performance.now() - startedAt), 100);
+    try {
+      const session = sessions.find((candidate) => candidate.id === sessionId);
+      const reply = await sendZominAiMessage(settings, zominAiContextMessages(session ?? activeSession, nextMessages), createZominAiToolRunner(client), contextSummary, setStreamingReply);
+      const responseElapsedMs = performance.now() - startedAt;
+      onConnectionChange({ state: "connected", detail: `Bonsai replied from ${settings.endpoint}.` });
+      setSessions((current) => current.map((candidate) => candidate.id === sessionId ? { ...candidate, messages: [...nextMessages, { role: "assistant", content: reply, elapsedMs: responseElapsedMs }], updatedAt: new Date().toISOString() } : candidate));
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "The local runtime could not be reached.";
+      const responseElapsedMs = performance.now() - startedAt;
+      onConnectionChange({ state: "disconnected", detail });
+      setSessions((current) => current.map((candidate) => candidate.id === sessionId ? { ...candidate, messages: [...nextMessages, { role: "assistant", content: `I could not connect to ZominAI. ${detail}`, elapsedMs: responseElapsedMs, failed: true }], updatedAt: new Date().toISOString() } : candidate));
+    } finally {
+      window.clearInterval(timer);
+      setElapsedMs(performance.now() - startedAt);
+      setStreamingReply("");
+      setSending(false);
+    }
+  }
+
   async function send() {
     const content = draft.trim();
     if (!content || sending) return;
@@ -1828,27 +1869,17 @@ function ZominAiChatDrawer({ client, connection, isOpen, onClose, onConnectionCh
     const updatedAt = new Date().toISOString();
     setSessions((current) => current.map((session) => session.id === activeSession.id ? { ...session, messages: nextMessages, title: session.messages.length === 0 ? zominAiChatTitle(content) : session.title, updatedAt } : session));
     setDraft("");
-    setElapsedMs(0);
-    setStreamingReply("");
-    setSending(true);
-    const startedAt = performance.now();
-    const timer = window.setInterval(() => setElapsedMs(performance.now() - startedAt), 100);
-    try {
-      const reply = await sendZominAiMessage(settings, zominAiContextMessages(activeSession, nextMessages), createZominAiToolRunner(client), activeSession.contextSummary, setStreamingReply);
-      const responseElapsedMs = performance.now() - startedAt;
-      onConnectionChange({ state: "connected", detail: `Bonsai replied from ${settings.endpoint}.` });
-      setSessions((current) => current.map((session) => session.id === activeSession.id ? { ...session, messages: [...nextMessages, { role: "assistant", content: reply, elapsedMs: responseElapsedMs }], updatedAt: new Date().toISOString() } : session));
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : "The local runtime could not be reached.";
-      const responseElapsedMs = performance.now() - startedAt;
-      onConnectionChange({ state: "disconnected", detail });
-      setSessions((current) => current.map((session) => session.id === activeSession.id ? { ...session, messages: [...nextMessages, { role: "assistant", content: `I could not connect to ZominAI. ${detail}`, elapsedMs: responseElapsedMs }], updatedAt: new Date().toISOString() } : session));
-    } finally {
-      window.clearInterval(timer);
-      setElapsedMs(performance.now() - startedAt);
-      setStreamingReply("");
-      setSending(false);
-    }
+    await requestReply(activeSession.id, nextMessages, activeSession.contextSummary);
+  }
+
+  async function retryLastMessage() {
+    if (sending) return;
+    const failedMessage = activeSession.messages.at(-1);
+    const userMessage = activeSession.messages.at(-2);
+    if (!failedMessage?.failed || userMessage?.role !== "user") return;
+    const nextMessages = activeSession.messages.slice(0, -1);
+    setSessions((current) => current.map((session) => session.id === activeSession.id ? { ...session, messages: nextMessages, updatedAt: new Date().toISOString() } : session));
+    await requestReply(activeSession.id, nextMessages, activeSession.contextSummary);
   }
 
   return <aside aria-label="ZominAI chat" aria-hidden={!isOpen} className={`fixed inset-y-0 right-0 z-[70] w-full max-w-[32rem] overflow-hidden border-l border-slate-200 bg-white pt-[4.5rem] shadow-2xl shadow-slate-950/20 ${drawerTransitionClass} motion-reduce:transition-none sm:w-[30rem] md:relative md:z-auto md:h-full md:max-w-none md:shrink-0 md:translate-x-0 md:border-l-0 md:bg-transparent md:pt-0 md:shadow-none ${isOpen ? "translate-x-0 md:w-[var(--zominai-drawer-width)] md:border-l md:border-slate-200 md:bg-white md:shadow-2xl md:shadow-slate-950/10" : "pointer-events-none translate-x-full md:w-0"}`} ref={drawerRef} style={{ "--zominai-drawer-width": `${drawerWidth}px` } as React.CSSProperties}>
@@ -1869,9 +1900,9 @@ function ZominAiChatDrawer({ client, connection, isOpen, onClose, onConnectionCh
             <div className="mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto">{sessions.slice().sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)).map((session) => <div className={`rounded-xl border p-1.5 ${session.id === activeSession.id ? "border-cyan-200 bg-white shadow-sm" : "border-transparent hover:border-slate-200 hover:bg-white"}`} key={session.id}>{editingTitleId === session.id ? <form className="flex items-center gap-1" onSubmit={(event) => { event.preventDefault(); saveTitle(session.id); }}><label className="sr-only" htmlFor={`zominai-title-${session.id}`}>Chat title</label><input autoFocus className="min-w-0 flex-1 rounded-md border border-cyan-300 bg-white px-2 py-1.5 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-cyan-100" id={`zominai-title-${session.id}`} maxLength={120} onChange={(event) => setTitleDraft(event.target.value)} value={titleDraft} /><button aria-label="Save chat title" className="rounded-md p-1.5 text-cyan-700 hover:bg-cyan-50" type="submit"><Check size={14} /></button><button aria-label="Cancel chat title rename" className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100" onClick={() => setEditingTitleId(null)} type="button"><X size={14} /></button></form> : <><button aria-current={session.id === activeSession.id ? "page" : undefined} className="block w-full text-left" onClick={() => selectChat(session.id)} type="button"><span className={`block truncate px-1 text-xs font-semibold leading-5 ${session.id === activeSession.id ? "text-cyan-900" : "text-slate-700"}`}>{session.title}</span><span className="block px-1 text-[11px] leading-4 text-slate-400">{zominAiTimestamp(session.updatedAt)}</span></button><div className="mt-1 flex justify-end gap-1"><button aria-label={`Rename chat ${session.title}`} className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" onClick={() => beginRename(session)} title="Rename chat" type="button"><Pencil size={13} /></button><button aria-label={`Delete chat ${session.title}`} className="rounded-md p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600" onClick={() => deleteChat(session.id)} title="Delete chat" type="button"><Trash2 size={13} /></button></div></>}</div>)}</div>
           </nav>
         </>}
-        <section className="flex min-w-0 flex-1 flex-col">
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col">
           <div aria-label="ZominAI conversation" className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-slate-50/70 p-4" ref={transcriptRef}>
-            {activeSession.messages.length === 0 ? <div className="grid h-full min-h-56 place-items-center text-center"><div className="max-w-60"><img className="mx-auto size-12 rounded-2xl object-cover shadow-sm" src={zominAiButtonUrl} alt="ZominAI Pegasus" /><p className="mt-4 text-sm font-semibold text-slate-900">Ask about your Drive</p><p className="mt-2 text-xs leading-5 text-slate-500">ZominAI can search and read supported Drive files, inspect databases, and run read-only queries. Results stay with this local model.</p></div></div> : activeSession.messages.map((message, index) => <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`} key={`${message.role}-${index}`}><div className="max-w-[88%]"><div className={`whitespace-pre-wrap rounded-2xl px-3 py-2.5 text-sm leading-6 ${message.role === "user" ? "rounded-br-md bg-cyan-800 text-white" : "rounded-bl-md border border-slate-200 bg-white text-slate-700"}`}>{message.content}</div>{message.role === "assistant" && typeof message.elapsedMs === "number" && <p aria-label="ZominAI response time" className="mt-1 px-1 text-[10px] text-slate-400">Completed in {zominAiElapsedLabel(message.elapsedMs)}</p>}</div></div>)}
+            {activeSession.messages.length === 0 ? <div className="grid h-full min-h-56 place-items-center text-center"><div className="max-w-60"><img className="mx-auto size-12 rounded-2xl object-cover shadow-sm" src={zominAiButtonUrl} alt="ZominAI Pegasus" /><p className="mt-4 text-sm font-semibold text-slate-900">Ask about your Drive</p><p className="mt-2 text-xs leading-5 text-slate-500">ZominAI can search and read supported Drive files, inspect databases, and run read-only queries. Results stay with this local model.</p></div></div> : activeSession.messages.map((message, index) => <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`} key={`${message.role}-${index}`}><div className="max-w-[88%]"><div className={`whitespace-pre-wrap rounded-2xl px-3 py-2.5 text-sm leading-6 ${message.role === "user" ? "rounded-br-md bg-cyan-800 text-white" : message.failed ? "rounded-bl-md border border-red-200 bg-red-50 text-red-800" : "rounded-bl-md border border-slate-200 bg-white text-slate-700"}`}>{message.content}</div>{message.role === "assistant" && <div className="mt-1 flex items-center gap-2 px-1">{typeof message.elapsedMs === "number" && <p aria-label="ZominAI response time" className="text-[10px] text-slate-400">Completed in {zominAiElapsedLabel(message.elapsedMs)}</p>}{message.failed && index === activeSession.messages.length - 1 && <button aria-label="Retry message to ZominAI" className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-semibold text-cyan-800 transition hover:bg-cyan-50 disabled:text-slate-300" disabled={sending} onClick={() => void retryLastMessage()} type="button"><RotateCcw size={12} /> Try again</button>}</div>}</div></div>)}
             {sending && <div className="flex justify-start"><div className="max-w-[88%]"><div className={`rounded-2xl rounded-bl-md border border-slate-200 bg-white px-3 py-2.5 text-sm leading-6 ${streamingReply ? "whitespace-pre-wrap text-slate-700" : "inline-flex items-center gap-2 text-slate-500"}`}>{streamingReply || <><LoaderCircle className="animate-spin" size={15} /> Thinking…</>}</div><p aria-live="polite" className="mt-1 px-1 text-[10px] font-medium text-slate-400">{streamingReply ? "Responding" : "Elapsed"} · {zominAiElapsedLabel(elapsedMs)}</p></div></div>}
           </div>
           <div aria-label="ZominAI context used" className="flex items-center gap-3 border-t border-slate-200 bg-white px-3 py-2">
@@ -2071,6 +2102,8 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
   }, [canManageUserAccess, section, setCurrentPath]);
 
   const advancedSearchActive = !sameAdvancedFilters(appliedAdvancedFilters, defaultAdvancedFilters);
+  const showingSearchResults = Boolean(search.trim()) || advancedSearchActive;
+  const showDriveUpload = section === "home" || section === "my-drive" || section === "starred" || section === "shared" || section === "trash";
   const advancedDateRange = dateRangeFor(appliedAdvancedFilters.modified);
   const recentDateRange = dateRangeFor(recentFilters.modified);
   const isRecent = section === "home";
@@ -2459,23 +2492,24 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
           <div className="mb-7 flex flex-wrap items-center justify-between gap-4">
             <div>
               {section === "my-drive" && currentPath && <FolderNavigation currentPath={currentPath} onNavigate={setCurrentPath} />}
-              <h1 className={`${section === "my-drive" && currentPath ? "mt-3" : ""} text-2xl font-semibold tracking-tight text-slate-900`}>{section === "zominai" ? <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1">ZominAI <span className="text-sm font-medium tracking-normal text-slate-500">Pronounced ZOH-min A.I.</span></span> : search || advancedSearchActive ? "Search results" : section === "api-keys" ? "API Keys" : section === "user-access" ? "User access" : section === "theme" ? "Theme" : section === "cluster-databases" ? "Zo Shared Drives" : section === "databases" ? "Zo Databases" : section === "functions" ? "Zo Functions" : section === "profile" ? "Profile & controls" : section === "home" ? "Recent" : section === "pastes" ? "Zo Paste" : section === "transfer" ? "Zo Transfer" : section === "shared" ? "Shared with others" : section === "starred" ? "Starred" : section === "trash" ? "Trash" : currentPath ? currentPath.split("/").at(-1) : "Files"}</h1>
-              {section === "api-keys" && <p className="mt-1 text-sm text-slate-500">Provision and revoke scoped access for local computers and automations.</p>}
-              {section === "user-access" && <p className="mt-1 text-sm text-slate-500">Create, update, and revoke people’s access to this Drive.</p>}
-              {section === "theme" && <p className="mt-1 text-sm text-slate-500">Choose the visual style for this browser.</p>}
-              {section === "cluster-databases" && <p className="mt-1 text-sm text-slate-500">Choose exactly which Drive folders each trusted person can access.</p>}
-              {section === "databases" && <p className="mt-1 text-sm text-slate-500">Choose a lightweight open-source database, then keep its data private in your Drive.</p>}
-              {section === "functions" && <p className="mt-1 text-sm text-slate-500">Store, run, and schedule small JavaScript or Python functions.</p>}
-              {section === "profile" && <p className="mt-1 text-sm text-slate-500">Manage the owner account for this private drive.</p>}
-              {section === "zominai" && <p className="mt-1 text-sm text-slate-500">Set up and verify the local Bonsai runtime for this browser.</p>}
-              {section === "home" && <p className="mt-1 text-sm text-slate-500">Files you recently created, uploaded, or updated.</p>}
-              {section === "pastes" && <p className="mt-1 text-sm text-slate-500">Create, keep, and securely share code or text snippets.</p>}
-              {section === "transfer" && <p className="mt-1 text-sm text-slate-500">Create and manage public file links from Zo Drive.</p>}
-              {section === "shared" && <p className="mt-1 text-sm text-slate-500">Access folders shared with you and manage links shared outside your Drive.</p>}
-              {section === "trash" && <p className="mt-1 text-sm text-slate-500">Items are permanently deleted 30 days after being moved here.</p>}
+              <h1 className={`${section === "my-drive" && currentPath ? "mt-3" : ""} text-2xl font-semibold tracking-tight text-slate-900`}>{section === "zominai" ? <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1">ZominAI <span className="text-sm font-medium tracking-normal text-slate-500">Pronounced ZOH-min A.I.</span></span> : showingSearchResults ? "Search results" : section === "api-keys" ? "API Keys" : section === "user-access" ? "User access" : section === "theme" ? "Theme" : section === "cluster-databases" ? "Zo Shared Drives" : section === "databases" ? "Zo Databases" : section === "functions" ? "Zo Functions" : section === "profile" ? "Profile & controls" : section === "home" ? "Recent" : section === "pastes" ? "Zo Paste" : section === "transfer" ? "Zo Transfer" : section === "shared" ? "Shared with others" : section === "starred" ? "Starred" : section === "trash" ? "Trash" : currentPath ? currentPath.split("/").at(-1) : "Files"}</h1>
+              {showingSearchResults && <p className="mt-1 text-sm text-slate-500">{search.trim() ? `Matches for “${search.trim()}” in this section.` : "Matches for the selected advanced filters."}</p>}
+              {!showingSearchResults && section === "api-keys" && <p className="mt-1 text-sm text-slate-500">Provision and revoke scoped access for local computers and automations.</p>}
+              {!showingSearchResults && section === "user-access" && <p className="mt-1 text-sm text-slate-500">Create, update, and revoke people’s access to this Drive.</p>}
+              {!showingSearchResults && section === "theme" && <p className="mt-1 text-sm text-slate-500">Choose the visual style for this browser.</p>}
+              {!showingSearchResults && section === "cluster-databases" && <p className="mt-1 text-sm text-slate-500">Choose exactly which Drive folders each trusted person can access.</p>}
+              {!showingSearchResults && section === "databases" && <p className="mt-1 text-sm text-slate-500">Choose a lightweight open-source database, then keep its data private in your Drive.</p>}
+              {!showingSearchResults && section === "functions" && <p className="mt-1 text-sm text-slate-500">Store, run, and schedule small JavaScript or Python functions.</p>}
+              {!showingSearchResults && section === "profile" && <p className="mt-1 text-sm text-slate-500">Manage the owner account for this private drive.</p>}
+              {!showingSearchResults && section === "zominai" && <p className="mt-1 text-sm text-slate-500">Set up and verify the local Bonsai runtime for this browser.</p>}
+              {!showingSearchResults && section === "home" && <p className="mt-1 text-sm text-slate-500">Files you recently created, uploaded, or updated.</p>}
+              {!showingSearchResults && section === "pastes" && <p className="mt-1 text-sm text-slate-500">Create, keep, and securely share code or text snippets.</p>}
+              {!showingSearchResults && section === "transfer" && <p className="mt-1 text-sm text-slate-500">Create and manage public file links from Zo Drive.</p>}
+              {!showingSearchResults && section === "shared" && <p className="mt-1 text-sm text-slate-500">Access folders shared with you and manage links shared outside your Drive.</p>}
+              {!showingSearchResults && section === "trash" && <p className="mt-1 text-sm text-slate-500">Items are permanently deleted 30 days after being moved here.</p>}
             </div>
             <div className="ml-auto flex shrink-0 items-center gap-3" data-testid="dashboard-actions">
-              {zominAiChatOpen && section !== "cluster-databases" && section !== "databases" && section !== "functions" && section !== "theme" && section !== "zominai" && <button aria-label="Open upload menu" className="hidden items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200 md:inline-flex" onClick={() => setUploadDialogOpen(true)}><Upload size={17} /> Upload</button>}
+              {zominAiChatOpen && showDriveUpload && <button aria-label="Open upload menu" className="hidden items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200 md:inline-flex" onClick={() => setUploadDialogOpen(true)}><Upload size={17} /> Upload</button>}
               {section === "trash" && trashItems.length > 0 ? <button className="rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50" onClick={() => void emptyTrash()}>Empty trash</button> : section === "pastes" ? <button className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800" onClick={() => startNativeFile("paste")}><Plus size={17} /> New paste</button> : section !== "home" && section !== "theme" && section !== "transfer" && section !== "api-keys" && section !== "user-access" && section !== "cluster-databases" && section !== "databases" && section !== "functions" && section !== "profile" && section !== "zominai" && <div className="flex rounded-lg border border-slate-200 bg-white p-1">
               <button aria-label="List view" className={`rounded-md p-2 ${viewMode === "list" ? "bg-slate-100 text-slate-900" : "text-slate-400"}`} onClick={() => setViewMode("list")}><List size={18} /></button>
               <button aria-label="Grid view" className={`rounded-md p-2 ${viewMode === "grid" ? "bg-slate-100 text-slate-900" : "text-slate-400"}`} onClick={() => setViewMode("grid")}><Grid2X2 size={18} /></button>
@@ -2485,7 +2519,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
 
           {section === "home" && <RecentFiltersBar filters={recentFilters} onChange={setRecentFilters} />}
 
-          {section === "api-keys" ? <ApiKeys client={client} /> : section === "user-access" && canManageUserAccess ? <UserAccessScreen client={authClient as unknown as UserAccessClient} currentUser={user} /> : section === "theme" ? <ThemeScreen onThemeChange={setDriveTheme} theme={driveTheme} /> : section === "cluster-databases" ? <ClusterDatabases client={client} /> : section === "databases" ? <Databases client={client} /> : section === "functions" ? <Functions client={client} /> : section === "profile" ? <AccountScreen client={authClient} onAccountDeleted={onAccountDeleted} user={user} /> : section === "zominai" ? <ZominAiWorkspace initialPane={zominAiPane} /> : section === "transfer" ? <ZoTransfer client={client} onCreated={async () => { await refresh(); await queryClient.invalidateQueries({ queryKey: ["shares"] }); }} /> : section === "pastes" ? <ZoPaste files={displayedFiles} isError={filesQuery.isError} isLoading={isLoading} onCreate={() => startNativeFile("paste")} onDelete={(key) => deleteMutation.mutate(key)} onPreview={openPreview} onRetry={() => void filesQuery.refetch()} onShare={(file) => { setShareSettings(null); setShareFile(file); }} onToggleStar={(file) => starMutation.mutate({ key: file.key, starred: file.starred })} /> : isLoading ? (
+          {section === "api-keys" ? <ApiKeys client={client} /> : section === "user-access" && canManageUserAccess ? <UserAccessScreen client={authClient as unknown as UserAccessClient} currentUser={user} /> : section === "theme" ? <ThemeScreen onThemeChange={setDriveTheme} theme={driveTheme} /> : section === "cluster-databases" ? <ClusterDatabases client={client} search={search} /> : section === "databases" ? <Databases client={client} search={search} /> : section === "functions" ? <Functions client={client} search={search} /> : section === "profile" ? <AccountScreen client={authClient} onAccountDeleted={onAccountDeleted} user={user} /> : section === "zominai" ? <ZominAiWorkspace initialPane={zominAiPane} /> : section === "transfer" ? <ZoTransfer client={client} search={search} onCreated={async () => { await refresh(); await queryClient.invalidateQueries({ queryKey: ["shares"] }); }} /> : section === "pastes" ? <ZoPaste files={displayedFiles} isError={filesQuery.isError} isLoading={isLoading} onCreate={() => startNativeFile("paste")} onDelete={(key) => deleteMutation.mutate(key)} onPreview={openPreview} onRetry={() => void filesQuery.refetch()} onShare={(file) => { setShareSettings(null); setShareFile(file); }} onToggleStar={(file) => starMutation.mutate({ key: file.key, starred: file.starred })} /> : isLoading ? (
             <div className="grid h-64 place-items-center text-sm text-slate-500"><LoaderCircle className="mr-2 animate-spin" size={20} /> Loading your drive…</div>
           ) : (section === "shared" ? sharesQuery.isError : section === "starred" ? starredQuery.isError : section === "trash" ? trashQuery.isError : filesQuery.isError) ? (
             <EmptyState
@@ -2533,7 +2567,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
         return updatedUsage;
       }} />}
       {uploadDialogOpen && <UploadDialog onClose={() => setUploadDialogOpen(false)} onChooseFiles={() => { setUploadDialogOpen(false); fileInput.current?.click(); }} onChooseFolder={() => { setUploadDialogOpen(false); folderInput.current?.click(); }} onDrop={(dataTransfer) => { setUploadDialogOpen(false); return uploadDroppedItems(dataTransfer); }} />}
-      {uploads.length === 0 && !zominAiChatOpen && section !== "cluster-databases" && section !== "databases" && section !== "functions" && section !== "zominai" && <button aria-label="Open upload menu" className="fixed bottom-4 right-4 z-40 inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-900/25 transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200 sm:bottom-6 sm:right-6 sm:px-5" onClick={() => setUploadDialogOpen(true)}><Upload size={18} /> <span className="hidden sm:inline">Upload</span></button>}
+      {uploads.length === 0 && !zominAiChatOpen && showDriveUpload && <button aria-label="Open upload menu" className="fixed bottom-4 right-4 z-40 inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-900/25 transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200 sm:bottom-6 sm:right-6 sm:px-5" onClick={() => setUploadDialogOpen(true)}><Upload size={18} /> <span className="hidden sm:inline">Upload</span></button>}
       {uploads.length > 0 && <UploadProgress uploads={uploads} />}
     </main>
   );
@@ -2548,7 +2582,7 @@ function FunctionWorkspaceTabs({ activeTab, disabled, onChange }: { activeTab: F
   return <nav aria-label="Function workspace views" className="border-b border-slate-100 bg-white px-5 pt-4"><div className="flex gap-1 overflow-x-auto" role="tablist">{tabs.map((tab) => <button aria-controls={`function-${tab.id}-panel`} aria-selected={activeTab === tab.id} className={`shrink-0 rounded-t-lg border-b-2 px-3 py-2.5 text-sm font-semibold transition ${activeTab === tab.id ? "border-blue-600 bg-blue-50 text-blue-700" : "border-transparent text-slate-500 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-800"} disabled:cursor-not-allowed disabled:text-slate-300`} disabled={disabled && tab.id !== "editor"} key={tab.id} onClick={() => onChange(tab.id)} role="tab" type="button">{tab.label}</button>)}</div></nav>;
 }
 
-function Functions({ client }: { client: DriveClient }) {
+function Functions({ client, search }: { client: DriveClient; search: string }) {
   const queryClient = useQueryClient();
   const supported = Boolean(client.createFunction && client.deleteFunction && client.listFunctions && client.listFunctionRuns && client.runFunction && client.updateFunction);
   const functionsQuery = useQuery({ queryKey: ["functions"], queryFn: () => client.listFunctions!(), enabled: supported });
@@ -2561,14 +2595,18 @@ function Functions({ client }: { client: DriveClient }) {
   const [cron, setCron] = useState("");
   const [enabled, setEnabled] = useState(true);
   const [input, setInput] = useState("{\n  \"name\": \"Zo\"\n}");
-  const selected = (functionsQuery.data ?? []).find((fn) => fn.id === selectedId) ?? null;
+  const normalizedSearch = search.trim().toLowerCase();
+  const allFunctions = functionsQuery.data ?? [];
+  const functions = allFunctions.filter((fn) => matchesSearch(normalizedSearch, fn.name, fn.runtime, fn.source, fn.visibility, fn.cron, fn.enabled ? "enabled" : "paused"));
+  const selected = allFunctions.find((fn) => fn.id === selectedId) ?? null;
   const runsQuery = useQuery({ queryKey: ["function-runs", selectedId], queryFn: () => client.listFunctionRuns!(selectedId!), enabled: supported && Boolean(selectedId) });
 
   useEffect(() => {
-    if (selected || selectedId) return;
-    const first = functionsQuery.data?.[0];
+    if (selected && (!normalizedSearch || functions.some((fn) => fn.id === selected.id))) return;
+    if (selectedId && !normalizedSearch) return;
+    const first = functions[0];
     if (first) loadFunction(first);
-  }, [functionsQuery.data, selected, selectedId]);
+  }, [functionsQuery.data, normalizedSearch, selected, selectedId]);
 
   function loadFunction(fn: DriveFunction) {
     setSelectedId(fn.id); setWorkspaceTab("editor"); setName(fn.name); setRuntime(fn.runtime); setSource(fn.source); setVisibility(fn.visibility); setCron(fn.cron ?? ""); setEnabled(fn.enabled);
@@ -2598,9 +2636,9 @@ function Functions({ client }: { client: DriveClient }) {
   const endpoint = selectedId && visibility === "public" ? `${window.location.origin}${appBasePath === "/" ? "" : appBasePath}/public/functions/${selectedId}/invoke` : null;
   const runs = runsQuery.data ?? [];
   return <div className="space-y-5">
-    <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 px-7 py-8 text-white shadow-sm md:px-9"><div className="absolute -right-20 -top-28 size-72 rounded-full bg-cyan-300/15 blur-3xl" /><div className="relative"><span className="inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-cyan-200/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100"><Terminal size={14} /> Serverless code, in your Drive</span><h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">Run small jobs without another service.</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">Store JavaScript or Python handlers, run them privately, expose an invocation endpoint when needed, and schedule enabled functions with UTC cron.</p></div></section>
-    <div className="grid gap-5 xl:grid-cols-[16rem_minmax(0,1fr)]"><aside className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="flex items-center justify-between border-b border-slate-100 p-4"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Functions</p><p className="mt-1 text-sm font-semibold text-slate-900">{(functionsQuery.data ?? []).length} saved</p></div><button aria-label="New function" className="grid size-9 place-items-center rounded-lg bg-blue-600 text-white hover:bg-blue-700" onClick={newFunction}><Plus size={18} /></button></div>{functionsQuery.isPending ? <p className="p-5 text-sm text-slate-500">Loading functions…</p> : (functionsQuery.data ?? []).length === 0 ? <p className="p-5 text-sm leading-6 text-slate-500">Create a function to get started.</p> : <div className="p-2">{functionsQuery.data?.map((fn) => <button className={`mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left ${fn.id === selectedId ? "bg-blue-600 text-white shadow-sm" : "text-slate-700 hover:bg-slate-50"}`} key={fn.id} onClick={() => loadFunction(fn)}><span className={`grid size-9 place-items-center rounded-lg ${fn.id === selectedId ? "bg-white/15" : "bg-slate-100 text-slate-500"}`}><Terminal size={17} /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{fn.name}</span><span className={`mt-0.5 block text-xs ${fn.id === selectedId ? "text-blue-100" : "text-slate-400"}`}>{fn.runtime} · {fn.enabled ? "enabled" : "paused"}</span></span></button>)}</div>}</aside>
-    <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    {!normalizedSearch && <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 px-7 py-8 text-white shadow-sm md:px-9"><div className="absolute -right-20 -top-28 size-72 rounded-full bg-cyan-300/15 blur-3xl" /><div className="relative"><span className="inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-cyan-200/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100"><Terminal size={14} /> Serverless code, in your Drive</span><h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">Run small jobs without another service.</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">Store JavaScript or Python handlers, run them privately, expose an invocation endpoint when needed, and schedule enabled functions with UTC cron.</p></div></section>}
+    <div className="grid gap-5 xl:grid-cols-[16rem_minmax(0,1fr)]"><aside className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="flex items-center justify-between border-b border-slate-100 p-4"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Functions</p><p className="mt-1 text-sm font-semibold text-slate-900">{normalizedSearch ? `${functions.length} matching` : `${allFunctions.length} saved`}</p></div><button aria-label="New function" className="grid size-9 place-items-center rounded-lg bg-blue-600 text-white hover:bg-blue-700" onClick={newFunction}><Plus size={18} /></button></div>{functionsQuery.isPending ? <p className="p-5 text-sm text-slate-500">Loading functions…</p> : allFunctions.length === 0 ? <p className="p-5 text-sm leading-6 text-slate-500">Create a function to get started.</p> : functions.length === 0 ? <p className="p-5 text-sm leading-6 text-slate-500">No functions match “{search.trim()}”.</p> : <div className="p-2">{functions.map((fn) => <button className={`mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left ${fn.id === selectedId ? "bg-blue-600 text-white shadow-sm" : "text-slate-700 hover:bg-slate-50"}`} key={fn.id} onClick={() => loadFunction(fn)}><span className={`grid size-9 place-items-center rounded-lg ${fn.id === selectedId ? "bg-white/15" : "bg-slate-100 text-slate-500"}`}><Terminal size={17} /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{fn.name}</span><span className={`mt-0.5 block text-xs ${fn.id === selectedId ? "text-blue-100" : "text-slate-400"}`}>{fn.runtime} · {fn.enabled ? "enabled" : "paused"}</span></span></button>)}</div>}</aside>
+    {normalizedSearch && functions.length === 0 ? <section className="grid min-h-72 place-items-center rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center"><div><Terminal className="mx-auto text-slate-300" size={28} /><h2 className="mt-4 text-lg font-semibold text-slate-900">No matching functions</h2><p className="mt-2 text-sm text-slate-500">Try a function name, runtime, status, schedule, or source-code term.</p></div></section> : <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50 px-5 py-4">
         <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600">{workspaceTab === "editor" ? selected ? "Function editor" : "New function" : workspaceTab === "runs" ? "Function runs" : "Invocation logs"}</p><p className="mt-1 text-sm text-slate-500">{workspaceTab === "editor" ? "Handlers receive JSON input and must return JSON-serialisable data." : workspaceTab === "runs" ? "Test the saved function and review its recent activity." : "Inspect output and runtime logs for the last 30 invocations."}</p></div>
       </div>
@@ -2611,7 +2649,7 @@ function Functions({ client }: { client: DriveClient }) {
         <footer aria-label="Function editor actions" className="flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4" role="group"><button className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-white disabled:text-slate-400" disabled={!selectedId || deleteMutation.isPending} onClick={() => { if (window.confirm(`Delete ${name}?`)) deleteMutation.mutate(); }}>Delete</button><button className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-300" disabled={!name.trim() || !source.trim() || saveMutation.isPending} onClick={() => saveMutation.mutate()}>{saveMutation.isPending ? "Saving…" : selected ? "Save changes" : "Create function"}</button></footer>
       </div>
       {workspaceTab === "runs" && selectedId && <div aria-labelledby="function-runs-tab" className="grid gap-5 bg-slate-50 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]" id="function-runs-panel" role="tabpanel"><div><div className="flex items-center justify-between"><div><h3 className="font-semibold text-slate-900">Test run</h3><p className="mt-1 text-xs text-slate-500">Run the saved function with any JSON value.</p></div><button className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:bg-slate-300" disabled={runMutation.isPending} onClick={() => runMutation.mutate()}>{runMutation.isPending ? "Running…" : "Run now"}</button></div><textarea aria-label="Function input JSON" className="mt-3 min-h-32 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 font-mono text-xs leading-6 text-slate-100 outline-none focus:border-cyan-400" spellCheck={false} value={input} onChange={(event) => setInput(event.target.value)} /></div><div><h3 className="font-semibold text-slate-900">Recent runs</h3><p className="mt-1 text-xs text-slate-500">Last 30 runs, including scheduled and public invocations.</p><div className="mt-3 max-h-72 space-y-2 overflow-auto">{runsQuery.isPending ? <p className="text-sm text-slate-500">Loading runs…</p> : runs.length === 0 ? <p className="text-sm text-slate-500">No runs yet.</p> : runs.map((run) => <FunctionRunRow key={run.id} run={run} />)}</div></div></div>}
-    </section></div>
+    </section>}</div>
     {workspaceTab === "logs" && selectedId && <div id="function-logs-panel" role="tabpanel"><FunctionLogs isLoading={runsQuery.isPending} runs={runs} /></div>}
   </div>;
 }
@@ -2638,7 +2676,7 @@ function defaultFunctionSource(runtime: FunctionRuntime): string {
   return runtime === "javascript" ? `export default async function handler(input) {\n  return { message: \`Hello, \${input.name ?? "world"}!\`, input };\n}` : `def handler(input):\n    return {"message": f"Hello, {input.get('name', 'world')}!", "input": input}`;
 }
 
-function ClusterDatabases({ client }: { client: DriveClient }) {
+function ClusterDatabases({ client, search }: { client: DriveClient; search: string }) {
   const queryClient = useQueryClient();
   const supported = Boolean(
       client.createClusterInvitation &&
@@ -2692,6 +2730,13 @@ function ClusterDatabases({ client }: { client: DriveClient }) {
     queryKey: ["cluster-objects", openMount],
     queryFn: () => client.listClusterObjects!(openMount!),
     enabled: supported && Boolean(openMount),
+  });
+  const normalizedSearch = search.trim().toLowerCase();
+  const mounts = mountsQuery.data ?? [];
+  const searchObjectsQuery = useQuery({
+    queryKey: ["cluster-search-objects", mounts.map((mount) => mount.id).join(",")],
+    queryFn: async () => (await Promise.all(mounts.map(async (mount) => (await client.listClusterObjects!(mount.id)).map((object) => ({ mount, object }))))).flat(),
+    enabled: supported && Boolean(normalizedSearch) && mounts.length > 0,
   });
   const accessQuery = useQuery({
     queryKey: ["cluster-access", openMount],
@@ -2867,6 +2912,11 @@ function ClusterDatabases({ client }: { client: DriveClient }) {
       ),
   });
   const canWrite = accessQuery.data?.role === "editor";
+  const matchingSharedFiles = (searchObjectsQuery.data ?? []).filter(({ object }) => matchesSearch(normalizedSearch, object.name, object.key, object.contentType));
+  const visibleInvitations = (invitationsQuery.data ?? []).filter((invite) => matchesSearch(normalizedSearch, invite.folder, invite.recipient, invite.role));
+  const visiblePeers = (peersQuery.data ?? []).filter((peer) => matchesSearch(normalizedSearch, peer.folder, peer.recipient, peer.role));
+  const visibleMounts = mounts.filter((mount) => matchesSearch(normalizedSearch, mount.folder, mount.remoteUrl, mount.author, mount.recipient, mount.role) || matchingSharedFiles.some((result) => result.mount.id === mount.id));
+  const visibleOpenMountObjects = (objectsQuery.data ?? []).filter((object) => matchesSearch(normalizedSearch, object.name, object.key, object.contentType));
   async function downloadObject(key: string, name: string) {
     try {
       const response = await client.downloadClusterObject!({
@@ -2910,6 +2960,7 @@ function ClusterDatabases({ client }: { client: DriveClient }) {
     );
   return (
     <div className="space-y-5">
+      {!normalizedSearch && <>
       <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 via-cyan-950 to-slate-900 px-7 py-8 text-white shadow-sm md:px-9">
         <div className="absolute -right-16 -top-24 size-72 rounded-full bg-cyan-300/15 blur-3xl" />
         <div className="relative max-w-3xl">
@@ -3195,17 +3246,18 @@ function ClusterDatabases({ client }: { client: DriveClient }) {
           </div>
         </aside>
       </section>
-      {((invitationsQuery.data ?? []).length > 0 || (peersQuery.data ?? []).length > 0) && (
+      </>}
+      {(visibleInvitations.length > 0 || visiblePeers.length > 0) && (
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <header className="border-b border-slate-100 px-5 py-4">
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-700">Access you manage</p>
             <h2 className="mt-1 font-semibold text-slate-900">Exposed folders</h2>
             <p className="mt-1 text-sm text-slate-500">Cancel an unused pairing key, change active access between Viewer and Editor, or revoke it immediately.</p>
           </header>
-          {(invitationsQuery.data ?? []).length > 0 && <div className="border-b border-slate-100">
+          {visibleInvitations.length > 0 && <div className="border-b border-slate-100">
             <div className="bg-amber-50/70 px-5 py-3"><p className="text-xs font-bold uppercase tracking-[0.14em] text-amber-800">Pending pairing keys</p><p className="mt-1 text-xs text-amber-900">Keys are shown once at creation. Cancelled and expired keys cannot be used.</p></div>
             <div className="divide-y divide-slate-100">
-              {invitationsQuery.data?.map((invite) => (
+              {visibleInvitations.map((invite) => (
                 <div className="flex flex-wrap items-center gap-3 px-5 py-4" key={invite.id}>
                   <span className="grid size-9 place-items-center rounded-lg bg-amber-100 text-amber-800"><Clock3 size={17} /></span>
                   <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-800">{invite.recipient || "Unlabelled recipient"}</span><span className="block truncate text-xs text-slate-500">{invite.folder} · expires {new Date(invite.expiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span></span>
@@ -3215,10 +3267,10 @@ function ClusterDatabases({ client }: { client: DriveClient }) {
               ))}
             </div>
           </div>}
-          {(peersQuery.data ?? []).length > 0 && <div>
+          {visiblePeers.length > 0 && <div>
             <div className="bg-cyan-50/70 px-5 py-3"><p className="text-xs font-bold uppercase tracking-[0.14em] text-cyan-800">Active folder access</p><p className="mt-1 text-xs text-cyan-900">These recipients already redeemed a key and can reach the listed folder.</p></div>
             <div className="divide-y divide-slate-100">
-            {peersQuery.data?.map((peer) => (
+            {visiblePeers.map((peer) => (
               <div className="flex flex-wrap items-center gap-3 px-5 py-4" key={peer.id}>
                 <span className="grid size-9 place-items-center rounded-lg bg-cyan-100 text-cyan-800"><UsersRound size={17} /></span>
                 <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-800">{peer.recipient || "Unlabelled recipient"}</span><span className="block truncate text-xs text-slate-500">{peer.folder}</span></span>
@@ -3234,7 +3286,8 @@ function ClusterDatabases({ client }: { client: DriveClient }) {
           }
         </section>
       )}
-      {(mountsQuery.data ?? []).length > 0 && (
+      {normalizedSearch && <section aria-label="Shared Drive file search results" className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><header className="border-b border-slate-100 px-5 py-4"><h2 className="font-semibold text-slate-900">Matching shared files</h2><p className="mt-1 text-sm text-slate-500">Files found across every connected Shared Drive.</p></header>{searchObjectsQuery.isPending ? <p className="p-5 text-sm text-slate-500">Searching connected folders…</p> : matchingSharedFiles.length === 0 ? <p className="p-5 text-sm text-slate-500">No shared files match “{search.trim()}”.</p> : <div className="divide-y divide-slate-100">{matchingSharedFiles.map(({ mount, object }) => <button className="flex w-full items-center gap-3 px-5 py-4 text-left hover:bg-slate-50" key={`${mount.id}:${object.key}`} onClick={() => setOpenMount(mount.id)}><File size={17} className="shrink-0 text-slate-400" /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-800">{object.name}</span><span className="block truncate text-xs text-slate-500">{mount.folder} / {object.key}</span></span><span className="text-xs text-slate-400">{formatBytes(object.size)}</span></button>)}</div>}</section>}
+      {visibleMounts.length > 0 && (
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <header className="border-b border-slate-100 px-5 py-4">
             <h2 className="font-semibold text-slate-900">Connected folders</h2>
@@ -3244,7 +3297,7 @@ function ClusterDatabases({ client }: { client: DriveClient }) {
             </p>
           </header>
           <div className="divide-y divide-slate-100">
-            {mountsQuery.data?.map((mount) => (
+            {visibleMounts.map((mount) => (
               <div className="flex items-center gap-3 px-5 py-4" key={mount.id}>
                 <button
                   className="flex min-w-0 flex-1 items-center gap-3 text-left hover:text-cyan-800"
@@ -3336,7 +3389,7 @@ function ClusterDatabases({ client }: { client: DriveClient }) {
                 </p>
               ) : (
                 <div className="mt-4 space-y-2">
-                  {(objectsQuery.data ?? []).map((object) => (
+                  {visibleOpenMountObjects.map((object) => (
                     <div
                       className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2"
                       key={object.key}
@@ -3387,9 +3440,9 @@ function ClusterDatabases({ client }: { client: DriveClient }) {
                       </button>}
                     </div>
                   ))}
-                  {(objectsQuery.data ?? []).length === 0 && (
+                  {visibleOpenMountObjects.length === 0 && (
                     <p className="text-sm text-slate-500">
-                      No files in this shared folder yet.
+                      {normalizedSearch ? `No files in this shared folder match “${search.trim()}”.` : "No files in this shared folder yet."}
                     </p>
                   )}
                 </div>
@@ -3426,7 +3479,7 @@ function ClusterBehaviour({ description, title }: { description: string; title: 
   return <div><h3 className="text-sm font-semibold text-slate-800">{title}</h3><p className="mt-1 text-sm leading-6 text-slate-500">{description}</p></div>;
 }
 
-function Databases({ client }: { client: DriveClient }) {
+function Databases({ client, search }: { client: DriveClient; search: string }) {
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [selectedEngine, setSelectedEngine] = useState<DatabaseEngineId>("sqlite");
@@ -3454,9 +3507,11 @@ function Databases({ client }: { client: DriveClient }) {
     queryFn: () => client.listDatabases!(),
     enabled: supported
   });
-  const databases = databasesQuery.data ?? [];
+  const normalizedSearch = search.trim().toLowerCase();
+  const allDatabases = databasesQuery.data ?? [];
+  const databases = allDatabases.filter((database) => matchesSearch(normalizedSearch, database.name, database.engine));
   const importSettingsQuery = useQuery({ queryKey: ["database-import-settings"], queryFn: () => client.getDatabaseImportSettings!(), enabled: supported && sqliteInstalled });
-  const selectedDatabase = databases.find((database) => database.id === selectedId) ?? null;
+  const selectedDatabase = allDatabases.find((database) => database.id === selectedId) ?? null;
   const activeDatabase = databaseView === "instances" ? selectedDatabase : null;
   const tablesQuery = useQuery({
     queryKey: ["database-tables", activeDatabase?.id],
@@ -3469,6 +3524,13 @@ function Databases({ client }: { client: DriveClient }) {
   useEffect(() => {
     if (activeDatabase && activeDatabase.engine !== "sqlite" && activePanel !== "run" && activePanel !== "access") setActivePanel("run");
   }, [activeDatabase, activePanel]);
+
+  useEffect(() => {
+    if (!normalizedSearch || !anyEngineInstalled) return;
+    setDatabaseView("instances");
+    setSelectedId(null);
+    setSelectedTable(null);
+  }, [anyEngineInstalled, normalizedSearch]);
 
   useEffect(() => {
     updateDriveUrl({
@@ -3619,7 +3681,7 @@ function Databases({ client }: { client: DriveClient }) {
         <input accept=".db,.sqlite,.sqlite3,application/vnd.sqlite3,application/x-sqlite3" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) importMutation.mutate(file); event.target.value = ""; }} ref={importInput} type="file" />
         {sqliteInstalled && <><button className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:text-slate-400" disabled={importMutation.isPending} onClick={() => importInput.current?.click()} type="button"><Upload size={16} />{importMutation.isPending ? "Importing…" : "Import SQLite file"}</button><button className="mt-2 w-full text-center text-xs font-medium text-slate-500 hover:text-blue-600" onClick={() => setImportSettingsOpen(true)} type="button">Import limit: {formatBytes(importSettingsQuery.data?.importLimitBytes ?? 0)}</button></>}
       </div>
-      {databasesQuery.isPending ? <p className="p-5 text-sm text-slate-500">Loading databases…</p> : databases.length === 0 ? <p className="p-5 text-sm leading-6 text-slate-500">Choose an installed engine and create a private database.</p> : <div className="p-2">{databases.map((database) => <button className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-slate-700 transition hover:bg-slate-50" key={database.id} onClick={() => { setSelectedId(database.id); setSelectedEngine(database.engine); setSelectedTable(null); setQueryResult(null); setDeleteConfirmationOpen(false); setActivePanel(database.engine === "sqlite" ? "data" : "run"); setDatabaseView("instances"); }}><span className="grid size-9 place-items-center rounded-lg bg-slate-100 text-slate-500"><Database size={18} /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{database.name}</span><span className="mt-0.5 block text-xs font-medium text-slate-400">{database.engine} · {formatBytes(database.sizeBytes)}</span></span></button>)}</div>}
+      {databasesQuery.isPending ? <p className="p-5 text-sm text-slate-500">Loading databases…</p> : databases.length === 0 ? <p className="p-5 text-sm leading-6 text-slate-500">{normalizedSearch ? `No databases match “${search.trim()}”.` : "Choose an installed engine and create a private database."}</p> : <div className="p-2">{databases.map((database) => <button className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-slate-700 transition hover:bg-slate-50" key={database.id} onClick={() => { setSelectedId(database.id); setSelectedEngine(database.engine); setSelectedTable(null); setQueryResult(null); setDeleteConfirmationOpen(false); setActivePanel(database.engine === "sqlite" ? "data" : "run"); setDatabaseView("instances"); }}><span className="grid size-9 place-items-center rounded-lg bg-slate-100 text-slate-500"><Database size={18} /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{database.name}</span><span className="mt-0.5 block text-xs font-medium text-slate-400">{database.engine} · {formatBytes(database.sizeBytes)}</span></span></button>)}</div>}
     </aside>}
 
     <div className="min-w-0">
@@ -4212,20 +4274,22 @@ function StorageBreakdownDialog({ usage, onClose, onSetQuota }: { usage?: Storag
   );
 }
 
-function ZoTransfer({ client, onCreated }: { client: DriveClient; onCreated: () => Promise<void> }) {
+function ZoTransfer({ client, onCreated, search: globalSearch }: { client: DriveClient; onCreated: () => Promise<void>; search: string }) {
   const [mode, setMode] = useState<"drive" | "upload">("drive");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [expiry, setExpiry] = useState("7d");
   const [access, setAccess] = useState<ShareAccess>("public");
   const [passcode, setPasscode] = useState("");
   const [showPasscode, setShowPasscode] = useState(false);
-  const [search, setSearch] = useState("");
+  const [fileSearch, setFileSearch] = useState("");
   const [link, setLink] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const filesQuery = useQuery({ queryKey: ["transfer-files"], queryFn: () => client.list({}) });
   const sharesQuery = useQuery({ queryKey: ["transfer-shares"], queryFn: () => client.listShares() });
-  const files = (filesQuery.data ?? []).filter((file) => file.name.toLowerCase().includes(search.toLowerCase()));
-  const transfers = (sharesQuery.data ?? []).filter((share) => share.kind === "transfer");
+  const normalizedGlobalSearch = globalSearch.trim().toLowerCase();
+  const normalizedFileSearch = fileSearch.trim().toLowerCase();
+  const files = (filesQuery.data ?? []).filter((file) => matchesSearch(normalizedGlobalSearch, file.name, file.key, file.contentType) && matchesSearch(normalizedFileSearch, file.name, file.key, file.contentType));
+  const transfers = (sharesQuery.data ?? []).filter((share) => share.kind === "transfer" && matchesSearch(normalizedGlobalSearch, share.name, share.key, share.access, share.contentType));
   const canCreate = access === "public" || passcode.length > 0;
   const transferOptions = () => ({ access, kind: "transfer" as const, passcode: access === "passcode" ? passcode : undefined, expiresAt: ttlToDate(expiry) });
   const finish = async (share: DriveShare) => {
@@ -4259,12 +4323,12 @@ function ZoTransfer({ client, onCreated }: { client: DriveClient; onCreated: () 
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="relative overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 px-7 py-9 text-white md:px-10"><div className="absolute -right-28 -top-32 size-80 rounded-full bg-cyan-400/15 blur-3xl" /><div className="relative"><span className="inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-cyan-200/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100"><Send size={14} /> Ready to send</span><h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">Send a file with Zo Transfer</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300 md:text-base">Upload a file or select one already in Zo Drive. Create a public or passcode-protected link, then revoke it whenever needed.</p><p className="mt-4 text-xs font-medium text-cyan-100/80">Inspired by WeTransfer.</p></div></div>
       <div className="grid gap-6 p-5 md:grid-cols-[minmax(0,1fr)_18rem] md:p-7">
-        <div><div className="flex rounded-lg bg-slate-100 p-1"><button className={`flex-1 rounded-md px-3 py-2 text-sm font-semibold ${mode === "drive" ? "bg-white text-blue-700 shadow-sm" : "text-slate-500"}`} onClick={() => setMode("drive")}>Choose from Drive</button><button className={`flex-1 rounded-md px-3 py-2 text-sm font-semibold ${mode === "upload" ? "bg-white text-blue-700 shadow-sm" : "text-slate-500"}`} onClick={() => setMode("upload")}>Upload from computer</button></div>{mode === "drive" ? <div className="mt-4"><label className="sr-only" htmlFor="transfer-search">Search Drive files</label><input id="transfer-search" className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" placeholder="Search files in Zo Drive" value={search} onChange={(event) => setSearch(event.target.value)} />{filesQuery.isPending ? <p className="py-8 text-center text-sm text-slate-500">Loading files…</p> : <div className="mt-3 max-h-60 overflow-auto rounded-xl border border-slate-200">{files.length === 0 ? <p className="p-5 text-sm text-slate-500">No files found.</p> : files.map((file) => <button className={`flex w-full items-center gap-3 border-b border-slate-100 px-4 py-3 text-left last:border-b-0 hover:bg-slate-50 ${selectedKey === file.key ? "bg-blue-50" : ""}`} key={file.key} onClick={() => setSelectedKey(file.key)}><span className={`rounded-lg p-2 ${selectedKey === file.key ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-500"}`}>{fileIcon(file.contentType)}</span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-800">{file.name}</span><span className="block text-xs text-slate-500">{formatBytes(file.size)} · {file.key.includes("/") ? file.key.slice(0, file.key.lastIndexOf("/")) : "My Drive"}</span></span>{selectedKey === file.key && <span className="text-xs font-bold text-blue-700">Selected</span>}</button>)}</div>}</div> : <div className="mt-4 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 p-8 text-center"><Upload className="mx-auto text-blue-600" size={30} /><h3 className="mt-3 font-semibold text-slate-800">Choose a file from your computer</h3><p className="mt-1 text-sm text-slate-500">The file is added to Zo Drive, then shared through your selected link access.</p><button className="mt-5 rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50 disabled:text-slate-400" onClick={() => input.current?.click()} disabled={working || !canCreate}>Browse files</button><input ref={input} className="hidden" type="file" onChange={(event) => { const file = event.target.files?.[0]; if (file) uploadMutation.mutate(file); event.target.value = ""; }} /></div>}</div>
+        <div><div className="flex rounded-lg bg-slate-100 p-1"><button className={`flex-1 rounded-md px-3 py-2 text-sm font-semibold ${mode === "drive" ? "bg-white text-blue-700 shadow-sm" : "text-slate-500"}`} onClick={() => setMode("drive")}>Choose from Drive</button><button className={`flex-1 rounded-md px-3 py-2 text-sm font-semibold ${mode === "upload" ? "bg-white text-blue-700 shadow-sm" : "text-slate-500"}`} onClick={() => setMode("upload")}>Upload from computer</button></div>{mode === "drive" ? <div className="mt-4"><label className="sr-only" htmlFor="transfer-search">Search Drive files</label><input id="transfer-search" className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" placeholder="Search files in Zo Drive" value={fileSearch} onChange={(event) => setFileSearch(event.target.value)} />{filesQuery.isPending ? <p className="py-8 text-center text-sm text-slate-500">Loading files…</p> : <div className="mt-3 max-h-60 overflow-auto rounded-xl border border-slate-200">{files.length === 0 ? <p className="p-5 text-sm text-slate-500">No files found.</p> : files.map((file) => <button className={`flex w-full items-center gap-3 border-b border-slate-100 px-4 py-3 text-left last:border-b-0 hover:bg-slate-50 ${selectedKey === file.key ? "bg-blue-50" : ""}`} key={file.key} onClick={() => setSelectedKey(file.key)}><span className={`rounded-lg p-2 ${selectedKey === file.key ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-500"}`}>{fileIcon(file.contentType)}</span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-800">{file.name}</span><span className="block text-xs text-slate-500">{formatBytes(file.size)} · {file.key.includes("/") ? file.key.slice(0, file.key.lastIndexOf("/")) : "My Drive"}</span></span>{selectedKey === file.key && <span className="text-xs font-bold text-blue-700">Selected</span>}</button>)}</div>}</div> : <div className="mt-4 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 p-8 text-center"><Upload className="mx-auto text-blue-600" size={30} /><h3 className="mt-3 font-semibold text-slate-800">Choose a file from your computer</h3><p className="mt-1 text-sm text-slate-500">The file is added to Zo Drive, then shared through your selected link access.</p><button className="mt-5 rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50 disabled:text-slate-400" onClick={() => input.current?.click()} disabled={working || !canCreate}>Browse files</button><input ref={input} className="hidden" type="file" onChange={(event) => { const file = event.target.files?.[0]; if (file) uploadMutation.mutate(file); event.target.value = ""; }} /></div>}</div>
         <aside className="rounded-xl border border-slate-200 bg-slate-50 p-5"><fieldset><legend className="text-sm font-semibold text-slate-700">Link access</legend><div className="mt-2 grid grid-cols-2 gap-2"><label className={`rounded-lg border p-3 text-sm font-medium ${access === "public" ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-200 text-slate-600"}`}><input className="sr-only" type="radio" checked={access === "public"} onChange={() => setAccess("public")} />Public</label><label className={`rounded-lg border p-3 text-sm font-medium ${access === "passcode" ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-200 text-slate-600"}`}><input className="sr-only" type="radio" checked={access === "passcode"} onChange={() => setAccess("passcode")} />Passcode</label></div></fieldset>{access === "passcode" && <div className="relative mt-3"><input aria-label="Transfer passcode" className="w-full rounded-lg border border-slate-300 py-2.5 pl-3 pr-11 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" type={showPasscode ? "text" : "password"} placeholder="Choose a passcode" value={passcode} onChange={(event) => setPasscode(event.target.value)} /><button aria-label={showPasscode ? "Hide transfer passcode" : "Show transfer passcode"} className="absolute right-1 top-1/2 -translate-y-1/2 rounded-md p-2 text-slate-400 hover:bg-white hover:text-slate-700" type="button" onClick={() => setShowPasscode((show) => !show)}>{showPasscode ? <EyeOff size={18} /> : <Eye size={18} />}</button></div>}<label className="mt-5 block text-sm font-semibold text-slate-700">Link expiry<select aria-label="Transfer expiry" className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm" value={expiry} onChange={(event) => setExpiry(event.target.value)}><option value="1d">1 day</option><option value="7d">7 days</option><option value="30d">30 days</option><option value="never">Never expires</option></select></label><div className="mt-5 rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm leading-6 text-blue-800"><ShieldCheck className="mb-1" size={18} />{access === "public" ? "Anyone with the link can download this file." : "Recipients must enter the passcode before they can download this file."} You can revoke it from Zo Transfer or Shared with others.</div><button className="mt-5 w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-300" disabled={!selectedKey || working || mode !== "drive" || !canCreate} onClick={() => selectedKey && createMutation.mutate(selectedKey)}>{working ? mode === "upload" ? "Uploading…" : "Creating link…" : actionLabel}</button><div className="mt-5 border-t border-slate-200 pt-4"><p className="flex items-center gap-2 text-sm font-semibold text-slate-700"><CreditCard size={17} className="text-slate-400" /> Payments <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-600">Coming soon</span></p><p className="mt-1 text-xs leading-5 text-slate-500">Payment-gated downloads are not enabled yet.</p></div></aside>
       </div>
       {link && <div className="border-t border-slate-100 bg-emerald-50 px-5 py-4 md:px-7"><p className="text-sm font-semibold text-emerald-900">Your {access === "passcode" ? "protected" : "public"} transfer is ready</p><div className="mt-2 flex gap-2"><input aria-label="Transfer link" className="min-w-0 flex-1 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm text-slate-700" value={link} readOnly /><button aria-label="Copy transfer link" className="rounded-lg border border-emerald-200 bg-white px-3 text-emerald-700 hover:bg-emerald-100" onClick={() => void copyText(link, "Transfer link copied")}><Copy size={18} /></button></div></div>}
     </section>
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:p-6"><div className="flex items-center justify-between gap-3"><div><h2 className="font-semibold text-slate-900">Active transfers</h2><p className="mt-1 text-sm text-slate-500">Links created through Zo Transfer.</p></div><button className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Refresh transfers" onClick={() => void sharesQuery.refetch()}><RotateCcw size={18} /></button></div>{sharesQuery.isPending ? <p className="py-6 text-sm text-slate-500">Loading transfers…</p> : transfers.length === 0 ? <p className="py-6 text-sm text-slate-500">No active transfers yet.</p> : <div className="mt-4 divide-y divide-slate-100">{transfers.map((share) => <article className="flex flex-wrap items-center gap-3 py-3" key={share.id}><span className="rounded-lg bg-blue-50 p-2 text-blue-600"><Send size={18} /></span><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-800">{share.name}</p><p className="text-xs text-slate-500">{share.access === "passcode" ? "Passcode protected" : "Public"} · {formatBytes(share.size)} · {share.expiresAt ? `Expires ${new Date(share.expiresAt).toLocaleString()}` : "No expiry"}</p></div><button aria-label={`Copy transfer link for ${share.name}`} className="rounded-lg p-2 text-slate-500 hover:bg-blue-50 hover:text-blue-700" onClick={() => void copyText(shareLink(share.id), "Transfer link copied")}><Copy size={17} /></button><button className="rounded-lg px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50" disabled={revokeMutation.isPending} onClick={() => revokeMutation.mutate(share.id)}>Revoke</button></article>)}</div>}</section>
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:p-6"><div className="flex items-center justify-between gap-3"><div><h2 className="font-semibold text-slate-900">Active transfers</h2><p className="mt-1 text-sm text-slate-500">Links created through Zo Transfer.</p></div><button className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Refresh transfers" onClick={() => void sharesQuery.refetch()}><RotateCcw size={18} /></button></div>{sharesQuery.isPending ? <p className="py-6 text-sm text-slate-500">Loading transfers…</p> : transfers.length === 0 ? <p className="py-6 text-sm text-slate-500">{normalizedGlobalSearch ? `No transfers match “${globalSearch.trim()}”.` : "No active transfers yet."}</p> : <div className="mt-4 divide-y divide-slate-100">{transfers.map((share) => <article className="flex flex-wrap items-center gap-3 py-3" key={share.id}><span className="rounded-lg bg-blue-50 p-2 text-blue-600"><Send size={18} /></span><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-800">{share.name}</p><p className="text-xs text-slate-500">{share.access === "passcode" ? "Passcode protected" : "Public"} · {formatBytes(share.size)} · {share.expiresAt ? `Expires ${new Date(share.expiresAt).toLocaleString()}` : "No expiry"}</p></div><button aria-label={`Copy transfer link for ${share.name}`} className="rounded-lg p-2 text-slate-500 hover:bg-blue-50 hover:text-blue-700" onClick={() => void copyText(shareLink(share.id), "Transfer link copied")}><Copy size={17} /></button><button className="rounded-lg px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50" disabled={revokeMutation.isPending} onClick={() => revokeMutation.mutate(share.id)}>Revoke</button></article>)}</div>}</section>
   </div>;
 }
 
@@ -5112,6 +5176,10 @@ function columnName(column: number): string {
 
 function sameAdvancedFilters(left: AdvancedFilters, right: AdvancedFilters): boolean {
   return left.contentQuery === right.contentQuery && left.inTrash === right.inTrash && left.location === right.location && left.modified === right.modified && left.starred === right.starred && left.type === right.type;
+}
+
+function matchesSearch(query: string, ...values: Array<string | null | undefined>): boolean {
+  return !query || values.some((value) => value?.toLowerCase().includes(query));
 }
 
 function dateRangeFor(value: AdvancedFilters["modified"]): { after: string; before: string } | null {

@@ -48,7 +48,7 @@ describe("DriveApp", () => {
       expect(screen.getByRole("heading", { name: "Run private databases beside your files" })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Automate with Zo Functions" })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Ask about your Drive without granting write access" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 1.30.0" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 1.31.0" })).toBeInTheDocument();
       expect(screen.getByText("Product")).toBeInTheDocument();
       expect(screen.getByRole("navigation", { name: "Choose documentation product" })).toBeInTheDocument();
       expect(screen.getByRole("navigation", { name: "Documentation sections" })).toHaveTextContent("Zo Originals");
@@ -58,7 +58,7 @@ describe("DriveApp", () => {
         expect(modeSwitch).toHaveTextContent("CLI");
       }
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI releases version 1.30.0" })).toHaveAttribute("href", expect.stringContaining("?releases=1&mode=gui"));
+      expect(screen.getByRole("link", { name: "GUI releases version 1.31.0" })).toHaveAttribute("href", expect.stringContaining("?releases=1&mode=gui"));
       expect(screen.queryByRole("heading", { name: "GUI changelog" })).not.toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
 
@@ -96,7 +96,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.30.0")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.31.0")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();
@@ -111,9 +111,9 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "Private local AI for your Drive." })).toBeInTheDocument();
-      expect(screen.getByText("ZominAI documentation · v1.3.0")).toBeInTheDocument();
+      expect(screen.getByText("ZominAI documentation · v1.4.0")).toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "ZominAI" })[0]).toHaveAttribute("aria-current", "page");
-      expect(screen.getByRole("heading", { name: "ZominAI version 1.3.0" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "ZominAI version 1.4.0" })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "ZominAI changelog" })).toBeInTheDocument();
 
       cleanup();
@@ -121,7 +121,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "ZominAI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.3.0")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.4.0")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&product=zominai"));
 
       cleanup();
@@ -261,7 +261,10 @@ describe("DriveApp", () => {
       renameClusterObject: vi.fn(),
       updateClusterPeerRole: vi.fn(),
       uploadClusterObject: vi.fn(),
-      listDatabases: vi.fn<() => Promise<DriveDatabase[]>>().mockResolvedValue([{ id: "db-11111111-1111-4111-8111-111111111111", name: "app-data", engine: "sqlite", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", sizeBytes: 4096 }]),
+      listDatabases: vi.fn<() => Promise<DriveDatabase[]>>().mockResolvedValue([
+        { id: "db-11111111-1111-4111-8111-111111111111", name: "app-data", engine: "sqlite", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", sizeBytes: 4096 },
+        { id: "db-33333333-3333-4333-8333-333333333333", name: "archive-cache", engine: "redis", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", sizeBytes: 2048 }
+      ]),
       listDatabaseEngines: vi.fn<() => Promise<DatabaseEngine[]>>(() => Promise.resolve([{ engine: "sqlite", name: "SQLite", packageName: "sqlite", availableVersion: "3.0.0", installedVersion: sqliteInstalled ? "3.0.0" : null, protocol: "sql", installed: sqliteInstalled, installedAt: sqliteInstalled ? "2026-07-20T00:00:00.000Z" : null, updatedAt: null, updateAvailable: false, workspaceAvailable: true }])),
       installDatabaseEngine: vi.fn((engine: DatabaseEngineId) => { if (engine === "sqlite") sqliteInstalled = true; return Promise.resolve({ engine, name: engine === "sqlite" ? "SQLite" : "Redis", packageName: engine, availableVersion: "3.0.0", installedVersion: "3.0.0", protocol: "sql" as const, installed: true, installedAt: "2026-07-20T00:00:00.000Z", updatedAt: null, updateAvailable: false, workspaceAvailable: engine === "sqlite" }); }),
       updateDatabaseEngine: vi.fn((engine: DatabaseEngineId) => Promise.resolve({ engine, name: engine === "sqlite" ? "SQLite" : "Redis", packageName: engine, availableVersion: "3.0.0", installedVersion: "3.0.0", protocol: "sql" as const, installed: true, installedAt: "2026-07-20T00:00:00.000Z", updatedAt: "2026-07-21T00:00:00.000Z", updateAvailable: false, workspaceAvailable: engine === "sqlite" })),
@@ -278,7 +281,10 @@ describe("DriveApp", () => {
       listDatabaseRows: vi.fn().mockResolvedValue({ columns: ["id", "title"], rows: [{ id: 1, title: "Ship Database Engines" }], total: 1 }),
       queryDatabase: vi.fn().mockResolvedValue({ columns: ["title"], rows: [{ title: "Ship Database Engines" }], changes: 0, lastInsertRowid: null }),
       executeDatabase: vi.fn().mockResolvedValue({ engine: "redis", result: "PONG" }),
-      listFunctions: vi.fn().mockResolvedValue([{ id: "fn-11111111-1111-4111-8111-111111111111", name: "greet", runtime: "javascript", source: "export default async function handler(input) { return input; }", visibility: "private", cron: null, enabled: true, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", lastRunAt: null, lastRunStatus: null }]),
+      listFunctions: vi.fn().mockResolvedValue([
+        { id: "fn-11111111-1111-4111-8111-111111111111", name: "greet", runtime: "javascript", source: "export default async function handler(input) { return input; }", visibility: "private", cron: null, enabled: true, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", lastRunAt: null, lastRunStatus: null },
+        { id: "fn-22222222-2222-4222-8222-222222222222", name: "archive-worker", runtime: "python", source: "def handler(input): return input", visibility: "private", cron: null, enabled: false, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", lastRunAt: null, lastRunStatus: null }
+      ]),
       createFunction: vi.fn(),
       updateFunction: vi.fn(),
       deleteFunction: vi.fn(),
@@ -305,6 +311,7 @@ describe("DriveApp", () => {
     expect(screen.getByTestId("search-controls")).toHaveClass("order-3", "basis-full");
     expect(screen.getByTestId("search-controls")).toContainElement(screen.getByRole("textbox", { name: "Search files" }));
     expect(screen.getByTestId("search-controls")).toContainElement(screen.getByRole("button", { name: "Advanced search" }));
+    expect(screen.getByRole("button", { name: "Open upload menu" })).toBeInTheDocument();
     expect(screen.getByTestId("header-actions")).toHaveClass("order-2", "ml-auto");
     expect(screen.getByTestId("header-actions")).toContainElement(screen.getByRole("button", { name: "ZominAI" }));
     expect(screen.getByTestId("header-actions")).toContainElement(screen.getByRole("button", { name: "Account menu" }));
@@ -340,6 +347,7 @@ describe("DriveApp", () => {
     fireEvent.click(screen.getByRole("button", { name: "ZominAI" }));
     const zominAiDrawer = await screen.findByRole("complementary", { name: "ZominAI chat" });
     expect(zominAiDrawer).toHaveClass("md:relative", "md:w-[var(--zominai-drawer-width)]", "md:border-l", "md:border-slate-200", "duration-500");
+    expect(screen.getByLabelText("ZominAI conversation").parentElement).toHaveClass("min-h-0");
     expect(screen.getByLabelText("ZominAI conversation").parentElement?.parentElement).toHaveClass("flex", "min-h-0", "flex-1", "flex-col");
     expect(screen.getByRole("button", { name: "Resize ZominAI chat" })).toHaveClass("w-5", "cursor-col-resize", "group");
     expect(screen.getAllByAltText("ZominAI Pegasus")).toHaveLength(2);
@@ -406,6 +414,14 @@ describe("DriveApp", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Message ZominAI" }), { target: { value: "Are you there?" } });
     fireEvent.click(screen.getByRole("button", { name: "Send message to ZominAI" }));
     expect(await screen.findByLabelText("ZominAI not connected")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry message to ZominAI" })).toHaveTextContent("Try again");
+    fetchSpy.mockResolvedValue(new Response(JSON.stringify({ choices: [{ message: { content: "I am back online." } }] }), { status: 200 }));
+    fireEvent.click(screen.getByRole("button", { name: "Retry message to ZominAI" }));
+    expect(await screen.findByText("I am back online.")).toBeInTheDocument();
+    expect(screen.getAllByText("Are you there?")).toHaveLength(1);
+    expect(screen.queryByText(/I could not connect to ZominAI/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Retry message to ZominAI" })).not.toBeInTheDocument();
+    expect(await screen.findByLabelText("ZominAI connected")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "ZominAI" }));
     expect(screen.queryByRole("complementary", { name: "ZominAI chat" })).not.toBeInTheDocument();
     fetchSpy.mockResolvedValue(new Response(JSON.stringify({ state: "downloading", downloadedBytes: 1, expectedBytes: 2, progress: 0.5, detail: "Downloading", updatedAt: "2026-07-21T00:00:00.000Z" }), { status: 200 }));
@@ -481,6 +497,7 @@ describe("DriveApp", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Zo Shared Drives" }));
     expect(await screen.findByRole("heading", { name: "Zo Shared Drives" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open upload menu" })).not.toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Create shared drives with people you trust." })).toBeInTheDocument();
     expect(screen.getByText("Inspired by Synology NAS Drive.")).toBeInTheDocument();
     expect(screen.getByText("Recursive scope")).toBeInTheDocument();
@@ -490,6 +507,10 @@ describe("DriveApp", () => {
     expect(screen.getByRole("heading", { name: "Exposed folders" })).toBeInTheDocument();
     expect(screen.getByText("Pending pairing keys")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cancel key" })).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Search files" }), { target: { value: "remote-plan" } });
+    const sharedDriveSearchResults = await screen.findByRole("region", { name: "Shared Drive file search results" });
+    await waitFor(() => expect(sharedDriveSearchResults).toHaveTextContent("remote-plan.pdf"));
+    fireEvent.change(screen.getByRole("textbox", { name: "Search files" }), { target: { value: "" } });
     fireEvent.click(await screen.findByLabelText("Share folder Notes"));
     fireEvent.click(screen.getByRole("button", { name: "Create 1 pairing key" }));
     await waitFor(() => expect(client.createClusterInvitation).toHaveBeenCalledWith({ folder: "Notes", role: "editor", recipient: null }));
@@ -498,6 +519,12 @@ describe("DriveApp", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Zo Functions" }));
     expect(await screen.findByRole("heading", { name: "Zo Functions" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open upload menu" })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Search files" }), { target: { value: "greet" } });
+    expect(await screen.findByText("1 matching")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Search files" }), { target: { value: "missing-function" } });
+    expect(await screen.findByText("No functions match “missing-function”.")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Search files" }), { target: { value: "" } });
     expect(await screen.findByRole("heading", { name: "Run small jobs without another service." })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Editor" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("group", { name: "Function editor actions" })).toHaveClass("justify-end");
@@ -524,6 +551,7 @@ describe("DriveApp", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Zo Databases" }));
     expect(await screen.findByRole("heading", { name: "Zo Databases" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open upload menu" })).not.toBeInTheDocument();
     expect(screen.getByText("Open-source database catalog")).toBeInTheDocument();
     expect(screen.getByText("DuckDB")).toBeInTheDocument();
     expect(screen.getByText("Redis")).toBeInTheDocument();
@@ -541,6 +569,10 @@ describe("DriveApp", () => {
     expect(screen.getByRole("heading", { name: "Your instances" }).closest("aside")?.parentElement).toHaveClass("mt-8");
     expect(screen.getByRole("button", { name: "Import SQLite file" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Import limit: 100.0 MB" })).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Search files" }), { target: { value: "app-data" } });
+    expect(await screen.findByText("app-data")).toBeInTheDocument();
+    expect(screen.queryByText("archive-cache")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Search files" }), { target: { value: "" } });
     fireEvent.click(await screen.findByRole("button", { name: /app-data sqlite/i }));
     expect(await screen.findByRole("button", { name: "Back to your databases" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Your instances" })).not.toBeInTheDocument();
@@ -578,6 +610,11 @@ describe("DriveApp", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Zo Transfer/ }));
     expect(await screen.findByRole("heading", { name: "Zo Transfer" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open upload menu" })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Search files" }), { target: { value: "photo.jpg" } });
+    expect(await screen.findByRole("heading", { name: "Search results" })).toBeInTheDocument();
+    expect(screen.getAllByText("photo.jpg").length).toBeGreaterThan(0);
+    fireEvent.change(screen.getByRole("textbox", { name: "Search files" }), { target: { value: "" } });
     expect(screen.getByText("Send a file with Zo Transfer")).toBeInTheDocument();
     expect(screen.getByText("Payment-gated downloads are not enabled yet.")).toBeInTheDocument();
     await waitFor(() => expect(client.list).toHaveBeenCalledWith({}));
@@ -592,12 +629,14 @@ describe("DriveApp", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Zo Paste" }));
     expect(await screen.findByRole("heading", { name: "Zo Paste" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open upload menu" })).not.toBeInTheDocument();
     expect(screen.getByText("Inspired by Pastebin.")).toBeInTheDocument();
     await waitFor(() => expect(client.list).toHaveBeenLastCalledWith(expect.objectContaining({ type: "paste" })));
     fireEvent.click(screen.getByRole("button", { name: "My Drive" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Recent" }));
     expect(await screen.findByRole("heading", { name: "Recent" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open upload menu" })).toBeInTheDocument();
     expect(await screen.findByText("Last activity")).toBeInTheDocument();
     expect(screen.getByText("Notes")).toBeInTheDocument();
     expect(await screen.findByText("remote-plan.pdf")).toBeInTheDocument();
@@ -608,6 +647,7 @@ describe("DriveApp", () => {
     expect(screen.getByRole("combobox", { name: "Recent modified date" })).toHaveClass("w-full");
     expect(screen.getByRole("combobox", { name: "Recent source" })).toHaveClass("w-full");
     fireEvent.click(screen.getByRole("button", { name: "Shared with others" }));
+    expect(screen.getByRole("button", { name: "Open upload menu" })).toBeInTheDocument();
     expect(await screen.findByText("remote-plan.pdf")).toBeInTheDocument();
     expect(screen.getByText("Shared by alice · Read only")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Recent" }));
@@ -633,6 +673,7 @@ describe("DriveApp", () => {
     await waitFor(() => expect(client.star).toHaveBeenCalledWith("photo.jpg"));
     fireEvent.click(screen.getByRole("button", { name: "Starred" }));
     expect(await screen.findByRole("heading", { name: "Starred" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open upload menu" })).toBeInTheDocument();
     expect(await screen.findByText("photo.jpg")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "My Drive" }));
 
@@ -675,6 +716,7 @@ describe("DriveApp", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Trash" }));
     expect(await screen.findByRole("heading", { name: "Trash" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open upload menu" })).toBeInTheDocument();
     await waitFor(() => expect(client.listTrash).toHaveBeenCalled());
     expect(await screen.findByRole("button", { name: "Restore report.pdf" })).toHaveClass("text-slate-400");
     expect(screen.getByRole("button", { name: "Restore report.pdf" }).parentElement).toHaveClass("justify-end");

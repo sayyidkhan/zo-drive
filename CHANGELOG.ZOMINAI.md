@@ -3,6 +3,15 @@
 All notable changes to ZominAI are recorded here. ZominAI follows its own
 semantic-versioned release track, independent of the Zo Drive GUI and CLI.
 
+## v1.4.0 - 2026-07-22
+
+### Added
+
+- Added a **Try again** action to failed replies, including failures already
+  saved in browser chat history.
+- Retrying replaces the failed response in place, preserves the original prompt,
+  and excludes error text from later model context.
+
 ## v1.3.0 - 2026-07-22
 
 ### Added

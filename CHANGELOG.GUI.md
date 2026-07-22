@@ -2,6 +2,22 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.31.0 - 2026-07-22
+
+### Added
+
+- Added one-click retry for failed ZominAI replies. Retrying resends the original
+  prompt and replaces the error instead of duplicating the conversation.
+
+### Fixed
+
+- Constrained the ZominAI conversation column so messages scroll independently
+  while the header, context meter, and composer remain visible.
+- Made the main search field filter Zo Transfer, Functions, Databases, and
+  Shared Drives, including files across every connected Shared Drive.
+- Limited the Drive Upload button to Recent, My Drive, Starred, Shared with
+  others, and Trash.
+
 ## v1.30.0 - 2026-07-22
 
 ### Added
