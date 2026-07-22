@@ -81,8 +81,21 @@ export const apiErrorSchema = z.object({
 
 export const driveUserSchema = z.object({
   id: z.string(),
-  username: z.string()
+  username: z.string(),
+  access: z.enum(["read", "write"]).optional(),
+  role: z.enum(["regular", "super"]).optional(),
+  isOwner: z.boolean().optional()
 });
+
+export const accountAccessSchema = z.enum(["read", "write"]);
+export const accountRoleSchema = z.enum(["regular", "super"]);
+export const accountMemberSchema = driveUserSchema.extend({
+  access: accountAccessSchema,
+  role: accountRoleSchema,
+  isOwner: z.boolean(),
+  createdAt: z.string().datetime()
+});
+export const listAccountMembersResponseSchema = z.object({ members: z.array(accountMemberSchema) });
 
 export const authStatusSchema = z.object({
   authenticated: z.boolean(),
@@ -278,6 +291,10 @@ export type ListFoldersResponse = z.infer<typeof listFoldersResponseSchema>;
 export type Health = z.infer<typeof healthSchema>;
 export type StorageUsage = z.infer<typeof storageUsageSchema>;
 export type ApiError = z.infer<typeof apiErrorSchema>;
+export type AccountAccess = z.infer<typeof accountAccessSchema>;
+export type AccountRole = z.infer<typeof accountRoleSchema>;
+export type AccountMember = z.infer<typeof accountMemberSchema>;
+export type ListAccountMembersResponse = z.infer<typeof listAccountMembersResponseSchema>;
 export type DriveUser = z.infer<typeof driveUserSchema>;
 export type AuthStatus = z.infer<typeof authStatusSchema>;
 export type ApiKeyScope = z.infer<typeof apiKeyScopeSchema>;

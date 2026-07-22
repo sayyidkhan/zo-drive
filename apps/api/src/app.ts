@@ -93,6 +93,14 @@ const credentialsSchema = z.object({
   username: z.string().trim().min(3).max(32).regex(/^[a-zA-Z0-9_-]+$/),
   password: z.string().min(6).max(256)
 });
+const accountMemberCreateSchema = credentialsSchema.extend({
+  access: z.enum(["read", "write"]),
+  role: z.enum(["regular", "super"])
+});
+const accountMemberUpdateSchema = z.object({
+  access: z.enum(["read", "write"]).optional(),
+  role: z.enum(["regular", "super"]).optional()
+}).refine((value) => value.access !== undefined || value.role !== undefined, "Provide an access level or role");
 
 const usernameSchema = credentialsSchema.pick({ username: true });
 const passwordChangeSchema = z.object({
@@ -190,10 +198,20 @@ const zominAiChatSchema = z.object({
 
 export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys, invalidApiKeyRateLimiter = new InvalidApiKeyRateLimiter(), sharing, forms, databases = new LocalDatabaseStore(storage.root), databaseApiKeys = new LocalDatabaseApiKeyStore({ root: storage.root }), functions = new LocalFunctionStore(storage.root), clusters = new LocalClusterStore({ root: storage.root }), maxDatabaseImportBytes = Number.MAX_SAFE_INTEGER, trustProxy = false, zominAi }: CreateAppOptions) {
   const app = new Hono();
-  const resolveActiveUser: UserResolver = async (request) => {
+  const resolveAuthenticatedUser = async (request: Request) => {
     const userId = await resolveUserId(request);
     if (!userId || !auth) return userId;
     return (await auth.store.findById(userId))?.id ?? null;
+  };
+  const resolveActiveUser: UserResolver = async (request) => {
+    const userId = await resolveUserId(request);
+    if (!userId || !auth) return userId;
+    return auth.store.accountOwnerIdFor(userId, request.method === "GET" || request.method === "HEAD" || request.method === "OPTIONS" ? "read" : "write");
+  };
+  const resolveReadUser: UserResolver = async (request) => {
+    const userId = await resolveUserId(request);
+    if (!userId || !auth) return userId;
+    return auth.store.accountOwnerIdFor(userId, "read");
   };
   if (allowedOrigin) {
     const corsOptions = { credentials: true, origin: allowedOrigin };
@@ -252,7 +270,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     const runtimeUrl = (path: string) => new URL(path, runtime).toString();
 
     app.get("/zominai/health", async (context) => {
-      if (!(await requireUser(context.req.raw, resolveActiveUser))) return unauthorized(context);
+      if (!(await requireUser(context.req.raw, resolveReadUser))) return unauthorized(context);
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 4_000);
       try {
@@ -269,7 +287,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     });
 
     app.post("/zominai/chat", async (context) => {
-      if (!(await requireUser(context.req.raw, resolveActiveUser))) return unauthorized(context);
+      if (!(await requireUser(context.req.raw, resolveReadUser))) return unauthorized(context);
       const parsed = zominAiChatSchema.safeParse(await context.req.json().catch(() => null));
       if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Enter a valid, bounded ZominAI chat request" } }, 400);
       const controller = new AbortController();
@@ -293,7 +311,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
 
   if (auth) {
     app.get("/auth/status", async (context) => {
-      const userId = await requireUser(context.req.raw, resolveActiveUser);
+      const userId = await resolveAuthenticatedUser(context.req.raw);
       const user = userId ? await auth.store.findById(userId) : null;
       return context.json({
         authenticated: Boolean(user),
@@ -329,19 +347,21 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     });
 
     app.patch("/auth/profile", async (context) => {
-      const userId = await requireUser(context.req.raw, resolveActiveUser);
+      const userId = await resolveAuthenticatedUser(context.req.raw);
       if (!userId) return unauthorized(context);
       const parsed = usernameSchema.safeParse(await context.req.json().catch(() => null));
       if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Username must be 3–32 letters, numbers, underscores, or hyphens" } }, 400);
       const nextUserId = parsed.data.username.trim().toLowerCase();
-      await storage.renameUser({ fromUserId: userId, toUserId: nextUserId });
-      await sharing?.renameOwner({ fromUserId: userId, toUserId: nextUserId });
-      await forms?.renameOwner({ fromUserId: userId, toUserId: nextUserId });
-      await databases.renameOwner({ fromUserId: userId, toUserId: nextUserId });
-      await databaseApiKeys.renameOwner({ fromUserId: userId, toUserId: nextUserId });
-      await functions.renameOwner({ fromUserId: userId, toUserId: nextUserId });
-      await apiKeys?.renameOwner({ fromUserId: userId, toUserId: nextUserId });
-      await clusters.renameOwner({ fromUserId: userId, toUserId: nextUserId });
+      if (await auth.store.isAccountOwner(userId)) {
+        await storage.renameUser({ fromUserId: userId, toUserId: nextUserId });
+        await sharing?.renameOwner({ fromUserId: userId, toUserId: nextUserId });
+        await forms?.renameOwner({ fromUserId: userId, toUserId: nextUserId });
+        await databases.renameOwner({ fromUserId: userId, toUserId: nextUserId });
+        await databaseApiKeys.renameOwner({ fromUserId: userId, toUserId: nextUserId });
+        await functions.renameOwner({ fromUserId: userId, toUserId: nextUserId });
+        await apiKeys?.renameOwner({ fromUserId: userId, toUserId: nextUserId });
+        await clusters.renameOwner({ fromUserId: userId, toUserId: nextUserId });
+      }
       const user = await auth.store.renameUser(userId, nextUserId);
       if (!user) return context.json({ error: { code: "PROFILE_UPDATE_FAILED", message: "Could not update the username" } }, 409);
       context.header("set-cookie", auth.sessions.cookieHeader(auth.sessions.create(user.id), auth.secureCookies));
@@ -349,7 +369,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     });
 
     app.post("/auth/password", async (context) => {
-      const userId = await requireUser(context.req.raw, resolveActiveUser);
+      const userId = await resolveAuthenticatedUser(context.req.raw);
       if (!userId) return unauthorized(context);
       const parsed = passwordChangeSchema.safeParse(await context.req.json().catch(() => null));
       if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Passwords must have at least 6 characters" } }, 400);
@@ -360,8 +380,9 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     });
 
     app.delete("/auth/account", async (context) => {
-      const userId = await requireUser(context.req.raw, resolveActiveUser);
+      const userId = await resolveAuthenticatedUser(context.req.raw);
       if (!userId) return unauthorized(context);
+      if (!(await auth.store.isAccountOwner(userId))) return context.json({ error: { code: "OWNER_REQUIRED", message: "Only the original account owner can delete this Drive" } }, 403);
       const parsed = deleteAccountSchema.safeParse(await context.req.json().catch(() => null));
       if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Enter your password and DELETE MY DRIVE to permanently delete this account" } }, 400);
       if (!(await auth.store.verifyPasswordForUser(userId, parsed.data.password))) {
@@ -375,20 +396,57 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
       await functions.removeByOwner(userId);
       await apiKeys?.removeByOwner(userId);
       await clusters.removeByOwner(userId);
-      await auth.store.removeUser(userId);
+      await auth.store.removeAccount(userId);
       context.header("set-cookie", auth.sessions.clearCookieHeader(auth.secureCookies));
+      return context.body(null, 204);
+    });
+
+    app.get("/auth/users", async (context) => {
+      const userId = await requireBrowserUser(context.req.raw, auth);
+      if (!userId) return unauthorized(context);
+      if (!(await auth.store.canManageUsers(userId))) return context.json({ error: { code: "FORBIDDEN", message: "Only super users can manage account access" } }, 403);
+      return context.json({ members: await auth.store.listAccountMembers(userId) });
+    });
+
+    app.post("/auth/users", async (context) => {
+      const userId = await requireBrowserUser(context.req.raw, auth);
+      if (!userId) return unauthorized(context);
+      const parsed = accountMemberCreateSchema.safeParse(await context.req.json().catch(() => null));
+      if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Enter a unique username, password, role, and access level" } }, 400);
+      const member = await auth.store.createAccountMember(userId, parsed.data);
+      if (!member) return context.json({ error: { code: "USER_CREATE_FAILED", message: "Only super users can add unique account members" } }, 409);
+      return context.json(member, 201);
+    });
+
+    app.patch("/auth/users/:id", async (context) => {
+      const userId = await requireBrowserUser(context.req.raw, auth);
+      if (!userId) return unauthorized(context);
+      const parsed = accountMemberUpdateSchema.safeParse(await context.req.json().catch(() => null));
+      if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Choose a role or access level" } }, 400);
+      const member = await auth.store.updateAccountMember(userId, context.req.param("id"), parsed.data);
+      if (member === "forbidden") return context.json({ error: { code: "OWNER_PROTECTED", message: "The original owner always retains super user and read & write access" } }, 403);
+      if (!member) return context.json({ error: { code: "NOT_FOUND", message: "User not found or access cannot be managed" } }, 404);
+      return context.json(member);
+    });
+
+    app.delete("/auth/users/:id", async (context) => {
+      const userId = await requireBrowserUser(context.req.raw, auth);
+      if (!userId) return unauthorized(context);
+      const result = await auth.store.removeAccountMember(userId, context.req.param("id"));
+      if (result === "forbidden") return context.json({ error: { code: "OWNER_PROTECTED", message: "The original owner cannot be removed" } }, 403);
+      if (result === "not_found") return context.json({ error: { code: "NOT_FOUND", message: "User not found or access cannot be managed" } }, 404);
       return context.body(null, 204);
     });
 
     if (apiKeys) {
       app.get("/api-keys", async (context) => {
-        const userId = await requireBrowserUser(context.req.raw, auth);
+        const userId = await requireAccountManager(context.req.raw, auth);
         if (!userId) return unauthorized(context);
         return context.json({ keys: await apiKeys.list(userId) });
       });
 
       app.post("/api-keys", async (context) => {
-        const userId = await requireBrowserUser(context.req.raw, auth);
+        const userId = await requireAccountManager(context.req.raw, auth);
         if (!userId) return unauthorized(context);
         const parsed = createApiKeySchema.safeParse(await context.req.json().catch(() => null));
         if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Enter a key name, scope, and valid expiry" } }, 400);
@@ -397,7 +455,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
       });
 
       app.delete("/api-keys/:id", async (context) => {
-        const userId = await requireBrowserUser(context.req.raw, auth);
+        const userId = await requireAccountManager(context.req.raw, auth);
         if (!userId) return unauthorized(context);
         if (!(await apiKeys.revoke({ id: context.req.param("id"), ownerUserId: userId }))) return context.json({ error: { code: "NOT_FOUND", message: "API key not found" } }, 404);
         return context.body(null, 204);
@@ -873,13 +931,13 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
   });
 
   app.get("/databases/:id/tables", async (context) => {
-    const userId = await requireDatabaseUser(context.req.raw, context.req.param("id"), "read", resolveActiveUser, databaseApiKeys);
+    const userId = await requireDatabaseUser(context.req.raw, context.req.param("id"), "read", resolveActiveUser, databaseApiKeys, auth);
     if (!userId) return unauthorized(context);
     return context.json({ tables: await databases.listTables({ ownerUserId: userId, id: context.req.param("id") }) });
   });
 
   app.get("/databases/:id/tables/:table/rows", async (context) => {
-    const userId = await requireDatabaseUser(context.req.raw, context.req.param("id"), "read", resolveActiveUser, databaseApiKeys);
+    const userId = await requireDatabaseUser(context.req.raw, context.req.param("id"), "read", resolveActiveUser, databaseApiKeys, auth);
     if (!userId) return unauthorized(context);
     const parsed = databaseRowsQuerySchema.safeParse(context.req.query());
     if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Invalid table pagination" } }, 400);
@@ -889,7 +947,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
   app.post("/databases/:id/query", async (context) => {
     const parsed = databaseQuerySchema.safeParse(await context.req.json().catch(() => null));
     if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Enter one valid SQL statement and up to 100 parameters" } }, 400);
-    const userId = await requireDatabaseUser(context.req.raw, context.req.param("id"), databaseQueryScope(parsed.data.sql), resolveActiveUser, databaseApiKeys);
+    const userId = await requireDatabaseUser(context.req.raw, context.req.param("id"), databaseQueryScope(parsed.data.sql), resolveActiveUser, databaseApiKeys, auth);
     if (!userId) return unauthorized(context);
     return context.json(await databases.query({ ownerUserId: userId, id: context.req.param("id"), ...parsed.data }));
   });
@@ -897,7 +955,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
   app.post("/databases/:id/execute", async (context) => {
     const parsed = databaseExecuteSchema.safeParse(await context.req.json().catch(() => null));
     if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Provide a valid engine request of up to 1 MB" } }, 400);
-    const userId = await requireDatabaseUser(context.req.raw, context.req.param("id"), databaseExecuteScope(parsed.data), resolveActiveUser, databaseApiKeys);
+    const userId = await requireDatabaseUser(context.req.raw, context.req.param("id"), databaseExecuteScope(parsed.data), resolveActiveUser, databaseApiKeys, auth);
     if (!userId) return unauthorized(context);
     return context.json(await databases.execute({ ownerUserId: userId, id: context.req.param("id"), request: parsed.data }));
   });
@@ -1196,6 +1254,12 @@ async function requireBrowserUser(request: Request, auth: NonNullable<CreateAppO
   return userId && (await auth.store.findById(userId))?.id || null;
 }
 
+async function requireAccountManager(request: Request, auth: NonNullable<CreateAppOptions["auth"]>): Promise<string | null> {
+  const userId = await requireBrowserUser(request, auth);
+  if (!userId || !(await auth.store.canManageUsers(userId))) return null;
+  return auth.store.accountOwnerIdFor(userId, "write");
+}
+
 async function requireClusterOwner(request: Request, resolveUserId: UserResolver, auth: CreateAppOptions["auth"]): Promise<string | null> {
   return requireUser(request, resolveUserId);
 }
@@ -1204,8 +1268,12 @@ async function requireDatabaseOwner(request: Request, resolveUserId: UserResolve
   return requireUser(request, resolveUserId);
 }
 
-async function requireDatabaseUser(request: Request, databaseId: string, scope: DatabaseApiKeyScope, resolveUserId: UserResolver, databaseApiKeys: LocalDatabaseApiKeyStore): Promise<string | null> {
-  if (!request.headers.has("authorization")) return requireUser(request, resolveUserId);
+async function requireDatabaseUser(request: Request, databaseId: string, scope: DatabaseApiKeyScope, resolveUserId: UserResolver, databaseApiKeys: LocalDatabaseApiKeyStore, auth: CreateAppOptions["auth"]): Promise<string | null> {
+  if (!request.headers.has("authorization")) {
+    if (!auth) return requireUser(request, resolveUserId);
+    const userId = auth.sessions.userIdFromCookie(request);
+    return userId ? auth.store.accountOwnerIdFor(userId, scope) : null;
+  }
   const credential = await databaseApiKeys.authorize(request, scope);
   return credential?.databaseId === databaseId ? credential.ownerUserId : null;
 }

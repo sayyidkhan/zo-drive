@@ -702,6 +702,41 @@ describe("Zo Drive API", () => {
     await expect((await app.request("http://localhost/auth/status", { headers: { cookie: cookie! } })).json()).resolves.toEqual({ authenticated: false, registrationAllowed: true, user: null });
   });
 
+  it("shares the owner Drive with member users and enforces access, super-user, and owner protections", async () => {
+    const root = await mkdtemp(join(tmpdir(), "zo-drive-user-access-"));
+    roots.push(root);
+    const sessions = new SessionService("test-session-secret-that-is-more-than-thirty-two-characters");
+    const app = createApp({
+      storage: new LocalDriveStorage({ root }),
+      resolveUserId: (request) => sessions.userIdFromRequest(request),
+      auth: { store: new LocalAuthStore({ root }), sessions, secureCookies: false }
+    });
+
+    const ownerRegistration = await app.request("http://localhost/auth/register", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: "owner", password: "owner-secret" }) });
+    const ownerCookie = ownerRegistration.headers.get("set-cookie")!;
+    const createMember = async (username: string, access: "read" | "write", role: "regular" | "super") => app.request("http://localhost/auth/users", { method: "POST", headers: { "content-type": "application/json", cookie: ownerCookie }, body: JSON.stringify({ username, password: `${username}-secret`, access, role }) });
+
+    const reader = await createMember("reader", "read", "regular");
+    expect(reader.status).toBe(201);
+    const superUser = await createMember("admin", "read", "super");
+    expect(superUser.status).toBe(201);
+    expect((await app.request("http://localhost/objects", { method: "POST", headers: { "content-type": "text/plain", cookie: ownerCookie, "x-zo-drive-file-name": "owner-file.txt" }, body: "shared account file" })).status).toBe(201);
+
+    const readerLogin = await app.request("http://localhost/auth/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: "reader", password: "reader-secret" }) });
+    const readerCookie = readerLogin.headers.get("set-cookie")!;
+    await expect((await app.request("http://localhost/objects", { headers: { cookie: readerCookie } })).json()).resolves.toMatchObject({ objects: [expect.objectContaining({ key: "owner-file.txt" })] });
+    expect((await app.request("http://localhost/objects", { method: "POST", headers: { "content-type": "text/plain", cookie: readerCookie, "x-zo-drive-file-name": "blocked.txt" }, body: "no write" })).status).toBe(401);
+    expect((await app.request("http://localhost/auth/users", { headers: { cookie: readerCookie } })).status).toBe(403);
+
+    const superLogin = await app.request("http://localhost/auth/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: "admin", password: "admin-secret" }) });
+    const superCookie = superLogin.headers.get("set-cookie")!;
+    expect((await app.request("http://localhost/auth/users", { headers: { cookie: superCookie } })).status).toBe(200);
+    expect((await app.request("http://localhost/auth/users/reader", { method: "PATCH", headers: { "content-type": "application/json", cookie: superCookie }, body: JSON.stringify({ access: "write" }) })).status).toBe(200);
+    expect((await app.request("http://localhost/auth/users/owner", { method: "PATCH", headers: { "content-type": "application/json", cookie: superCookie }, body: JSON.stringify({ access: "read", role: "regular" }) })).status).toBe(403);
+    expect((await app.request("http://localhost/auth/users/owner", { method: "DELETE", headers: { cookie: superCookie } })).status).toBe(403);
+    expect((await app.request("http://localhost/objects", { method: "POST", headers: { "content-type": "text/plain", cookie: readerCookie, "x-zo-drive-file-name": "member-file.txt" }, body: "now allowed" })).status).toBe(201);
+  });
+
   it("issues revocable scoped device keys without exposing their secrets after creation", async () => {
     const root = await mkdtemp(join(tmpdir(), "zo-drive-api-keys-"));
     roots.push(root);

@@ -69,14 +69,15 @@ import { toast, Toaster } from "sonner";
 import { create } from "zustand";
 
 import { ZoDriveClient } from "@zo-drive/sdk";
-import type { ApiKeyScope, AuthStatus, ClusterInvitation, ClusterMount, ClusterRole, DatabaseApiKey, DatabaseApiKeyScope, DatabaseEngine, DatabaseEngineId, DatabaseExecuteResult, DatabaseImportSettings, DatabaseRows, DriveApiKey, DriveDatabase, DriveFolder, DriveFunction, DriveFunctionRun, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, FunctionRuntime, FunctionVisibility, NativeFileType, PublicShare, PublishedForm, ShareAccess, StorageUsage } from "@zo-drive/types";
+import type { AccountAccess, AccountMember, AccountRole, ApiKeyScope, AuthStatus, ClusterInvitation, ClusterMount, ClusterRole, DatabaseApiKey, DatabaseApiKeyScope, DatabaseEngine, DatabaseEngineId, DatabaseExecuteResult, DatabaseImportSettings, DatabaseRows, DriveApiKey, DriveDatabase, DriveFolder, DriveFunction, DriveFunctionRun, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, FunctionRuntime, FunctionVisibility, NativeFileType, PublicShare, PublishedForm, ShareAccess, StorageUsage } from "@zo-drive/types";
 
 type DriveClient = Pick<ZoDriveClient, "createApiKey" | "createFolder" | "createNativeFile" | "createShare" | "delete" | "download" | "emptyTrash" | "getUsage" | "list" | "listApiKeys" | "listFolders" | "listFormResponses" | "listShares" | "listStarred" | "listTrash" | "permanentlyDeleteTrash" | "publishForm" | "rename" | "restoreTrash" | "revokeApiKey" | "revokeShare" | "saveNativeFile" | "setQuota" | "star" | "unstar" | "updateSharePasscode" | "upload"> & Partial<Pick<ZoDriveClient, "createClusterFolder" | "createClusterInvitation" | "createClusterMount" | "deleteClusterInvitation" | "deleteClusterMount" | "deleteClusterObject" | "deleteClusterPeer" | "downloadClusterObject" | "getClusterMountAccess" | "listClusterInvitations" | "listClusterMounts" | "listClusterObjects" | "listClusterPeers" | "renameClusterObject" | "updateClusterPeerRole" | "uploadClusterObject" | "createDatabase" | "createDatabaseApiKey" | "deleteDatabase" | "executeDatabase" | "exportDatabase" | "getDatabaseImportSettings" | "importDatabase" | "installDatabaseEngine" | "listDatabaseApiKeys" | "listDatabaseEngines" | "listDatabases" | "listDatabaseRows" | "listDatabaseTables" | "queryDatabase" | "revokeDatabaseApiKey" | "setDatabaseImportLimit" | "updateDatabaseEngine" | "createFunction" | "deleteFunction" | "listFunctions" | "listFunctionRuns" | "runFunction" | "updateFunction">>;
 type AuthClient = Pick<ZoDriveClient, "changePassword" | "deleteAccount" | "getAuthStatus" | "login" | "logout" | "registerInitialUser" | "updateProfile">;
+type UserAccessClient = Pick<ZoDriveClient, "createAccountMember" | "deleteAccountMember" | "listAccountMembers" | "updateAccountMember">;
 type SharedClient = Pick<ZoDriveClient, "downloadShared" | "getPublicShare" | "openSharedPaste" | "saveSharedPaste">;
 type PublicFormClient = Pick<ZoDriveClient, "getPublicForm" | "submitFormResponse">;
 type ViewMode = "grid" | "list";
-type DriveSection = "api-keys" | "cluster-databases" | "databases" | "functions" | "home" | "my-drive" | "pastes" | "profile" | "shared" | "starred" | "transfer" | "trash" | "zominai";
+type DriveSection = "api-keys" | "cluster-databases" | "databases" | "functions" | "home" | "my-drive" | "pastes" | "profile" | "shared" | "starred" | "transfer" | "trash" | "user-access" | "zominai";
 type DatabasePanel = "data" | "run" | "sql" | "access";
 type DatabaseView = "catalog" | "instances";
 type FunctionWorkspaceTab = "editor" | "runs" | "logs";
@@ -272,11 +273,16 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.25.0";
+const GUI_VERSION = "1.26.0";
 const CLI_VERSION = "1.3.0";
 const ZOMINAI_VERSION = "1.1.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.26.0",
+    date: "2026-07-22",
+    changes: ["Added User access in the account menu, with individual member sign-ins, read-only or read & write Drive access, super-user access management, and permanent protection for the original owner."]
+  },
   {
     version: "v1.25.0",
     date: "2026-07-22",
@@ -1007,6 +1013,7 @@ function AuthScreen({ auth, client, onAuthenticated }: { auth: AuthStatus; clien
 
 function AccountScreen({ user, client, onAccountDeleted }: { user: DriveUser; client: AuthClient; onAccountDeleted: () => void }) {
   const queryClient = useQueryClient();
+  const isOwner = user.isOwner !== false;
   const [username, setUsername] = useState(user.username);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -1041,7 +1048,7 @@ function AccountScreen({ user, client, onAccountDeleted }: { user: DriveUser; cl
   return (
     <div className="w-full space-y-6">
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 px-6 py-8 text-white"><span className="inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-cyan-200/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100"><UserRound size={14} /> Owner account</span><h2 className="mt-4 text-3xl font-semibold tracking-tight">Your private Drive, under your control.</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">Manage the owner sign-in details for this Drive. Device API keys remain separate, so a lost machine can be revoked without changing your password.</p></div>
+        <div className="bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 px-6 py-8 text-white"><span className="inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-cyan-200/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100"><UserRound size={14} /> {isOwner ? "Owner account" : "Account profile"}</span><h2 className="mt-4 text-3xl font-semibold tracking-tight">{isOwner ? "Your private Drive, under your control." : "Your Drive sign-in, under your control."}</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">{isOwner ? "Manage the owner sign-in details for this Drive. Device API keys remain separate, so a lost machine can be revoked without changing your password." : "Manage your sign-in details. User access and device API keys are managed separately."}</p></div>
         <div className="space-y-5 p-5">
           <SettingsCard icon={<UserRound size={20} />} title="Profile" description="Your username is how you sign in.">
             <form className="flex flex-col gap-3 sm:flex-row" onSubmit={(event) => { event.preventDefault(); profileMutation.mutate(); }}><input aria-label="Account username" className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" minLength={3} maxLength={32} value={username} onChange={(event) => setUsername(event.target.value)} required /><button className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-300" disabled={profileMutation.isPending || username === user.username} type="submit">Save username</button></form>
@@ -1050,15 +1057,61 @@ function AccountScreen({ user, client, onAccountDeleted }: { user: DriveUser; cl
             <form className="grid gap-3 sm:grid-cols-2" onSubmit={(event) => { event.preventDefault(); passwordMutation.mutate(); }}><input aria-label="Current password" className="rounded-lg border border-slate-300 px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" type="password" minLength={6} placeholder="Current password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} required /><input aria-label="New password" className="rounded-lg border border-slate-300 px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" type="password" minLength={6} placeholder="New password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} required /><button className="w-fit rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:border-blue-300 hover:text-blue-700 disabled:text-slate-400 sm:col-span-2" disabled={passwordMutation.isPending} type="submit">Update password</button></form>
           </SettingsCard>
           <SettingsCard icon={<HardDrive size={20} />} title="Drive data" description="Your files are private and stored in this Zo Drive data root.">
-            <div className="rounded-lg bg-slate-50 px-3 py-2.5 text-sm text-slate-600"><span className="font-medium text-slate-700">Account:</span> {user.username} <span className="mx-2 text-slate-300">•</span> Private owner drive</div>
+            <div className="rounded-lg bg-slate-50 px-3 py-2.5 text-sm text-slate-600"><span className="font-medium text-slate-700">Account:</span> {user.username} <span className="mx-2 text-slate-300">•</span> {isOwner ? "Private owner drive" : user.access === "read" ? "Read-only member access" : "Read & write member access"}</div>
           </SettingsCard>
-          <SettingsCard danger icon={<ShieldAlert size={20} />} title="Danger zone" description="Permanently delete this owner account and every file in its drive.">
+          {isOwner && <SettingsCard danger icon={<ShieldAlert size={20} />} title="Danger zone" description="Permanently delete this owner account and every file in its drive.">
             <div className="rounded-lg border border-red-100 bg-red-50 p-4"><p className="text-sm leading-6 text-red-800">This cannot be undone. Type <strong>DELETE MY DRIVE</strong> and enter your current password to continue.</p><div className="mt-3 grid gap-3 sm:grid-cols-2"><input aria-label="Delete confirmation" className="rounded-lg border border-red-200 bg-white px-3 py-2.5 outline-none focus:border-red-500 focus:ring-4 focus:ring-red-100" placeholder="DELETE MY DRIVE" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /><input aria-label="Delete account password" className="rounded-lg border border-red-200 bg-white px-3 py-2.5 outline-none focus:border-red-500 focus:ring-4 focus:ring-red-100" type="password" placeholder="Current password" value={deletePassword} onChange={(event) => setDeletePassword(event.target.value)} /><button className="w-fit rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-200 sm:col-span-2" disabled={confirmation !== "DELETE MY DRIVE" || deletePassword.length < 6 || deleteMutation.isPending} onClick={() => deleteMutation.mutate()}>Delete account and files</button></div></div>
-          </SettingsCard>
+          </SettingsCard>}
         </div>
       </section>
     </div>
   );
+}
+
+function UserAccessScreen({ client, currentUser }: { client: UserAccessClient; currentUser: DriveUser }) {
+  const queryClient = useQueryClient();
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [access, setAccess] = useState<AccountAccess>("write");
+  const [role, setRole] = useState<AccountRole>("regular");
+  const membersQuery = useQuery({ queryKey: ["account-members"], queryFn: () => client.listAccountMembers() });
+  const createMutation = useMutation({
+    mutationFn: () => client.createAccountMember({ username, password, access, role }),
+    onSuccess: async () => {
+      setUsername(""); setPassword(""); setAccess("write"); setRole("regular");
+      await queryClient.invalidateQueries({ queryKey: ["account-members"] });
+      toast.success("User added");
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not add user")
+  });
+  const updateMutation = useMutation({
+    mutationFn: ({ id, changes }: { id: string; changes: { access?: AccountAccess; role?: AccountRole } }) => client.updateAccountMember(id, changes),
+    onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ["account-members"] }); toast.success("Access updated"); },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not update access")
+  });
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => client.deleteAccountMember(id),
+    onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ["account-members"] }); toast.success("User removed"); },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not remove user")
+  });
+
+  return <div className="w-full space-y-6">
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 px-6 py-8 text-white"><span className="inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-cyan-200/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100"><UsersRound size={14} /> Account access</span><h2 className="mt-4 text-3xl font-semibold tracking-tight">Manage who can use this Drive.</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">Every user signs in with their own password. Super users can add, change, and revoke access; the original owner is permanently protected.</p></div>
+      <div className="grid gap-6 p-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <div>
+          <div className="mb-4 flex items-center justify-between"><div><h3 className="font-semibold text-slate-900">Users with access</h3><p className="mt-1 text-sm text-slate-500">Read users can browse and download. Read & write users can manage Drive content.</p></div><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{membersQuery.data?.length ?? 0} users</span></div>
+          {membersQuery.isLoading ? <div className="grid h-36 place-items-center text-sm text-slate-500"><LoaderCircle className="animate-spin" size={18} /></div> : membersQuery.isError ? <div className="rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">Could not load user access. <button className="font-semibold underline" onClick={() => void membersQuery.refetch()}>Try again</button></div> : <div className="overflow-hidden rounded-xl border border-slate-200"><div className="hidden grid-cols-[minmax(9rem,1.35fr)_9rem_9rem_5.5rem] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold uppercase tracking-[0.1em] text-slate-400 md:grid"><span>User</span><span>Access</span><span>Role</span><span className="text-right">Actions</span></div>{(membersQuery.data ?? []).map((member) => <UserAccessRow currentUser={currentUser} key={member.id} member={member} onDelete={() => deleteMutation.mutate(member.id)} onUpdate={(changes) => updateMutation.mutate({ id: member.id, changes })} pending={updateMutation.isPending || deleteMutation.isPending} />)}</div>}
+        </div>
+        <form className="self-start rounded-xl border border-slate-200 bg-slate-50 p-5" onSubmit={(event) => { event.preventDefault(); createMutation.mutate(); }}><div className="flex items-center gap-2 text-slate-900"><Plus size={18} className="text-blue-600" /><h3 className="font-semibold">Add user</h3></div><p className="mt-1 text-sm leading-5 text-slate-500">Create a separate sign-in for this account.</p><label className="mt-5 block text-sm font-medium text-slate-700">Username<input aria-label="New user username" className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" minLength={3} maxLength={32} onChange={(event) => setUsername(event.target.value)} required value={username} /></label><label className="mt-4 block text-sm font-medium text-slate-700">Temporary password<input aria-label="New user password" className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" minLength={6} onChange={(event) => setPassword(event.target.value)} required type="password" value={password} /></label><label className="mt-4 block text-sm font-medium text-slate-700">Drive access<select aria-label="New user access" className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" onChange={(event) => setAccess(event.target.value as AccountAccess)} value={access}><option value="read">Read only</option><option value="write">Read & write</option></select></label><label className="mt-4 block text-sm font-medium text-slate-700">Account role<select aria-label="New user role" className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" onChange={(event) => setRole(event.target.value as AccountRole)} value={role}><option value="regular">Regular user</option><option value="super">Super user</option></select></label><button className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-300" disabled={createMutation.isPending} type="submit"><Plus size={17} /> {createMutation.isPending ? "Adding user…" : "Add user"}</button></form>
+      </div>
+    </section>
+  </div>;
+}
+
+function UserAccessRow({ currentUser, member, onDelete, onUpdate, pending }: { currentUser: DriveUser; member: AccountMember; onDelete: () => void; onUpdate: (changes: { access?: AccountAccess; role?: AccountRole }) => void; pending: boolean }) {
+  const protectedOwner = member.isOwner;
+  return <div className="grid gap-3 border-b border-slate-100 px-4 py-4 last:border-b-0 md:grid-cols-[minmax(9rem,1.35fr)_9rem_9rem_5.5rem] md:items-center"><div className="min-w-0"><p className="truncate font-medium text-slate-800">{member.username} {member.id === currentUser.id && <span className="text-slate-400">(you)</span>}</p><p className="mt-1 text-xs text-slate-400">{protectedOwner ? "Original owner · permanently protected" : `Created ${new Date(member.createdAt).toLocaleDateString()}`}</p></div><label className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400 md:text-[0px]"><span className="md:hidden">Access</span><select aria-label={`${member.username} access`} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 md:mt-0" disabled={protectedOwner || pending} onChange={(event) => onUpdate({ access: event.target.value as AccountAccess })} value={member.access}><option value="read">Read only</option><option value="write">Read & write</option></select></label><label className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400 md:text-[0px]"><span className="md:hidden">Role</span><select aria-label={`${member.username} role`} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 md:mt-0" disabled={protectedOwner || pending} onChange={(event) => onUpdate({ role: event.target.value as AccountRole })} value={member.role}><option value="regular">Regular</option><option value="super">Super</option></select></label><div className="flex justify-end"><button aria-label={`Remove ${member.username}`} className="rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:text-slate-200" disabled={protectedOwner || pending} onClick={() => { if (window.confirm(`Remove ${member.username}'s access to this Drive?`)) onDelete(); }} title={protectedOwner ? "The original owner cannot be removed" : "Remove user"} type="button"><Trash2 size={18} /></button></div></div>;
 }
 
 function SettingsCard({ children, description, danger = false, icon, title }: { children: React.ReactNode; description: string; danger?: boolean; icon: React.ReactNode; title: string }) {
@@ -2145,6 +2198,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
               <a className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" href={landingUrl()}><ArrowLeft size={17} /> Landing page</a>
               <a className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" href={docsUrl("gui")}><ScrollText size={17} /> Documentation</a>
               <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={() => { setAccountMenuOpen(false); setSection("api-keys"); setCurrentPath(""); }}><KeyRound size={17} /> API Keys</button>
+              {(user.isOwner !== false || user.role === "super") && <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={() => { setAccountMenuOpen(false); setSection("user-access"); setCurrentPath(""); }}><UsersRound size={17} /> User access</button>}
               <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={() => { setAccountMenuOpen(false); setSection("profile"); setCurrentPath(""); }}><UserRound size={17} /> Profile & controls</button>
               <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={() => { setAccountMenuOpen(false); setZominAiPane("settings"); setSection("zominai"); setCurrentPath(""); }}><Settings2 size={17} /> ZominAI settings</button>
             </div>}
@@ -2198,8 +2252,9 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
           <div className="mb-7 flex flex-wrap items-center justify-between gap-4">
             <div>
               {section === "my-drive" && currentPath && <FolderNavigation currentPath={currentPath} onNavigate={setCurrentPath} />}
-              <h1 className={`${section === "my-drive" && currentPath ? "mt-3" : ""} text-2xl font-semibold tracking-tight text-slate-900`}>{section === "zominai" ? <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1">ZominAI <span className="text-sm font-medium tracking-normal text-slate-500">Pronounced ZOH-min A.I.</span></span> : search || advancedSearchActive ? "Search results" : section === "api-keys" ? "API Keys" : section === "cluster-databases" ? "Zo Shared Drives" : section === "databases" ? "Zo Databases" : section === "functions" ? "Zo Functions" : section === "profile" ? "Profile & controls" : section === "home" ? "Recent" : section === "pastes" ? "Zo Paste" : section === "transfer" ? "Zo Transfer" : section === "shared" ? "Shared with others" : section === "starred" ? "Starred" : section === "trash" ? "Trash" : currentPath ? currentPath.split("/").at(-1) : "Files"}</h1>
+              <h1 className={`${section === "my-drive" && currentPath ? "mt-3" : ""} text-2xl font-semibold tracking-tight text-slate-900`}>{section === "zominai" ? <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1">ZominAI <span className="text-sm font-medium tracking-normal text-slate-500">Pronounced ZOH-min A.I.</span></span> : search || advancedSearchActive ? "Search results" : section === "api-keys" ? "API Keys" : section === "user-access" ? "User access" : section === "cluster-databases" ? "Zo Shared Drives" : section === "databases" ? "Zo Databases" : section === "functions" ? "Zo Functions" : section === "profile" ? "Profile & controls" : section === "home" ? "Recent" : section === "pastes" ? "Zo Paste" : section === "transfer" ? "Zo Transfer" : section === "shared" ? "Shared with others" : section === "starred" ? "Starred" : section === "trash" ? "Trash" : currentPath ? currentPath.split("/").at(-1) : "Files"}</h1>
               {section === "api-keys" && <p className="mt-1 text-sm text-slate-500">Provision and revoke scoped access for local computers and automations.</p>}
+              {section === "user-access" && <p className="mt-1 text-sm text-slate-500">Create, update, and revoke people’s access to this Drive.</p>}
               {section === "cluster-databases" && <p className="mt-1 text-sm text-slate-500">Choose exactly which Drive folders each trusted person can access.</p>}
               {section === "databases" && <p className="mt-1 text-sm text-slate-500">Choose a lightweight open-source database, then keep its data private in your Drive.</p>}
               {section === "functions" && <p className="mt-1 text-sm text-slate-500">Store, run, and schedule small JavaScript or Python functions.</p>}
@@ -2213,7 +2268,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
             </div>
             <div className="ml-auto flex shrink-0 items-center gap-3" data-testid="dashboard-actions">
               {zominAiChatOpen && section !== "cluster-databases" && section !== "databases" && section !== "functions" && section !== "zominai" && <button aria-label="Open upload menu" className="hidden items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200 md:inline-flex" onClick={() => setUploadDialogOpen(true)}><Upload size={17} /> Upload</button>}
-              {section === "trash" && trashItems.length > 0 ? <button className="rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50" onClick={() => void emptyTrash()}>Empty trash</button> : section === "pastes" ? <button className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800" onClick={() => startNativeFile("paste")}><Plus size={17} /> New paste</button> : section !== "home" && section !== "transfer" && section !== "api-keys" && section !== "cluster-databases" && section !== "databases" && section !== "functions" && section !== "profile" && section !== "zominai" && <div className="flex rounded-lg border border-slate-200 bg-white p-1">
+              {section === "trash" && trashItems.length > 0 ? <button className="rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50" onClick={() => void emptyTrash()}>Empty trash</button> : section === "pastes" ? <button className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800" onClick={() => startNativeFile("paste")}><Plus size={17} /> New paste</button> : section !== "home" && section !== "transfer" && section !== "api-keys" && section !== "user-access" && section !== "cluster-databases" && section !== "databases" && section !== "functions" && section !== "profile" && section !== "zominai" && <div className="flex rounded-lg border border-slate-200 bg-white p-1">
               <button aria-label="List view" className={`rounded-md p-2 ${viewMode === "list" ? "bg-slate-100 text-slate-900" : "text-slate-400"}`} onClick={() => setViewMode("list")}><List size={18} /></button>
               <button aria-label="Grid view" className={`rounded-md p-2 ${viewMode === "grid" ? "bg-slate-100 text-slate-900" : "text-slate-400"}`} onClick={() => setViewMode("grid")}><Grid2X2 size={18} /></button>
             </div>}
@@ -2222,7 +2277,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
 
           {section === "home" && <RecentFiltersBar filters={recentFilters} onChange={setRecentFilters} />}
 
-          {section === "api-keys" ? <ApiKeys client={client} /> : section === "cluster-databases" ? <ClusterDatabases client={client} /> : section === "databases" ? <Databases client={client} /> : section === "functions" ? <Functions client={client} /> : section === "profile" ? <AccountScreen client={authClient} onAccountDeleted={onAccountDeleted} user={user} /> : section === "zominai" ? <ZominAiWorkspace initialPane={zominAiPane} /> : section === "transfer" ? <ZoTransfer client={client} onCreated={async () => { await refresh(); await queryClient.invalidateQueries({ queryKey: ["shares"] }); }} /> : section === "pastes" ? <ZoPaste files={displayedFiles} isError={filesQuery.isError} isLoading={isLoading} onCreate={() => startNativeFile("paste")} onDelete={(key) => deleteMutation.mutate(key)} onPreview={openPreview} onRetry={() => void filesQuery.refetch()} onShare={(file) => { setShareSettings(null); setShareFile(file); }} onToggleStar={(file) => starMutation.mutate({ key: file.key, starred: file.starred })} /> : isLoading ? (
+          {section === "api-keys" ? <ApiKeys client={client} /> : section === "user-access" ? <UserAccessScreen client={authClient as unknown as UserAccessClient} currentUser={user} /> : section === "cluster-databases" ? <ClusterDatabases client={client} /> : section === "databases" ? <Databases client={client} /> : section === "functions" ? <Functions client={client} /> : section === "profile" ? <AccountScreen client={authClient} onAccountDeleted={onAccountDeleted} user={user} /> : section === "zominai" ? <ZominAiWorkspace initialPane={zominAiPane} /> : section === "transfer" ? <ZoTransfer client={client} onCreated={async () => { await refresh(); await queryClient.invalidateQueries({ queryKey: ["shares"] }); }} /> : section === "pastes" ? <ZoPaste files={displayedFiles} isError={filesQuery.isError} isLoading={isLoading} onCreate={() => startNativeFile("paste")} onDelete={(key) => deleteMutation.mutate(key)} onPreview={openPreview} onRetry={() => void filesQuery.refetch()} onShare={(file) => { setShareSettings(null); setShareFile(file); }} onToggleStar={(file) => starMutation.mutate({ key: file.key, starred: file.starred })} /> : isLoading ? (
             <div className="grid h-64 place-items-center text-sm text-slate-500"><LoaderCircle className="mr-2 animate-spin" size={20} /> Loading your drive…</div>
           ) : (section === "shared" ? sharesQuery.isError : section === "starred" ? starredQuery.isError : section === "trash" ? trashQuery.isError : filesQuery.isError) ? (
             <EmptyState

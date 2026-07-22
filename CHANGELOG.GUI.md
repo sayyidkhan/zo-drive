@@ -2,6 +2,15 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.26.0 - 2026-07-22
+
+### Added
+
+- Added account-level User access management with individual sign-ins, read-only
+  and read & write Drive permissions, and super-user access administration.
+- Protected the original account owner from role changes, access removal, and
+  deletion while preserving shared access to the same Drive data for members.
+
 ## v1.25.0 - 2026-07-22
 
 ### Added

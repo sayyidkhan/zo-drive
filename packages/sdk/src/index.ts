@@ -1,6 +1,7 @@
 import {
   apiErrorSchema,
   authStatusSchema,
+  accountMemberSchema,
   createdDatabaseApiKeySchema,
   databaseImportSettingsSchema,
   databaseEngineSchema,
@@ -15,6 +16,7 @@ import {
   driveShareSchema,
   formResponseSchema,
   listFormResponsesSchema,
+  listAccountMembersResponseSchema,
   listDriveApiKeysResponseSchema,
   listDriveDatabasesResponseSchema,
   listDriveFunctionsResponseSchema,
@@ -43,7 +45,7 @@ import {
   functionRunSchema,
   storageUsageSchema
 } from "@zo-drive/types";
-import type { ApiKeyScope, AuthStatus, ClusterInvitation, ClusterMount, ClusterPeer, ClusterPendingInvitation, ClusterRole, CreatedDatabaseApiKey, CreatedDriveApiKey, DatabaseApiKey, DatabaseApiKeyScope, DatabaseEngine, DatabaseEngineId, DatabaseExecuteRequest, DatabaseExecuteResult, DatabaseImportSettings, DatabaseQueryResult, DatabaseRows, DatabaseTable, DriveApiKey, DriveDatabase, DriveFolder, DriveFunction, DriveFunctionRun, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, FunctionRuntime, FunctionVisibility, Health, NativeFileType, PublicShare, PublishedForm, ShareAccess, ShareKind, SharedPaste, StorageUsage } from "@zo-drive/types";
+import type { AccountAccess, AccountMember, AccountRole, ApiKeyScope, AuthStatus, ClusterInvitation, ClusterMount, ClusterPeer, ClusterPendingInvitation, ClusterRole, CreatedDatabaseApiKey, CreatedDriveApiKey, DatabaseApiKey, DatabaseApiKeyScope, DatabaseEngine, DatabaseEngineId, DatabaseExecuteRequest, DatabaseExecuteResult, DatabaseImportSettings, DatabaseQueryResult, DatabaseRows, DatabaseTable, DriveApiKey, DriveDatabase, DriveFolder, DriveFunction, DriveFunctionRun, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, FunctionRuntime, FunctionVisibility, Health, NativeFileType, PublicShare, PublishedForm, ShareAccess, ShareKind, SharedPaste, StorageUsage } from "@zo-drive/types";
 
 type Fetcher = typeof fetch;
 
@@ -440,6 +442,25 @@ export class ZoDriveClient {
   async getAuthStatus(): Promise<AuthStatus> {
     const response = await this.request("/auth/status", { method: "GET" });
     return authStatusSchema.parse(await response.json());
+  }
+
+  async listAccountMembers(): Promise<AccountMember[]> {
+    const response = await this.request("/auth/users", { method: "GET" });
+    return listAccountMembersResponseSchema.parse(await response.json()).members;
+  }
+
+  async createAccountMember({ username, password, access, role }: { username: string; password: string; access: AccountAccess; role: AccountRole }): Promise<AccountMember> {
+    const response = await this.request("/auth/users", { body: JSON.stringify({ username, password, access, role }), headers: { "content-type": "application/json" }, method: "POST" });
+    return accountMemberSchema.parse(await response.json());
+  }
+
+  async updateAccountMember(id: string, { access, role }: { access?: AccountAccess; role?: AccountRole }): Promise<AccountMember> {
+    const response = await this.request(`/auth/users/${encodeURIComponent(id)}`, { body: JSON.stringify({ access, role }), headers: { "content-type": "application/json" }, method: "PATCH" });
+    return accountMemberSchema.parse(await response.json());
+  }
+
+  async deleteAccountMember(id: string): Promise<void> {
+    await this.request(`/auth/users/${encodeURIComponent(id)}`, { method: "DELETE" });
   }
 
   async listApiKeys(): Promise<DriveApiKey[]> {
