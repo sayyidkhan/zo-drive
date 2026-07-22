@@ -114,7 +114,7 @@ type ZominAiSettings = {
   systemInstructions: string;
 };
 
-type DriveTheme = "google-drive" | "zo-computer" | "zo-dark" | "zo-drive" | "zo-light" | "zo-system";
+type DriveTheme = "zominai-drive" | "zo-computer" | "zo-dark" | "zo-drive" | "zo-light" | "zo-system";
 
 type ZominAiVerification = {
   checkedAt: string;
@@ -282,11 +282,16 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.38.0";
+const GUI_VERSION = "1.38.1";
 const CLI_VERSION = "1.3.0";
 const ZOMINAI_VERSION = "1.7.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.38.1",
+    date: "2026-07-22",
+    changes: ["Replaced the near-duplicate Google Drive option with the distinct ZominAI Drive cyan theme."]
+  },
   {
     version: "v1.38.0",
     date: "2026-07-22",
@@ -1263,13 +1268,14 @@ const driveThemeStorageKey = "zo-drive:theme:v1";
 
 function readDriveTheme(): DriveTheme {
   const stored = window.localStorage.getItem(driveThemeStorageKey);
-  return stored === "google-drive" || stored === "zo-computer" || stored === "zo-dark" || stored === "zo-light" || stored === "zo-system" ? stored : "zo-drive";
+  if (stored === "google-drive" || stored === "zominai-drive") return "zominai-drive";
+  return stored === "zo-computer" || stored === "zo-dark" || stored === "zo-light" || stored === "zo-system" ? stored : "zo-drive";
 }
 
 function ThemeScreen({ onThemeChange, theme }: { onThemeChange: (theme: DriveTheme) => void; theme: DriveTheme }) {
   const options: Array<{ description: string; id: DriveTheme; label: string }> = [
     { id: "zo-drive", label: "Zo Drive", description: "Keep the familiar blue workspace built for organising files and running Drive tools." },
-    { id: "google-drive", label: "Google Drive", description: "Use a familiar Google Drive-inspired workspace with white surfaces, Google-blue actions, and pale-blue selections." },
+    { id: "zominai-drive", label: "ZominAI Drive", description: "Use ZominAI's cyan palette across a bright, focused Drive workspace." },
     { id: "zo-computer", label: "Zo Computer", description: "Use Zo's black-and-white Pegasus direction with serif display type and an ink-forward workspace." },
     { id: "zo-light", label: "Zo Light", description: "Zo's built-in light appearance for a clean white workspace." },
     { id: "zo-dark", label: "Zo Dark", description: "Zo's built-in dark appearance for an ink-blue workspace." },
@@ -1289,13 +1295,13 @@ function ThemeScreen({ onThemeChange, theme }: { onThemeChange: (theme: DriveThe
 function ThemeOptions({ onThemeChange, options, theme, title }: { onThemeChange: (theme: DriveTheme) => void; options: Array<{ description: string; id: DriveTheme; label: string }>; theme: DriveTheme; title: string }) {
   return <section><div className="border-b border-slate-100 px-5 py-3"><p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">{title}</p></div><div className={`grid gap-5 p-5 ${options.length === 3 ? "lg:grid-cols-3" : "lg:grid-cols-2"}`}>{options.map((option) => {
         const selected = theme === option.id;
-        const googleDrive = option.id === "google-drive";
+        const zominAiDrive = option.id === "zominai-drive";
         const zoComputer = option.id === "zo-computer";
         const dark = option.id === "zo-dark";
         const system = option.id === "zo-system";
-        const previewClass = zoComputer ? "bg-[#f5f0e7] text-[#171512]" : dark ? "bg-[#0b1020] text-slate-100" : system ? "bg-gradient-to-br from-white via-white to-slate-950 text-slate-900" : googleDrive ? "bg-[#f8fafd] text-[#202124]" : option.id === "zo-drive" ? "bg-[#f8faff] text-slate-800" : "bg-white text-slate-900";
-        const lineClass = dark ? "bg-slate-700" : zoComputer ? "bg-stone-300" : googleDrive ? "bg-[#d3e3fd]" : "bg-slate-200";
-        return <article className={`overflow-hidden rounded-2xl border-2 transition ${selected ? "border-slate-900 shadow-lg shadow-slate-950/10" : "border-slate-200 hover:border-slate-400"}`} key={option.id}><div className={`min-h-44 p-5 ${previewClass}`}><div className={`flex items-center gap-2 border-b pb-3 text-sm font-semibold ${dark ? "border-white/15" : zoComputer ? "border-stone-300 font-mono" : googleDrive ? "border-[#dadce0]" : "border-slate-200"}`}><span className={`grid size-8 place-items-center rounded-lg ${dark ? "bg-violet-500 text-white" : zoComputer ? "bg-[#171512] text-white" : googleDrive ? "bg-[#0b57d0] text-white" : option.id === "zo-drive" ? "bg-blue-600 text-white" : "bg-slate-900 text-white"}`}>{zoComputer ? <span className="font-serif text-lg leading-none">Z</span> : googleDrive ? <Folder size={17} /> : system ? <Settings2 size={17} /> : option.id === "zo-drive" ? <img className="size-5 object-contain" src={drivePegasusLogoUrl} alt="" /> : <Palette size={17} />}</span>{option.label}</div><div className="mt-5"><p className={`text-base font-semibold ${dark ? "text-white" : "text-current"}`}>{zoComputer ? "Run your life on Zo." : googleDrive ? "A familiar workspace for files." : system ? "Adapts with your device." : dark ? "A calm workspace after dark." : "Your files, your way."}</p><div className={`mt-4 h-2 w-3/4 rounded-full ${lineClass}`} /><div className={`mt-2 h-2 w-1/2 rounded-full ${lineClass}`} /></div></div><div className="p-5"><div className="flex items-start justify-between gap-4"><p className="text-sm leading-6 text-slate-500">{option.description}</p>{selected && <span className="grid size-7 shrink-0 place-items-center rounded-full bg-slate-900 text-white"><Check size={16} /></span>}</div><button aria-pressed={selected} className={`mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition ${selected ? "bg-slate-100 text-slate-600" : "bg-slate-900 text-white hover:bg-slate-700"}`} onClick={() => onThemeChange(option.id)} type="button">{selected ? "Current theme" : `Use ${option.label}`}</button></div></article>;
+        const previewClass = zoComputer ? "bg-[#f5f0e7] text-[#171512]" : dark ? "bg-[#0b1020] text-slate-100" : system ? "bg-gradient-to-br from-white via-white to-slate-950 text-slate-900" : zominAiDrive ? "bg-[#f7fcfd] text-[#164e63]" : option.id === "zo-drive" ? "bg-[#f8faff] text-slate-800" : "bg-white text-slate-900";
+        const lineClass = dark ? "bg-slate-700" : zoComputer ? "bg-stone-300" : zominAiDrive ? "bg-cyan-200" : "bg-slate-200";
+        return <article className={`overflow-hidden rounded-2xl border-2 transition ${selected ? "border-slate-900 shadow-lg shadow-slate-950/10" : "border-slate-200 hover:border-slate-400"}`} key={option.id}><div className={`min-h-44 p-5 ${previewClass}`}><div className={`flex items-center gap-2 border-b pb-3 text-sm font-semibold ${dark ? "border-white/15" : zoComputer ? "border-stone-300 font-mono" : zominAiDrive ? "border-cyan-200" : "border-slate-200"}`}><span className={`grid size-8 place-items-center rounded-lg ${dark ? "bg-violet-500 text-white" : zoComputer ? "bg-[#171512] text-white" : zominAiDrive ? "bg-cyan-700 text-white" : option.id === "zo-drive" ? "bg-blue-600 text-white" : "bg-slate-900 text-white"}`}>{zoComputer ? <span className="font-serif text-lg leading-none">Z</span> : zominAiDrive ? <Cpu size={17} /> : system ? <Settings2 size={17} /> : option.id === "zo-drive" ? <img className="size-5 object-contain" src={drivePegasusLogoUrl} alt="" /> : <Palette size={17} />}</span>{option.label}</div><div className="mt-5"><p className={`text-base font-semibold ${dark ? "text-white" : "text-current"}`}>{zoComputer ? "Run your life on Zo." : zominAiDrive ? "A clear workspace for focused work." : system ? "Adapts with your device." : dark ? "A calm workspace after dark." : "Your files, your way."}</p><div className={`mt-4 h-2 w-3/4 rounded-full ${lineClass}`} /><div className={`mt-2 h-2 w-1/2 rounded-full ${lineClass}`} /></div></div><div className="p-5"><div className="flex items-start justify-between gap-4"><p className="text-sm leading-6 text-slate-500">{option.description}</p>{selected && <span className="grid size-7 shrink-0 place-items-center rounded-full bg-slate-900 text-white"><Check size={16} /></span>}</div><button aria-pressed={selected} className={`mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition ${selected ? "bg-slate-100 text-slate-600" : "bg-slate-900 text-white hover:bg-slate-700"}`} onClick={() => onThemeChange(option.id)} type="button">{selected ? "Current theme" : `Use ${option.label}`}</button></div></article>;
       })}</div></section>;
 }
 
@@ -1317,19 +1323,19 @@ function DarkThemeStyles({ selector }: { selector: string }) {
 
 function DriveThemeStyles({ theme }: { theme: DriveTheme }) {
   if (theme === "zo-drive") return null;
-  if (theme === "google-drive") return <style>{`
-    [data-drive-theme="google-drive"] { background: #f8fafd; color: #202124; color-scheme: light; }
-    [data-drive-theme="google-drive"] .bg-white { background-color: #ffffff !important; }
-    [data-drive-theme="google-drive"] .bg-slate-50, [data-drive-theme="google-drive"] .bg-\\[\\#f8faff\\] { background-color: #f8fafd !important; }
-    [data-drive-theme="google-drive"] .bg-slate-100 { background-color: #edf2fc !important; }
-    [data-drive-theme="google-drive"] .bg-blue-50 { background-color: #c2e7ff !important; }
-    [data-drive-theme="google-drive"] .border-slate-100, [data-drive-theme="google-drive"] .border-slate-200, [data-drive-theme="google-drive"] .border-slate-300 { border-color: #dadce0 !important; }
-    [data-drive-theme="google-drive"] .text-slate-900, [data-drive-theme="google-drive"] .text-slate-800, [data-drive-theme="google-drive"] .text-slate-700 { color: #202124 !important; }
-    [data-drive-theme="google-drive"] .text-slate-600, [data-drive-theme="google-drive"] .text-slate-500 { color: #444746 !important; }
-    [data-drive-theme="google-drive"] .text-slate-400 { color: #5f6368 !important; }
-    [data-drive-theme="google-drive"] .bg-blue-600, [data-drive-theme="google-drive"] .bg-blue-700 { background-color: #0b57d0 !important; }
-    [data-drive-theme="google-drive"] .text-blue-600, [data-drive-theme="google-drive"] .text-blue-700 { color: #0b57d0 !important; }
-    [data-drive-theme="google-drive"] .hover\\:bg-blue-50:hover, [data-drive-theme="google-drive"] .hover\\:bg-slate-50:hover, [data-drive-theme="google-drive"] .hover\\:bg-slate-100:hover { background-color: #d3e3fd !important; }
+  if (theme === "zominai-drive") return <style>{`
+    [data-drive-theme="zominai-drive"] { background: #f7fcfd; color: #164e63; color-scheme: light; }
+    [data-drive-theme="zominai-drive"] .bg-white { background-color: #ffffff !important; }
+    [data-drive-theme="zominai-drive"] .bg-slate-50, [data-drive-theme="zominai-drive"] .bg-\\[\\#f8faff\\] { background-color: #f7fcfd !important; }
+    [data-drive-theme="zominai-drive"] .bg-slate-100 { background-color: #ecfeff !important; }
+    [data-drive-theme="zominai-drive"] .bg-blue-50 { background-color: #cffafe !important; }
+    [data-drive-theme="zominai-drive"] .border-slate-100, [data-drive-theme="zominai-drive"] .border-slate-200, [data-drive-theme="zominai-drive"] .border-slate-300 { border-color: #bae6fd !important; }
+    [data-drive-theme="zominai-drive"] .text-slate-900, [data-drive-theme="zominai-drive"] .text-slate-800, [data-drive-theme="zominai-drive"] .text-slate-700 { color: #164e63 !important; }
+    [data-drive-theme="zominai-drive"] .text-slate-600, [data-drive-theme="zominai-drive"] .text-slate-500 { color: #155e75 !important; }
+    [data-drive-theme="zominai-drive"] .text-slate-400 { color: #0e7490 !important; }
+    [data-drive-theme="zominai-drive"] .bg-blue-600, [data-drive-theme="zominai-drive"] .bg-blue-700 { background-color: #0e7490 !important; }
+    [data-drive-theme="zominai-drive"] .text-blue-600, [data-drive-theme="zominai-drive"] .text-blue-700 { color: #0e7490 !important; }
+    [data-drive-theme="zominai-drive"] .hover\\:bg-blue-50:hover, [data-drive-theme="zominai-drive"] .hover\\:bg-slate-50:hover, [data-drive-theme="zominai-drive"] .hover\\:bg-slate-100:hover { background-color: #cffafe !important; }
   `}</style>;
   if (theme === "zo-light") return <style>{`
     [data-drive-theme="zo-light"] { background: #ffffff; color: #18181b; }

@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.38.1 - 2026-07-22
+
+### Changed
+
+- Replaced the near-duplicate Google Drive theme with **ZominAI Drive**, using
+  ZominAI's distinct cyan palette across the workspace.
+
 ## v1.38.0 - 2026-07-22
 
 ### Added
