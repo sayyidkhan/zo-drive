@@ -2,6 +2,17 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.24.0 - 2026-07-22
+
+### Added
+
+- Made ZominAI chat history an overlay so it no longer takes permanent space
+  from the conversation.
+- Added automatic chat titles, manual title rename and deletion, and
+  date-and-time timestamps for every conversation.
+- Added estimated active-context usage and local context compaction, preserving
+  recent messages while reducing the context sent to the local runtime.
+
 ## v1.23.9 - 2026-07-22
 
 ### Fixed

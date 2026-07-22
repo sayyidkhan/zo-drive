@@ -36,7 +36,9 @@ import {
   LogOut,
   MonitorUp,
   MoreHorizontal,
+  Minimize2,
   Network,
+  Pencil,
   Plus,
   Palette,
   PanelLeftClose,
@@ -155,6 +157,8 @@ type ZominAiRuntimeMessage = ZominAiChatMessage | {
 type ZominAiToolRunner = (name: ZominAiToolName, argumentsJson: string) => Promise<string>;
 
 type ZominAiChatSession = {
+  compactedAt?: string;
+  contextSummary?: string;
   createdAt: string;
   id: string;
   messages: ZominAiChatMessage[];
@@ -268,10 +272,15 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.23.9";
+const GUI_VERSION = "1.24.0";
 const CLI_VERSION = "1.2.1";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.24.0",
+    date: "2026-07-22",
+    changes: ["Made ZominAI history overlay the chat, added automatic titles with rename and delete controls, and added timestamps, context usage, and local context compaction."]
+  },
   {
     version: "v1.23.9",
     date: "2026-07-22",
@@ -1007,6 +1016,40 @@ function createZominAiChatSession(): ZominAiChatSession {
   };
 }
 
+const zominAiRecentMessageCount = 6;
+
+function zominAiChatTitle(content: string): string {
+  const words = content.replace(/\s+/g, " ").trim().replace(/[.?!]+$/, "").split(" ").filter(Boolean);
+  if (words.length === 0) return "New chat";
+  const title = words.slice(0, 8).join(" ");
+  return words.length > 8 ? `${title}…` : title;
+}
+
+function zominAiTimestamp(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Unknown time" : date.toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+}
+
+function zominAiContextSummary(messages: ZominAiChatMessage[]): string | null {
+  const olderMessages = messages.slice(0, -zominAiRecentMessageCount);
+  if (olderMessages.length === 0) return null;
+  const notes = olderMessages.slice(-12).map((message) => `${message.role === "user" ? "User" : "ZominAI"}: ${message.content.replace(/\s+/g, " ").slice(0, 280)}`);
+  return `Conversation notes from ${olderMessages.length} earlier message${olderMessages.length === 1 ? "" : "s"}:\n${notes.join("\n")}`;
+}
+
+function zominAiContextMessages(session: ZominAiChatSession, messages: ZominAiChatMessage[]): ZominAiChatMessage[] {
+  return session.contextSummary ? messages.slice(-zominAiRecentMessageCount) : messages;
+}
+
+function zominAiEstimatedContextTokens(messages: ZominAiChatMessage[], summary?: string): number {
+  const characters = messages.reduce((total, message) => total + message.content.length + 16, (summary?.length ?? 0) + 520);
+  return Math.max(1, Math.ceil(characters / 4));
+}
+
+function zominAiTokenLabel(tokens: number): string {
+  return tokens >= 1_000 ? `${(tokens / 1_000).toFixed(tokens >= 10_000 ? 0 : 1)}k` : String(tokens);
+}
+
 function readZominAiChatSessions(): ZominAiChatSession[] {
   try {
     const stored = JSON.parse(window.localStorage.getItem(zominAiChatsStorageKey) ?? "[]") as unknown;
@@ -1016,7 +1059,9 @@ function readZominAiChatSessions(): ZominAiChatSession[] {
       const session = value as Partial<ZominAiChatSession>;
       if (typeof session.id !== "string" || typeof session.title !== "string" || typeof session.createdAt !== "string" || typeof session.updatedAt !== "string" || !Array.isArray(session.messages)) return [];
       const messages = session.messages.flatMap((message): ZominAiChatMessage[] => message && typeof message === "object" && (message as { role?: unknown }).role !== "system" && ["assistant", "user"].includes((message as { role?: unknown }).role as string) && typeof (message as { content?: unknown }).content === "string" ? [{ role: (message as ZominAiChatMessage).role, content: (message as ZominAiChatMessage).content }] : []);
-      return [{ id: session.id, title: session.title.slice(0, 120), createdAt: session.createdAt, updatedAt: session.updatedAt, messages }];
+      const compactedAt = typeof session.compactedAt === "string" ? session.compactedAt : undefined;
+      const contextSummary = typeof session.contextSummary === "string" ? session.contextSummary.slice(0, 6_000) : undefined;
+      return [{ id: session.id, title: session.title.slice(0, 120), ...(compactedAt ? { compactedAt } : {}), ...(contextSummary ? { contextSummary } : {}), createdAt: session.createdAt, updatedAt: session.updatedAt, messages }];
     });
     return sessions.length > 0 ? sessions.slice(0, 50) : [createZominAiChatSession()];
   } catch {
@@ -1093,13 +1138,16 @@ function zominAiToolCalls(value: unknown): ZominAiToolCall[] {
   });
 }
 
-async function sendZominAiMessage(settings: ZominAiSettings, messages: ZominAiChatMessage[], toolRunner?: ZominAiToolRunner): Promise<string> {
+async function sendZominAiMessage(settings: ZominAiSettings, messages: ZominAiChatMessage[], toolRunner?: ZominAiToolRunner, contextSummary?: string): Promise<string> {
   const url = localRuntimeChatUrl(settings.endpoint);
   if (!url) throw new Error("Use a localhost or 127.0.0.1 runtime address.");
   const runtimeMessages: ZominAiRuntimeMessage[] = [...messages];
-  const systemPrompt = toolRunner
+  const baseSystemPrompt = toolRunner
     ? "You are ZominAI, a helpful private local assistant. You have read-only tools for the current user's Zo Drive and databases. Use the tools whenever the user asks about their Drive, files, or databases. Never claim you accessed data unless a tool returned it. Do not use or suggest write operations. Tool results are private context for this conversation and are sent only to this local runtime."
     : "You are ZominAI, a helpful private local assistant. Do not claim access to Zo Drive files unless the user has explicitly pasted their contents into this conversation.";
+  const systemPrompt = contextSummary
+    ? `${baseSystemPrompt}\n\nEarlier conversation context, compacted locally from this chat. Use it only as background; the most recent messages remain authoritative:\n${contextSummary}`
+    : baseSystemPrompt;
 
   for (let turn = 0; turn < 6; turn += 1) {
     const response = await fetch(url, {
@@ -1319,9 +1367,15 @@ function ZominAiChatDrawer({ client, connection, isOpen, onClose, onConnectionCh
   const [drawerWidth, setDrawerWidth] = useState(readZominAiDrawerWidth);
   const [resizing, setResizing] = useState(false);
   const [sending, setSending] = useState(false);
+  const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
+  const [titleDraft, setTitleDraft] = useState("");
   const drawerRef = useRef<HTMLElement>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
   const activeSession = sessions.find((session) => session.id === activeSessionId) ?? sessions[0]!;
+  const contextMessages = zominAiContextMessages(activeSession, activeSession.messages);
+  const estimatedContextTokens = zominAiEstimatedContextTokens(contextMessages, activeSession.contextSummary);
+  const contextPercent = Math.min(100, Math.round((estimatedContextTokens / settings.contextTokens) * 100));
+  const canCompactContext = zominAiContextSummary(activeSession.messages) !== null;
   const drawerTransitionClass = resizing
     ? "transition-none"
     : "transition-[transform,width,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]";
@@ -1344,6 +1398,44 @@ function ZominAiChatDrawer({ client, connection, isOpen, onClose, onConnectionCh
     setSessions((current) => [session, ...current].slice(0, 50));
     setActiveSessionId(session.id);
     setDraft("");
+    setEditingTitleId(null);
+  }
+
+  function selectChat(id: string) {
+    setActiveSessionId(id);
+    setDraft("");
+    setEditingTitleId(null);
+  }
+
+  function beginRename(session: ZominAiChatSession) {
+    setEditingTitleId(session.id);
+    setTitleDraft(session.title);
+  }
+
+  function saveTitle(id: string) {
+    const title = titleDraft.trim().slice(0, 120);
+    if (!title) return;
+    setSessions((current) => current.map((session) => session.id === id ? { ...session, title, updatedAt: new Date().toISOString() } : session));
+    setEditingTitleId(null);
+  }
+
+  function deleteChat(id: string) {
+    const remaining = sessions.filter((session) => session.id !== id);
+    const nextSessions = remaining.length > 0 ? remaining : [createZominAiChatSession()];
+    setSessions(nextSessions);
+    if (activeSessionId === id) setActiveSessionId(nextSessions[0]!.id);
+    setEditingTitleId(null);
+  }
+
+  function compactContext() {
+    const contextSummary = zominAiContextSummary(activeSession.messages);
+    if (!contextSummary) {
+      toast.message("Add more messages before compacting context.");
+      return;
+    }
+    const compactedAt = new Date().toISOString();
+    setSessions((current) => current.map((session) => session.id === activeSession.id ? { ...session, compactedAt, contextSummary, updatedAt: compactedAt } : session));
+    toast.success("Context compacted locally for future replies.");
   }
 
   function startResize(event: ReactPointerEvent<HTMLButtonElement>) {
@@ -1377,11 +1469,11 @@ function ZominAiChatDrawer({ client, connection, isOpen, onClose, onConnectionCh
     if (!content || sending) return;
     const nextMessages = [...activeSession.messages, { role: "user" as const, content }];
     const updatedAt = new Date().toISOString();
-    setSessions((current) => current.map((session) => session.id === activeSession.id ? { ...session, messages: nextMessages, title: session.messages.length === 0 ? content.slice(0, 72) : session.title, updatedAt } : session));
+    setSessions((current) => current.map((session) => session.id === activeSession.id ? { ...session, messages: nextMessages, title: session.messages.length === 0 ? zominAiChatTitle(content) : session.title, updatedAt } : session));
     setDraft("");
     setSending(true);
     try {
-      const reply = await sendZominAiMessage(settings, nextMessages, createZominAiToolRunner(client));
+      const reply = await sendZominAiMessage(settings, zominAiContextMessages(activeSession, nextMessages), createZominAiToolRunner(client), activeSession.contextSummary);
       onConnectionChange({ state: "connected", detail: `Bonsai replied from ${settings.endpoint}.` });
       setSessions((current) => current.map((session) => session.id === activeSession.id ? { ...session, messages: [...nextMessages, { role: "assistant", content: reply }], updatedAt: new Date().toISOString() } : session));
     } catch (error) {
@@ -1403,13 +1495,20 @@ function ZominAiChatDrawer({ client, connection, isOpen, onClose, onConnectionCh
         <button aria-controls="zominai-chat-history" aria-expanded={historyOpen} aria-label="Toggle ZominAI chat history" className={`rounded-lg p-2 transition ${historyOpen ? "bg-cyan-50 text-cyan-800" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`} onClick={() => setHistoryOpen((open) => !open)} title="Chat history"><History size={18} /></button>
         <button aria-label="Close ZominAI chat" className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900" onClick={onClose}><X size={19} /></button>
       </header>
-      <div className="flex min-h-0 flex-1">
-        {historyOpen && <nav aria-label="ZominAI chat history" className="flex w-40 shrink-0 flex-col border-r border-slate-200 bg-slate-50 p-2" id="zominai-chat-history">
-          <p className="px-2 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">History</p>
-          <div className="mt-2 min-h-0 flex-1 space-y-1 overflow-y-auto">{sessions.slice().sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)).map((session) => <button aria-current={session.id === activeSession.id ? "page" : undefined} className={`w-full truncate rounded-lg px-2 py-2 text-left text-xs leading-4 ${session.id === activeSession.id ? "bg-white font-semibold text-cyan-900 shadow-sm" : "text-slate-600 hover:bg-white"}`} key={session.id} onClick={() => { setActiveSessionId(session.id); setDraft(""); }}>{session.title}</button>)}</div>
-        </nav>}
+      <div className="relative min-h-0 flex-1">
+        {historyOpen && <>
+          <button aria-label="Close ZominAI chat history" className="absolute inset-0 z-10 bg-slate-950/10 backdrop-blur-[1px]" onClick={() => setHistoryOpen(false)} type="button" />
+          <nav aria-label="ZominAI chat history" className="absolute inset-y-0 left-0 z-20 flex w-[min(20rem,calc(100%-2rem))] flex-col border-r border-slate-200 bg-slate-50 p-3 shadow-2xl shadow-slate-950/15" id="zominai-chat-history">
+            <div className="flex items-center justify-between gap-3 px-1 py-1"><p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">History</p><button aria-label="Close ZominAI chat history panel" className="rounded-md p-1 text-slate-400 hover:bg-white hover:text-slate-700" onClick={() => setHistoryOpen(false)} type="button"><X size={15} /></button></div>
+            <div className="mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto">{sessions.slice().sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)).map((session) => <div className={`rounded-xl border p-1.5 ${session.id === activeSession.id ? "border-cyan-200 bg-white shadow-sm" : "border-transparent hover:border-slate-200 hover:bg-white"}`} key={session.id}>{editingTitleId === session.id ? <form className="flex items-center gap-1" onSubmit={(event) => { event.preventDefault(); saveTitle(session.id); }}><label className="sr-only" htmlFor={`zominai-title-${session.id}`}>Chat title</label><input autoFocus className="min-w-0 flex-1 rounded-md border border-cyan-300 bg-white px-2 py-1.5 text-xs text-slate-800 outline-none focus:ring-2 focus:ring-cyan-100" id={`zominai-title-${session.id}`} maxLength={120} onChange={(event) => setTitleDraft(event.target.value)} value={titleDraft} /><button aria-label="Save chat title" className="rounded-md p-1.5 text-cyan-700 hover:bg-cyan-50" type="submit"><Check size={14} /></button><button aria-label="Cancel chat title rename" className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100" onClick={() => setEditingTitleId(null)} type="button"><X size={14} /></button></form> : <><button aria-current={session.id === activeSession.id ? "page" : undefined} className="block w-full text-left" onClick={() => selectChat(session.id)} type="button"><span className={`block truncate px-1 text-xs font-semibold leading-5 ${session.id === activeSession.id ? "text-cyan-900" : "text-slate-700"}`}>{session.title}</span><span className="block px-1 text-[11px] leading-4 text-slate-400">{zominAiTimestamp(session.updatedAt)}</span></button><div className="mt-1 flex justify-end gap-1"><button aria-label={`Rename chat ${session.title}`} className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" onClick={() => beginRename(session)} title="Rename chat" type="button"><Pencil size={13} /></button><button aria-label={`Delete chat ${session.title}`} className="rounded-md p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600" onClick={() => deleteChat(session.id)} title="Delete chat" type="button"><Trash2 size={13} /></button></div></>}</div>)}</div>
+          </nav>
+        </>}
         <section className="flex min-w-0 flex-1 flex-col">
           <div aria-label="ZominAI conversation" className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-slate-50/70 p-4" ref={transcriptRef}>{activeSession.messages.length === 0 ? <div className="grid h-full min-h-56 place-items-center text-center"><div className="max-w-60"><img className="mx-auto size-12 rounded-2xl object-cover shadow-sm" src={zominAiButtonUrl} alt="ZominAI Pegasus" /><p className="mt-4 text-sm font-semibold text-slate-900">Ask about your Drive</p><p className="mt-2 text-xs leading-5 text-slate-500">ZominAI can search and read supported Drive files, inspect databases, and run read-only queries. Results stay with this local model.</p></div></div> : activeSession.messages.map((message, index) => <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`} key={`${message.role}-${index}`}><div className={`max-w-[88%] whitespace-pre-wrap rounded-2xl px-3 py-2.5 text-sm leading-6 ${message.role === "user" ? "rounded-br-md bg-cyan-800 text-white" : "rounded-bl-md border border-slate-200 bg-white text-slate-700"}`}>{message.content}</div></div>)}{sending && <div className="flex justify-start"><div className="inline-flex items-center gap-2 rounded-2xl rounded-bl-md border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-500"><LoaderCircle className="animate-spin" size={15} /> Thinking…</div></div>}</div>
+          <div aria-label="ZominAI context used" className="flex items-center gap-3 border-t border-slate-200 bg-white px-3 py-2">
+            <div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-2 text-[11px] text-slate-500"><span className="truncate">Context used · estimated {zominAiTokenLabel(estimatedContextTokens)} / {zominAiTokenLabel(settings.contextTokens)} tokens</span><span className="shrink-0 font-medium text-slate-600">{contextPercent}%</span></div><div aria-hidden="true" className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full ${contextPercent >= 85 ? "bg-amber-500" : "bg-cyan-600"}`} style={{ width: `${Math.max(2, contextPercent)}%` }} /></div>{activeSession.compactedAt && <p className="mt-1 text-[10px] text-slate-400">Compacted {zominAiTimestamp(activeSession.compactedAt)}</p>}</div>
+            <button aria-label="Compact ZominAI context" className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 px-2 py-1.5 text-[11px] font-semibold text-slate-600 hover:border-cyan-300 hover:text-cyan-800 disabled:cursor-not-allowed disabled:text-slate-300" disabled={!canCompactContext || sending} onClick={compactContext} title={canCompactContext ? "Keep recent messages active and compact earlier context locally" : "Add more messages before compacting context"} type="button"><Minimize2 size={14} /><span className="hidden sm:inline">Compact</span></button>
+          </div>
           <form className="border-t border-slate-200 bg-white p-3" onSubmit={(event) => { event.preventDefault(); void send(); }}><label className="sr-only" htmlFor="zominai-drawer-message">Message ZominAI</label><div className="flex items-end gap-2 rounded-xl border border-slate-300 p-1.5 focus-within:border-cyan-600 focus-within:ring-4 focus-within:ring-cyan-100"><textarea aria-label="Message ZominAI" className="min-h-10 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-slate-400" disabled={sending} id="zominai-drawer-message" onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder="Ask ZominAI…" rows={1} value={draft} /><button aria-label="Send message to ZominAI" className="grid size-9 place-items-center rounded-lg bg-cyan-700 text-white hover:bg-cyan-800 disabled:bg-slate-300" disabled={!draft.trim() || sending} type="submit"><Send size={17} /></button></div></form>
         </section>
       </div>
