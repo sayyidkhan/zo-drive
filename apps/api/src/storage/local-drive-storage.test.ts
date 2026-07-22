@@ -139,9 +139,11 @@ describe("LocalDriveStorage", () => {
     expect(aliceCategories.databases!.bytes).toBeGreaterThan(Buffer.byteLength("alice database"));
     expect(aliceCategories.functions).toMatchObject({ bytes: expect.any(Number), fileCount: 1 });
     expect(aliceCategories["zo-originals"]).toMatchObject({ bytes: expect.any(Number), fileCount: 6 });
+    expect(aliceUsage.fileCount).toBe(0);
     expect(bobCategories.databases).toMatchObject({ bytes: expect.any(Number), fileCount: 2 });
     expect(bobCategories.functions).toMatchObject({ bytes: 0, fileCount: 0 });
     expect(bobCategories["zo-originals"]).toMatchObject({ bytes: expect.any(Number), fileCount: 6 });
+    expect(bobUsage.fileCount).toBe(0);
     expect(aliceUsage.usedBytes).toBe(aliceUsage.categories.reduce((total, category) => total + category.bytes, 0));
     expect(bobUsage.usedBytes).toBe(bobUsage.categories.reduce((total, category) => total + category.bytes, 0));
     expect(aliceUsage.quotaAvailableBytes).toBe(aliceUsage.quotaBytes - aliceUsage.usedBytes);
@@ -218,7 +220,7 @@ describe("LocalDriveStorage", () => {
     const item = await storage.trash({ userId: "alice", key: "Notes/plan.txt" });
     await expect(storage.list({ userId: "alice" })).resolves.toEqual([]);
     await expect(storage.listTrash({ userId: "alice" })).resolves.toMatchObject([{ id: item.id, originalKey: "Notes/plan.txt", starred: true }]);
-    await expect(storage.getUsage({ userId: "alice" })).resolves.toMatchObject({ fileCount: 1, usedBytes: 7, categories: expect.arrayContaining([{ id: "trash", bytes: 7, fileCount: 1 }]) });
+    await expect(storage.getUsage({ userId: "alice" })).resolves.toMatchObject({ fileCount: 0, usedBytes: 7, categories: expect.arrayContaining([{ id: "trash", bytes: 7, fileCount: 1 }]) });
 
     await expect(storage.restoreTrash({ userId: "alice", id: item.id })).resolves.toMatchObject({ key: "Notes/plan.txt", starred: true, contentType: "text/plain" });
     await expect(storage.read({ userId: "alice", key: "Notes/plan.txt" })).resolves.toMatchObject({ starred: true });

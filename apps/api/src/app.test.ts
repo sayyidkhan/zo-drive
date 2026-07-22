@@ -713,7 +713,7 @@ describe("Zo Drive API", () => {
     expect((await app.request("http://localhost/objects", { headers: { authorization: `Bearer ${createdBody.apiKey}` } })).status).toBe(401);
   });
 
-  it("keeps device keys usable when the owner username changes and deletes them with the account", async () => {
+  it("allows device keys to manage database, function, and shared-drive owner routes", async () => {
     const root = await mkdtemp(join(tmpdir(), "zo-drive-api-key-rename-"));
     roots.push(root);
     const sessions = new SessionService("test-session-secret-that-is-more-than-thirty-two-characters");
@@ -729,6 +729,16 @@ describe("Zo Drive API", () => {
     const cookie = registration.headers.get("set-cookie")!;
     const created = await app.request("http://localhost/api-keys", { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ name: "Automation", scopes: ["read", "write"], expiresAt: null }) });
     const { apiKey } = await created.json() as { apiKey: string };
+    const deviceHeaders = { authorization: `Bearer ${apiKey}` };
+
+    expect((await app.request("http://localhost/databases/engines", { headers: deviceHeaders })).status).toBe(200);
+    expect((await app.request("http://localhost/databases/engines/sqlite/install", { method: "POST", headers: deviceHeaders })).status).toBe(200);
+    const database = await app.request("http://localhost/databases", { method: "POST", headers: { ...deviceHeaders, "content-type": "application/json" }, body: JSON.stringify({ name: "CLI metrics", engine: "sqlite" }) });
+    expect(database.status).toBe(201);
+    const databaseBody = await database.json() as { id: string };
+    expect((await app.request(`http://localhost/databases/${databaseBody.id}`, { method: "DELETE", headers: deviceHeaders })).status).toBe(204);
+    expect((await app.request("http://localhost/functions", { headers: deviceHeaders })).status).toBe(200);
+    expect((await app.request("http://localhost/clusters/invitations", { headers: deviceHeaders })).status).toBe(200);
 
     const profile = await app.request("http://localhost/auth/profile", { method: "PATCH", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ username: "drive-owner" }) });
     const renamedCookie = profile.headers.get("set-cookie")!;

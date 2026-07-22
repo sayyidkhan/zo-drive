@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## Unreleased
+
+### Fixed
+
+- Show only current Drive files in the headline count; Trash and internal Zo
+  feature records remain visible in the storage breakdown and quota total.
+
 ## v1.24.6 - 2026-07-22
 
 ### Changed

@@ -1131,12 +1131,10 @@ async function requireBrowserUser(request: Request, auth: NonNullable<CreateAppO
 }
 
 async function requireClusterOwner(request: Request, resolveUserId: UserResolver, auth: CreateAppOptions["auth"]): Promise<string | null> {
-  return auth ? requireBrowserUser(request, auth) : requireUser(request, resolveUserId);
+  return requireUser(request, resolveUserId);
 }
 
 async function requireDatabaseOwner(request: Request, resolveUserId: UserResolver, auth: CreateAppOptions["auth"]): Promise<string | null> {
-  if (request.headers.has("authorization")) return null;
-  if (auth) return requireBrowserUser(request, auth);
   return requireUser(request, resolveUserId);
 }
 

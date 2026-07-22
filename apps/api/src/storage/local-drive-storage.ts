@@ -604,10 +604,9 @@ export class LocalDriveStorage {
     const { availableBytes, maxQuotaBytes, totalBytes } = await this.getFilesystemQuotaBounds();
     const quotaBytes = await this.readQuota(safeUserId);
     const featureBytes = Object.values(featureUsage).reduce((total, usage) => total + usage.bytes, 0);
-    const featureItems = Object.values(featureUsage).reduce((total, usage) => total + usage.fileCount, 0);
     const usedBytes = [...files, ...trash].reduce((total, file) => total + file.size, featureBytes);
     return {
-      fileCount: files.length + trash.length + featureItems,
+      fileCount: files.length,
       usedBytes,
       quotaBytes,
       quotaAvailableBytes: Math.max(0, quotaBytes - usedBytes),

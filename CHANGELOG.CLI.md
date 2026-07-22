@@ -2,6 +2,13 @@
 
 All notable changes to the `zo-drive` command-line tool are recorded here.
 
+## Unreleased
+
+### Fixed
+
+- Make `usage`, `status`, and `health` report current Drive files only, while
+  retaining Trash and internal Zo feature storage in quota totals.
+
 ## v1.3.0 - 2026-07-22
 
 ### Added
