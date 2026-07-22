@@ -38,12 +38,12 @@ describe("Zo Drive API", () => {
     await expect(response.json()).resolves.toEqual({ status: "ok" });
   });
 
-  it("proxies authenticated ZominAI requests to the private Bonsai runtime with a fixed model", async () => {
+  it("lists and selects models loaded by the private ZominAI runtime", async () => {
     const root = await mkdtemp(join(tmpdir(), "zo-drive-zominai-"));
     roots.push(root);
     const runtimeFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      if (input.toString().endsWith("/v1/models")) return new Response(JSON.stringify({ data: [{ id: "Bonsai-8B-Q1_0.gguf" }] }));
-      expect(JSON.parse(String(init?.body))).toMatchObject({ model: "Bonsai-8B-Q1_0.gguf", stream: false });
+      if (input.toString().endsWith("/v1/models")) return new Response(JSON.stringify({ data: [{ id: "Bonsai-8B-Q1_0.gguf" }, { id: "Bonsai-27B-Q4_K_M.gguf" }] }));
+      expect(JSON.parse(String(init?.body))).toMatchObject({ model: "Bonsai-27B-Q4_K_M.gguf", stream: false });
       return new Response(JSON.stringify({ choices: [{ message: { content: "Private answer" } }] }));
     });
     const app = createApp({
@@ -53,10 +53,13 @@ describe("Zo Drive API", () => {
     });
 
     expect((await app.request("http://localhost/zominai/health")).status).toBe(401);
-    await expect((await app.request("http://localhost/zominai/health", { headers: { "x-test-user-id": "alice" } })).json()).resolves.toEqual({ model: "Bonsai-8B-Q1_0.gguf", status: "ready" });
-    const response = await app.request("http://localhost/zominai/chat", { method: "POST", headers: { "content-type": "application/json", "x-test-user-id": "alice" }, body: JSON.stringify({ messages: [{ content: "Summarise my Drive", role: "user" }] }) });
+    await expect((await app.request("http://localhost/zominai/health", { headers: { "x-test-user-id": "alice" } })).json()).resolves.toEqual({ model: "Bonsai-8B-Q1_0.gguf", models: ["Bonsai-8B-Q1_0.gguf", "Bonsai-27B-Q4_K_M.gguf"], status: "ready" });
+    const response = await app.request("http://localhost/zominai/chat", { method: "POST", headers: { "content-type": "application/json", "x-test-user-id": "alice" }, body: JSON.stringify({ messages: [{ content: "Summarise my Drive", role: "user" }], model: "Bonsai-27B-Q4_K_M.gguf" }) });
     await expect(response.json()).resolves.toMatchObject({ choices: [{ message: { content: "Private answer" } }] });
-    expect(runtimeFetch).toHaveBeenCalledTimes(2);
+    const unavailableResponse = await app.request("http://localhost/zominai/chat", { method: "POST", headers: { "content-type": "application/json", "x-test-user-id": "alice" }, body: JSON.stringify({ messages: [{ content: "Use another model", role: "user" }], model: "Not-Loaded.gguf" }) });
+    expect(unavailableResponse.status).toBe(400);
+    await expect(unavailableResponse.json()).resolves.toMatchObject({ error: { code: "ZOMINAI_MODEL_UNAVAILABLE" } });
+    expect(runtimeFetch).toHaveBeenCalledTimes(4);
   });
 
   it("streams authenticated ZominAI responses without buffering them", async () => {

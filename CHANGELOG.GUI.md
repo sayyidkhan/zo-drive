@@ -2,6 +2,14 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.32.0 - 2026-07-22
+
+### Added
+
+- Replaced the ZominAI chat subtitle with a model dropdown populated from the
+  models currently loaded by the private runtime.
+- Saved the selected model in this browser and applied it to subsequent messages.
+
 ## v1.31.0 - 2026-07-22
 
 ### Added

@@ -3,6 +3,15 @@
 All notable changes to ZominAI are recorded here. ZominAI follows its own
 semantic-versioned release track, independent of the Zo Drive GUI and CLI.
 
+## v1.5.0 - 2026-07-22
+
+### Added
+
+- Added runtime-backed model discovery and a persistent model selector in the
+  chat header.
+- Allowed each chat request to use any model confirmed as loaded by the private
+  ZominAI runtime, while rejecting unavailable model names.
+
 ## v1.4.0 - 2026-07-22
 
 ### Added

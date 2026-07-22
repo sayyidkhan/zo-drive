@@ -192,6 +192,7 @@ const zominAiChatSchema = z.object({
       type: z.literal("function")
     })).max(6).optional()
   })).min(1).max(30),
+  model: z.string().trim().min(1).max(256).optional(),
   stream: z.boolean().optional(),
   tool_choice: z.literal("auto").optional(),
   tools: z.array(z.unknown()).max(10).optional()
@@ -269,19 +270,24 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     const runtime = new URL(zominAi.endpoint);
     const runtimeFetch = zominAi.fetch ?? fetch;
     const runtimeUrl = (path: string) => new URL(path, runtime).toString();
+    const listRuntimeModels = async (signal: AbortSignal): Promise<string[]> => {
+      const response = await runtimeFetch(runtimeUrl("/v1/models"), { headers: { Accept: "application/json" }, signal });
+      if (!response.ok) throw new Error("ZominAI model catalogue is unavailable");
+      const body = await response.json() as { data?: Array<{ id?: unknown }> };
+      return [...new Set((body.data ?? []).flatMap((item) => typeof item.id === "string" && item.id.trim() ? [item.id] : []))];
+    };
 
     app.get("/zominai/health", async (context) => {
       if (!(await requireUser(context.req.raw, resolveReadUser))) return unauthorized(context);
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 4_000);
       try {
-        const response = await runtimeFetch(runtimeUrl("/v1/models"), { headers: { Accept: "application/json" }, signal: controller.signal });
-        if (!response.ok) return context.json({ model: zominAi.model, status: "unavailable" }, 503);
-        const body = await response.json() as { data?: Array<{ id?: unknown }> };
-        const ready = (body.data ?? []).some((item) => item.id === zominAi.model || (typeof item.id === "string" && /bonsai-8b/i.test(item.id)));
-        return context.json({ model: zominAi.model, status: ready ? "ready" : "unavailable" }, ready ? 200 : 503);
+        const models = await listRuntimeModels(controller.signal);
+        const ready = models.length > 0;
+        const model = models.includes(zominAi.model) ? zominAi.model : models[0] ?? zominAi.model;
+        return context.json({ model, models, status: ready ? "ready" : "unavailable" }, ready ? 200 : 503);
       } catch {
-        return context.json({ model: zominAi.model, status: "unavailable" }, 503);
+        return context.json({ model: zominAi.model, models: [], status: "unavailable" }, 503);
       } finally {
         clearTimeout(timeout);
       }
@@ -300,8 +306,16 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
         context.req.raw.signal.removeEventListener("abort", abort);
       };
       try {
+        const selectedModel = parsed.data.model ?? zominAi.model;
+        if (selectedModel !== zominAi.model) {
+          const models = await listRuntimeModels(controller.signal);
+          if (!models.includes(selectedModel)) {
+            cleanup();
+            return context.json({ error: { code: "ZOMINAI_MODEL_UNAVAILABLE", message: "Select a model currently loaded by the private ZominAI runtime." } }, 400);
+          }
+        }
         const response = await runtimeFetch(runtimeUrl("/v1/chat/completions"), {
-          body: JSON.stringify({ ...parsed.data, model: zominAi.model, stream: parsed.data.stream ?? false }),
+          body: JSON.stringify({ ...parsed.data, model: selectedModel, stream: parsed.data.stream ?? false }),
           headers: { Accept: parsed.data.stream ? "text/event-stream" : "application/json", "Content-Type": "application/json" },
           method: "POST",
           signal: controller.signal
