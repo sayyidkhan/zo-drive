@@ -2,6 +2,14 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.23.8 - 2026-07-22
+
+### Fixed
+
+- Kept file actions visible in Drive, Starred, Recent, and Zo Paste lists.
+- Moved Trash restore and permanent-delete controls into a dedicated,
+  right-aligned Actions column.
+
 ## v1.23.7 - 2026-07-22
 
 ### Changed

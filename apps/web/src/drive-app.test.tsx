@@ -42,9 +42,9 @@ describe("DriveApp", () => {
 
       expect(screen.getByRole("heading", { name: "Manage files in your private Drive." })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Share files on your terms" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 1.23.7" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 1.23.8" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI changelog version 1.23.7" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
+      expect(screen.getByRole("link", { name: "GUI changelog version 1.23.8" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
       expect(screen.getByText((_, element) => element?.tagName === "H3" && element.textContent === "GUI v1.17.0")).toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
@@ -79,7 +79,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.23.7")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.23.8")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();
@@ -181,7 +181,7 @@ describe("DriveApp", () => {
       getUsage: vi.fn().mockResolvedValue({ fileCount: 28, usedBytes: 15, quotaBytes: 100 * 1024 * 1024 * 1024, quotaAvailableBytes: 100 * 1024 * 1024 * 1024 - 15, minQuotaBytes: 1024 * 1024 * 1024, maxQuotaBytes: Math.floor(512 * 1024 * 1024 * 1024 * 0.8), totalBytes: 512 * 1024 * 1024 * 1024, availableBytes: 512 * 1024 * 1024 * 1024 - 200, systemUsedBytes: 200, categories: [{ id: "photos", bytes: 10, fileCount: 1 }, { id: "documents", bytes: 5, fileCount: 1 }, { id: "videos", bytes: 0, fileCount: 0 }, { id: "audio", bytes: 0, fileCount: 0 }, { id: "archives", bytes: 0, fileCount: 0 }, { id: "other", bytes: 0, fileCount: 0 }, { id: "trash", bytes: 0, fileCount: 4 }, { id: "databases", bytes: 0, fileCount: 8 }, { id: "functions", bytes: 0, fileCount: 3 }, { id: "zo-originals", bytes: 0, fileCount: 11 }] }),
       listFolders: vi.fn().mockResolvedValue([{ key: "Notes", name: "Notes", updatedAt: "2026-01-01T00:00:00.000Z" }]),
       listStarred: vi.fn().mockResolvedValue([{ key: "photo.jpg", name: "photo.jpg", size: 10, contentType: "image/jpeg", updatedAt: "2026-01-01T00:00:00.000Z", starred: true }]),
-      listTrash: vi.fn().mockResolvedValue([]),
+      listTrash: vi.fn().mockResolvedValue([{ id: "trash-123", originalKey: "Archive/report.pdf", name: "report.pdf", size: 25, contentType: "application/pdf", starred: false, trashedAt: "2026-01-01T00:00:00.000Z", expiresAt: "2026-01-31T00:00:00.000Z" }]),
       createFolder: vi.fn(),
       createNativeFile: vi.fn().mockResolvedValue({ key: "Strategy", name: "Strategy", size: 1, contentType: "application/vnd.zo.document+json", nativeType: "document", updatedAt: "2026-01-01T00:00:00.000Z", starred: false }),
       saveNativeFile: vi.fn().mockResolvedValue({ key: "Strategy", name: "Strategy", size: 1, contentType: "application/vnd.zo.document+json", nativeType: "document", updatedAt: "2026-01-01T00:00:00.000Z", starred: false }),
@@ -271,6 +271,9 @@ describe("DriveApp", () => {
     expect(screen.getByTestId("drive-workspace")).toHaveClass("h-dvh", "overflow-hidden");
     expect(document.getElementById("drive-navigation")).toHaveClass("md:overflow-hidden");
     expect(screen.getByTestId("storage-card")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add photo.jpg to Starred" })).not.toHaveClass("md:opacity-0");
+    expect(screen.getByRole("button", { name: "Share photo.jpg" })).not.toHaveClass("md:opacity-0");
+    expect(screen.getByRole("button", { name: "Move photo.jpg to Trash" })).not.toHaveClass("md:opacity-0");
     fireEvent.click(screen.getByRole("button", { name: "Collapse navigation" }));
     expect(screen.getByRole("button", { name: "New" })).toHaveAttribute("title", "New");
     expect(screen.getByRole("button", { name: "My Drive" })).toHaveAttribute("title", "My Drive");
@@ -519,6 +522,7 @@ describe("DriveApp", () => {
     expect(await screen.findByText("remote-plan.pdf")).toBeInTheDocument();
     expect(screen.getByText("Shared by alice · Read only")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Recent" }));
+    expect(await screen.findByRole("button", { name: "Share photo.jpg" })).not.toHaveClass("md:opacity-0");
     fireEvent.change(screen.getByLabelText("Recent file type"), { target: { value: "image" } });
     await waitFor(() => expect(client.list).toHaveBeenLastCalledWith(expect.objectContaining({ type: "image" })));
     fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
@@ -582,7 +586,10 @@ describe("DriveApp", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Trash" }));
     expect(await screen.findByRole("heading", { name: "Trash" })).toBeInTheDocument();
-    expect(await screen.findByText("Trash is empty")).toBeInTheDocument();
+    await waitFor(() => expect(client.listTrash).toHaveBeenCalled());
+    expect(await screen.findByRole("button", { name: "Restore report.pdf" })).toHaveClass("text-slate-400");
+    expect(screen.getByRole("button", { name: "Restore report.pdf" }).parentElement).toHaveClass("justify-end");
+    expect(screen.getByRole("button", { name: "Permanently delete report.pdf" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText("Account menu"));
     fireEvent.click(screen.getByRole("button", { name: "Profile & controls" }));

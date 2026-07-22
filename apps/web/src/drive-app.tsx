@@ -263,10 +263,15 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.23.7";
+const GUI_VERSION = "1.23.8";
 const CLI_VERSION = "1.2.1";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.23.8",
+    date: "2026-07-22",
+    changes: ["Kept file actions visible in Drive, Starred, Recent, and Zo Paste lists, and moved Trash restore and delete actions into a dedicated right-aligned column."]
+  },
   {
     version: "v1.23.7",
     date: "2026-07-22",
