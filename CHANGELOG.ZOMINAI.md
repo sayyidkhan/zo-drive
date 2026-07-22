@@ -3,6 +3,17 @@
 All notable changes to ZominAI are recorded here. ZominAI follows its own
 semantic-versioned release track, independent of the Zo Drive GUI and CLI.
 
+## v1.6.0 - 2026-07-22
+
+### Added
+
+- Added bounded browser-local system instructions that customise response style
+  without overriding ZominAI's privacy, truthfulness, or read-only tool rules.
+- Added accurate tokens-per-second metrics from the local llama runtime beside
+  each completed response's elapsed time.
+- Made current Zo Drive file counts reliably available through deterministic,
+  authenticated read-only tool routing. MCP is not required for these tools.
+
 ## v1.5.0 - 2026-07-22
 
 ### Added

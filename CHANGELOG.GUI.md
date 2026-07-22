@@ -2,6 +2,20 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.33.0 - 2026-07-22
+
+### Added
+
+- Added a browser-local ZominAI system-instructions editor with a 2,000-character
+  limit, visible usage counter, and one-click default restoration.
+- Added runtime-reported token generation speed beside each completed response's
+  elapsed time.
+
+### Fixed
+
+- Routed file-count questions through the authenticated storage tool so ZominAI
+  can answer with the current Zo Drive count and clearly state its scope.
+
 ## v1.32.0 - 2026-07-22
 
 ### Added

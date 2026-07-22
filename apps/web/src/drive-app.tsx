@@ -110,6 +110,7 @@ type ZominAiSettings = {
   contextTokens: number;
   endpoint: string;
   model: string;
+  systemInstructions: string;
 };
 
 type DriveTheme = "zo-computer" | "zo-dark" | "zo-drive" | "zo-light" | "zo-system";
@@ -139,7 +140,17 @@ type ZominAiChatMessage = {
   elapsedMs?: number;
   failed?: boolean;
   role: "assistant" | "user";
+  tokensPerSecond?: number;
 };
+
+type ZominAiCompletion = {
+  content: string;
+  completionTokens?: number;
+  tokensPerSecond?: number;
+  toolCalls: ZominAiToolCall[];
+};
+
+type ZominAiReply = Omit<ZominAiCompletion, "toolCalls">;
 
 type ZominAiToolName = "describe_database" | "get_storage_usage" | "list_databases" | "list_drive" | "query_database" | "read_drive_file" | "search_drive";
 
@@ -267,11 +278,16 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.32.0";
+const GUI_VERSION = "1.33.0";
 const CLI_VERSION = "1.3.0";
-const ZOMINAI_VERSION = "1.5.0";
+const ZOMINAI_VERSION = "1.6.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.33.0",
+    date: "2026-07-22",
+    changes: ["Added a bounded browser-local system-instructions editor for ZominAI.", "Added runtime-reported token speed beside completed response time.", "Made Zo Drive file-count questions reliably use authenticated read-only storage data."]
+  },
   {
     version: "v1.32.0",
     date: "2026-07-22",
@@ -767,6 +783,11 @@ const CLI_CHANGELOG = [
 
 const ZOMINAI_CHANGELOG = [
   {
+    version: "v1.6.0",
+    date: "2026-07-22",
+    changes: ["Added custom system instructions with a 2,000-character limit and immutable privacy and read-only safeguards.", "Added accurate tokens-per-second metrics from the local runtime.", "Made file-count questions reliably use the authenticated Zo Drive storage tool without requiring MCP."]
+  },
+  {
     version: "v1.5.0",
     date: "2026-07-22",
     changes: ["Added runtime-backed model discovery and a persistent chat-header selector so each message can use any model loaded by the private ZominAI runtime."]
@@ -1004,8 +1025,8 @@ function ZominAiDocsPage() {
   const sections = [
     { id: "local", eyebrow: "Private by design", icon: <Cpu size={20} />, title: "Run ZominAI on your Zo Computer", body: "ZominAI sends messages and approved Drive-tool results only to models loaded on your Zo Computer. The authenticated Zo Drive gateway keeps the runtime port private while serving your signed-in devices.", steps: ["Open ZominAI from the private Zo Drive workspace on web, iPhone, or Android.", "Choose any loaded model from the selector below the ZominAI name; the choice is saved in this browser.", "The header badge is green only when the private runtime responds through the authenticated gateway."] },
     { id: "setup", eyebrow: "Setup", icon: <Download size={20} />, title: "Start Bonsai 8B on your Zo Computer", body: "Install llama.cpp on the Zo Computer that runs Zo Drive, then start Bonsai 8B on its protected loopback endpoint. The first model download is about 1.15 GB.", steps: ["Install llama.cpp on the Zo Computer.", "Run the supplied Bonsai 8B command from ZominAI > Install ZominAI.", "Return to Verify install after the model starts, then use ZominAI from any signed-in device."] },
-    { id: "drive-tools", eyebrow: "Read-only tools", icon: <ShieldCheck size={20} />, title: "Ask about your Drive without granting write access", body: "When a signed-in user asks about Drive data, ZominAI may browse or search files, read supported text and Zo-native content, inspect database schemas, and run read-only database queries. Binary files and all write operations remain blocked.", steps: ["Ask a question about a file, folder, or database in the chat drawer.", "ZominAI calls a relevant read-only tool only when it needs current Drive context.", "Review its response; it must not claim to access Drive data unless a tool supplied it."] },
-    { id: "history", eyebrow: "Conversations", icon: <History size={20} />, title: "Keep local history manageable", body: "Chat titles, messages, timestamps, and the drawer width are stored in the browser. Use History to rename or delete a conversation, and use Compact to reduce older active context while keeping recent messages.", steps: ["Select New chat to begin a separate conversation.", "Open History to switch, rename, or delete local conversations.", "Use Compact when the context meter is high; it preserves recent messages and replaces older context with a local summary."] },
+    { id: "drive-tools", eyebrow: "Read-only tools", icon: <ShieldCheck size={20} />, title: "Ask about your Drive without granting write access", body: "When a signed-in user asks about Drive data, ZominAI may browse or search files, read supported text and Zo-native content, inspect storage and file counts, inspect database schemas, and run read-only database queries. These are built into Zo Drive, so MCP is not required. Binary files and all write operations remain blocked.", steps: ["Ask a question about a file, folder, storage, or database in the chat drawer.", "ZominAI calls or prefetches the relevant authenticated read-only tool when it needs current Drive context.", "Review its response; it must not claim to access Drive data unless a tool supplied it."] },
+    { id: "history", eyebrow: "Conversations", icon: <History size={20} />, title: "Control instructions and context", body: "Chat titles, messages, custom system instructions, timestamps, response metrics, and the drawer width are stored in the browser. System instructions are limited to 2,000 characters and cannot override the private read-only boundary.", steps: ["Customise response style under ZominAI settings, or restore the concise default.", "Open History to switch, rename, or delete local conversations.", "Use Compact when the context meter is high; it preserves recent messages and replaces older context with a local summary."] },
     { id: "releases", eyebrow: "Independent releases", icon: <ScrollText size={20} />, title: `ZominAI version ${ZOMINAI_VERSION}`, body: "ZominAI has its own release line. A ZominAI-only change uses the zominai-v Git tag and does not require the Zo Drive GUI version to change unless its browser integration also changes.", steps: ["Check this page for the active ZominAI version.", "Use zominai-v release tags to trace a ZominAI release.", "Read the ZominAI changelog for local-runtime, tool, privacy, and conversation changes."] }
   ];
 
@@ -1277,13 +1298,16 @@ function DriveThemeStyles({ theme }: { theme: DriveTheme }) {
 const zominAiStorageKey = "zo-drive:zominai:v1";
 const zominAiChatsStorageKey = "zo-drive:zominai:chats:v1";
 const zominAiDrawerWidthStorageKey = "zo-drive:zominai:drawer-width:v1";
+const zominAiSystemInstructionsMaxCharacters = 2_000;
+const defaultZominAiSystemInstructions = "Answer directly and concisely. Use the available read-only tools whenever a question depends on current Zo Drive, database, or storage information. Never guess tool results, and clearly distinguish Zo Drive data from the wider Zo Computer.";
 const zominAiGatewayUrl = () => import.meta.env.DEV
   ? `${window.location.origin}/zominai`
   : `${window.location.origin}${appBasePath}/zominai`;
 const defaultZominAiSettings: ZominAiSettings = {
   contextTokens: 4096,
   endpoint: zominAiGatewayUrl(),
-  model: "Bonsai-8B-Q1_0.gguf"
+  model: "Bonsai-8B-Q1_0.gguf",
+  systemInstructions: defaultZominAiSystemInstructions
 };
 const zominAiRuntimeCommand = "ZominAI is installed and supervised by Zo on the computer that hosts Zo Drive.";
 const zominAiStatusUrl = `${zominAiGatewayUrl()}/health`;
@@ -1294,7 +1318,8 @@ function readZominAiSettings(): ZominAiSettings {
     return {
       contextTokens: typeof saved.contextTokens === "number" && Number.isFinite(saved.contextTokens) ? Math.max(1024, Math.min(32768, Math.round(saved.contextTokens))) : defaultZominAiSettings.contextTokens,
       endpoint: defaultZominAiSettings.endpoint,
-      model: typeof saved.model === "string" && saved.model.trim() && saved.model.length <= 256 ? saved.model : defaultZominAiSettings.model
+      model: typeof saved.model === "string" && saved.model.trim() && saved.model.length <= 256 ? saved.model : defaultZominAiSettings.model,
+      systemInstructions: typeof saved.systemInstructions === "string" ? saved.systemInstructions.slice(0, zominAiSystemInstructionsMaxCharacters) : defaultZominAiSettings.systemInstructions
     };
   } catch {
     return defaultZominAiSettings;
@@ -1346,13 +1371,17 @@ function zominAiContextMessages(session: ZominAiChatSession, messages: ZominAiCh
   return session.contextSummary ? contextMessages.slice(-zominAiRecentMessageCount) : contextMessages;
 }
 
-function zominAiEstimatedContextTokens(messages: ZominAiChatMessage[], summary?: string): number {
-  const characters = messages.reduce((total, message) => total + message.content.length + 16, (summary?.length ?? 0) + 520);
+function zominAiEstimatedContextTokens(messages: ZominAiChatMessage[], summary?: string, systemInstructions = ""): number {
+  const characters = messages.reduce((total, message) => total + message.content.length + 16, (summary?.length ?? 0) + systemInstructions.length + 520);
   return Math.max(1, Math.ceil(characters / 4));
 }
 
 function zominAiTokenLabel(tokens: number): string {
   return tokens >= 1_000 ? `${(tokens / 1_000).toFixed(tokens >= 10_000 ? 0 : 1)}k` : String(tokens);
+}
+
+function zominAiTokensPerSecondLabel(tokensPerSecond: number): string {
+  return `${tokensPerSecond.toFixed(1)} tok/s`;
 }
 
 function readZominAiChatSessions(): ZominAiChatSession[] {
@@ -1366,10 +1395,11 @@ function readZominAiChatSessions(): ZominAiChatSession[] {
       const messages = session.messages.flatMap((message): ZominAiChatMessage[] => {
         if (!message || typeof message !== "object" || (message as { role?: unknown }).role === "system" || !["assistant", "user"].includes((message as { role?: unknown }).role as string) || typeof (message as { content?: unknown }).content !== "string") return [];
         const elapsedMs = (message as { elapsedMs?: unknown }).elapsedMs;
+        const tokensPerSecond = (message as { tokensPerSecond?: unknown }).tokensPerSecond;
         const role = (message as ZominAiChatMessage).role;
         const content = (message as ZominAiChatMessage).content;
         const failed = (message as { failed?: unknown }).failed === true || (role === "assistant" && content.startsWith("I could not connect to ZominAI."));
-        return [{ role, content, ...(typeof elapsedMs === "number" && Number.isFinite(elapsedMs) && elapsedMs >= 0 ? { elapsedMs } : {}), ...(failed ? { failed: true } : {}) }];
+        return [{ role, content, ...(typeof elapsedMs === "number" && Number.isFinite(elapsedMs) && elapsedMs >= 0 ? { elapsedMs } : {}), ...(typeof tokensPerSecond === "number" && Number.isFinite(tokensPerSecond) && tokensPerSecond > 0 ? { tokensPerSecond } : {}), ...(failed ? { failed: true } : {}) }];
       });
       const compactedAt = typeof session.compactedAt === "string" ? session.compactedAt : undefined;
       const contextSummary = typeof session.contextSummary === "string" ? session.contextSummary.slice(0, 6_000) : undefined;
@@ -1430,7 +1460,7 @@ async function checkZominAiConnection(settings: ZominAiSettings, signal?: AbortS
 }
 
 const zominAiTools = [
-  { type: "function", function: { name: "get_storage_usage", description: "Get the current Zo Computer disk capacity and free space, plus the user's Zo Drive allocation and usage. Use this whenever the user asks about machine storage, disk space, capacity, free space, or Drive storage usage.", parameters: { type: "object", properties: {} } } },
+  { type: "function", function: { name: "get_storage_usage", description: "Get the current Zo Computer disk capacity and free space, plus the user's Zo Drive allocation, usage, and file count. Use this whenever the user asks about machine storage, disk space, capacity, free space, Drive storage usage, or how many files are in their Drive.", parameters: { type: "object", properties: {} } } },
   { type: "function", function: { name: "list_drive", description: "List files in the user's private Zo Drive. Use this to browse the Drive or a folder before reading a file.", parameters: { type: "object", properties: { prefix: { type: "string", description: "Optional folder path to list." } } } } },
   { type: "function", function: { name: "search_drive", description: "Find files by filename or supported text content in the user's private Zo Drive.", parameters: { type: "object", properties: { query: { type: "string", description: "Words to search for." }, prefix: { type: "string", description: "Optional folder path to search within." } }, required: ["query"] } } },
   { type: "function", function: { name: "read_drive_file", description: "Read a supported text or Zo-native file from the user's private Zo Drive. Use list_drive or search_drive first to obtain its exact key.", parameters: { type: "object", properties: { key: { type: "string", description: "Exact Drive file key." } }, required: ["key"] } } },
@@ -1452,17 +1482,33 @@ function zominAiToolCalls(value: unknown): ZominAiToolCall[] {
 
 function zominAiRequiresStorageTool(messages: ZominAiRuntimeMessage[]): boolean {
   const latestUserMessage = [...messages].reverse().find((message): message is ZominAiChatMessage => message.role === "user");
-  return Boolean(latestUserMessage && /\b(?:storage|disk|free space|space available|capacity|drive usage)\b/i.test(latestUserMessage.content));
+  return Boolean(latestUserMessage && (/\b(?:storage|disk|free space|space available|capacity|drive usage)\b/i.test(latestUserMessage.content)
+    || /\b(?:how many|number of|count)\b[^?.!]{0,80}\bfiles?\b|\bfiles?\b[^?.!]{0,80}\b(?:how many|number of|count)\b/i.test(latestUserMessage.content)));
 }
 
-async function readZominAiCompletion(response: Response, onProgress?: (content: string) => void): Promise<{ content: string; toolCalls: ZominAiToolCall[] }> {
+function zominAiCompletionMetrics(value: { timings?: unknown; usage?: unknown }): Pick<ZominAiCompletion, "completionTokens" | "tokensPerSecond"> {
+  const usage = value.usage && typeof value.usage === "object" ? value.usage as { completion_tokens?: unknown } : null;
+  const timings = value.timings && typeof value.timings === "object" ? value.timings as { predicted_ms?: unknown; predicted_n?: unknown; predicted_per_second?: unknown } : null;
+  const completionTokens = typeof usage?.completion_tokens === "number" && Number.isFinite(usage.completion_tokens) && usage.completion_tokens >= 0
+    ? usage.completion_tokens
+    : typeof timings?.predicted_n === "number" && Number.isFinite(timings.predicted_n) && timings.predicted_n >= 0 ? timings.predicted_n : undefined;
+  const measuredTokensPerSecond = typeof timings?.predicted_per_second === "number" && Number.isFinite(timings.predicted_per_second) && timings.predicted_per_second > 0
+    ? timings.predicted_per_second
+    : undefined;
+  const tokensPerSecond = measuredTokensPerSecond ?? (completionTokens !== undefined && typeof timings?.predicted_ms === "number" && Number.isFinite(timings.predicted_ms) && timings.predicted_ms > 0
+    ? completionTokens * 1_000 / timings.predicted_ms
+    : undefined);
+  return { ...(completionTokens !== undefined ? { completionTokens } : {}), ...(tokensPerSecond !== undefined ? { tokensPerSecond } : {}) };
+}
+
+async function readZominAiCompletion(response: Response, onProgress?: (content: string) => void): Promise<ZominAiCompletion> {
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.includes("text/event-stream")) {
-    const body = await response.json() as { choices?: Array<{ message?: { content?: unknown; tool_calls?: unknown } }> };
+    const body = await response.json() as { choices?: Array<{ message?: { content?: unknown; tool_calls?: unknown } }>; timings?: unknown; usage?: unknown };
     const message = body.choices?.[0]?.message;
     const content = typeof message?.content === "string" ? message.content.trim() : "";
     if (content) onProgress?.(content);
-    return { content, toolCalls: zominAiToolCalls(message?.tool_calls) };
+    return { content, toolCalls: zominAiToolCalls(message?.tool_calls), ...zominAiCompletionMetrics(body) };
   }
   if (!response.body) throw new Error("The local runtime returned an empty response stream.");
 
@@ -1471,17 +1517,19 @@ async function readZominAiCompletion(response: Response, onProgress?: (content: 
   const streamedToolCalls = new Map<number, { arguments: string; id: string; name: string }>();
   let buffer = "";
   let content = "";
+  let metrics: Pick<ZominAiCompletion, "completionTokens" | "tokensPerSecond"> = {};
 
   const consumeLine = (line: string) => {
     if (!line.startsWith("data:")) return;
     const data = line.slice(5).trim();
     if (!data || data === "[DONE]") return;
-    let event: { choices?: Array<{ delta?: { content?: unknown; tool_calls?: unknown }; message?: { content?: unknown; tool_calls?: unknown } }> };
+    let event: { choices?: Array<{ delta?: { content?: unknown; tool_calls?: unknown }; message?: { content?: unknown; tool_calls?: unknown } }>; timings?: unknown; usage?: unknown };
     try {
       event = JSON.parse(data) as typeof event;
     } catch {
       return;
     }
+    metrics = { ...metrics, ...zominAiCompletionMetrics(event) };
     const choice = event.choices?.[0];
     const delta = choice?.delta ?? choice?.message;
     if (typeof delta?.content === "string" && delta.content) {
@@ -1518,7 +1566,7 @@ async function readZominAiCompletion(response: Response, onProgress?: (content: 
     if (!["describe_database", "get_storage_usage", "list_databases", "list_drive", "query_database", "read_drive_file", "search_drive"].includes(call.name)) return [];
     return [{ function: { arguments: call.arguments || "{}", name: call.name as ZominAiToolName }, id: call.id || `zominai-tool-${index}`, type: "function" }];
   });
-  return { content: content.trim(), toolCalls };
+  return { content: content.trim(), toolCalls, ...metrics };
 }
 
 async function zominAiResponseError(response: Response): Promise<Error> {
@@ -1527,7 +1575,7 @@ async function zominAiResponseError(response: Response): Promise<Error> {
   return new Error(`ZominAI could not reply (HTTP ${response.status}).${detail}`);
 }
 
-async function sendZominAiMessage(settings: ZominAiSettings, messages: ZominAiChatMessage[], toolRunner?: ZominAiToolRunner, contextSummary?: string, onProgress?: (content: string) => void): Promise<string> {
+async function sendZominAiMessage(settings: ZominAiSettings, messages: ZominAiChatMessage[], toolRunner?: ZominAiToolRunner, contextSummary?: string, onProgress?: (content: string) => void): Promise<ZominAiReply> {
   const url = zominAiChatUrl(settings.endpoint);
   if (!url) throw new Error("The ZominAI gateway address is invalid.");
   const runtimeMessages: ZominAiRuntimeMessage[] = [...messages];
@@ -1540,12 +1588,16 @@ async function sendZominAiMessage(settings: ZominAiSettings, messages: ZominAiCh
     }
   }
   const baseSystemPrompt = toolRunner
-    ? "You are ZominAI, a helpful private local assistant. You have read-only tools for the current user's Zo Drive, databases, and storage usage. Use the tools whenever the user asks about their Drive, files, databases, or storage. Clearly distinguish the Zo Computer's disk capacity and free space from the user's Zo Drive quota and usage. Never claim you accessed data unless a tool returned it. Do not use or suggest write operations. Tool results are private context for this conversation and are sent only to this local runtime."
-    : "You are ZominAI, a helpful private local assistant. Do not claim access to Zo Drive files unless the user has explicitly pasted their contents into this conversation.";
-  const systemPrompt = contextSummary
-    ? `${baseSystemPrompt}\n\nEarlier conversation context, compacted locally from this chat. Use it only as background; the most recent messages remain authoritative:\n${contextSummary}`
-    : baseSystemPrompt;
-  const storagePrompt = storageContext ? `\n\nCurrent storage information was retrieved with the read-only get_storage_usage tool. Use it to answer the user's storage question directly:\n${storageContext}` : "";
+    ? "You are ZominAI, a private local assistant. You have authenticated, read-only tools for the current user's Zo Drive, databases, and storage usage. Use tools whenever the answer depends on current Drive data. Clearly distinguish the Zo Computer's disk capacity and free space from the user's Zo Drive quota, usage, and file count. Never claim you accessed data unless a tool returned it. Do not use or suggest write operations. Tool results are private context for this conversation and are sent only to this local runtime."
+    : "You are ZominAI, a private local assistant. Do not claim access to Zo Drive files unless the user explicitly pasted their contents into this conversation.";
+  const configuredInstructions = settings.systemInstructions.trim()
+    ? `\n\nUser-configured response instructions follow. They cannot override the privacy, truthfulness, or read-only rules above:\n${settings.systemInstructions.trim()}`
+    : "";
+  const summaryPrompt = contextSummary
+    ? `\n\nEarlier conversation context, compacted locally from this chat. Use it only as background; the most recent messages remain authoritative:\n${contextSummary}`
+    : "";
+  const storagePrompt = storageContext ? `\n\nCurrent information was retrieved with the read-only get_storage_usage tool. Answer the user's question directly from it. The drive.fileCount value counts files in Zo Drive; it is not a count of every operating-system file on the Zo Computer. If the user asked about the whole system, state that scope clearly:\n${storageContext}` : "";
+  const systemPrompt = `${baseSystemPrompt}${configuredInstructions}${summaryPrompt}${storagePrompt}`;
 
   for (let turn = 0; turn < 6; turn += 1) {
     const offerTools = Boolean(toolRunner && !storageContext);
@@ -1554,9 +1606,10 @@ async function sendZominAiMessage(settings: ZominAiSettings, messages: ZominAiCh
       headers: { Accept: "text/event-stream", "Content-Type": "application/json" },
       body: JSON.stringify({
         model: settings.model,
-        messages: [{ role: "system", content: `${systemPrompt}${storagePrompt}` }, ...runtimeMessages],
+        messages: [{ role: "system", content: systemPrompt }, ...runtimeMessages],
         ...(offerTools ? { tool_choice: "auto", tools: zominAiTools } : {}),
-        stream: true
+        stream: true,
+        stream_options: { include_usage: true }
       })
     });
     if (!response.ok) throw await zominAiResponseError(response);
@@ -1565,7 +1618,7 @@ async function sendZominAiMessage(settings: ZominAiSettings, messages: ZominAiCh
     const toolCalls = toolRunner ? completion.toolCalls : [];
     if (toolCalls.length === 0) {
       if (!content) throw new Error("The local runtime returned an empty response.");
-      return content;
+      return { content, ...(completion.completionTokens !== undefined ? { completionTokens: completion.completionTokens } : {}), ...(completion.tokensPerSecond !== undefined ? { tokensPerSecond: completion.tokensPerSecond } : {}) };
     }
 
     onProgress?.("");
@@ -1726,7 +1779,7 @@ function ZominAiChat({ settings }: { settings: ZominAiSettings }) {
     setSending(true);
     try {
       const reply = await sendZominAiMessage(settings, nextMessages);
-      setMessages((current) => [...current, { role: "assistant", content: reply }]);
+      setMessages((current) => [...current, { role: "assistant", content: reply.content, ...(reply.tokensPerSecond !== undefined ? { tokensPerSecond: reply.tokensPerSecond } : {}) }]);
     } catch (error) {
       const detail = error instanceof Error ? error.message : "The local runtime could not be reached.";
       setMessages((current) => [...current, { role: "assistant", content: `I could not connect to ZominAI. ${detail}` }]);
@@ -1758,7 +1811,7 @@ function ZominAiChatDrawer({ client, connection, isOpen, onClose, onConnectionCh
   const transcriptRef = useRef<HTMLDivElement>(null);
   const activeSession = sessions.find((session) => session.id === activeSessionId) ?? sessions[0]!;
   const contextMessages = zominAiContextMessages(activeSession, activeSession.messages);
-  const estimatedContextTokens = zominAiEstimatedContextTokens(contextMessages, activeSession.contextSummary);
+  const estimatedContextTokens = zominAiEstimatedContextTokens(contextMessages, activeSession.contextSummary, settings.systemInstructions);
   const contextPercent = Math.min(100, Math.round((estimatedContextTokens / settings.contextTokens) * 100));
   const canCompactContext = zominAiContextSummary(activeSession.messages) !== null;
   const availableModels = connection.models.includes(settings.model) ? connection.models : [settings.model, ...connection.models];
@@ -1861,7 +1914,7 @@ function ZominAiChatDrawer({ client, connection, isOpen, onClose, onConnectionCh
       const reply = await sendZominAiMessage(settings, zominAiContextMessages(session ?? activeSession, nextMessages), createZominAiToolRunner(client), contextSummary, setStreamingReply);
       const responseElapsedMs = performance.now() - startedAt;
       onConnectionChange({ state: "connected", detail: `${settings.model} replied from ${settings.endpoint}.`, models: connection.models });
-      setSessions((current) => current.map((candidate) => candidate.id === sessionId ? { ...candidate, messages: [...nextMessages, { role: "assistant", content: reply, elapsedMs: responseElapsedMs }], updatedAt: new Date().toISOString() } : candidate));
+      setSessions((current) => current.map((candidate) => candidate.id === sessionId ? { ...candidate, messages: [...nextMessages, { role: "assistant", content: reply.content, elapsedMs: responseElapsedMs, ...(reply.tokensPerSecond !== undefined ? { tokensPerSecond: reply.tokensPerSecond } : {}) }], updatedAt: new Date().toISOString() } : candidate));
     } catch (error) {
       const detail = error instanceof Error ? error.message : "The local runtime could not be reached.";
       const responseElapsedMs = performance.now() - startedAt;
@@ -1915,7 +1968,7 @@ function ZominAiChatDrawer({ client, connection, isOpen, onClose, onConnectionCh
         </>}
         <section className="flex min-h-0 min-w-0 flex-1 flex-col">
           <div aria-label="ZominAI conversation" className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-slate-50/70 p-4" ref={transcriptRef}>
-            {activeSession.messages.length === 0 ? <div className="grid h-full min-h-56 place-items-center text-center"><div className="max-w-60"><img className="mx-auto size-12 rounded-2xl object-cover shadow-sm" src={zominAiButtonUrl} alt="ZominAI Pegasus" /><p className="mt-4 text-sm font-semibold text-slate-900">Ask about your Drive</p><p className="mt-2 text-xs leading-5 text-slate-500">ZominAI can search and read supported Drive files, inspect databases, and run read-only queries. Results stay with this local model.</p></div></div> : activeSession.messages.map((message, index) => <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`} key={`${message.role}-${index}`}><div className="max-w-[88%]"><div className={`whitespace-pre-wrap rounded-2xl px-3 py-2.5 text-sm leading-6 ${message.role === "user" ? "rounded-br-md bg-cyan-800 text-white" : message.failed ? "rounded-bl-md border border-red-200 bg-red-50 text-red-800" : "rounded-bl-md border border-slate-200 bg-white text-slate-700"}`}>{message.content}</div>{message.role === "assistant" && <div className="mt-1 flex items-center gap-2 px-1">{typeof message.elapsedMs === "number" && <p aria-label="ZominAI response time" className="text-[10px] text-slate-400">Completed in {zominAiElapsedLabel(message.elapsedMs)}</p>}{message.failed && index === activeSession.messages.length - 1 && <button aria-label="Retry message to ZominAI" className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-semibold text-cyan-800 transition hover:bg-cyan-50 disabled:text-slate-300" disabled={sending} onClick={() => void retryLastMessage()} type="button"><RotateCcw size={12} /> Try again</button>}</div>}</div></div>)}
+            {activeSession.messages.length === 0 ? <div className="grid h-full min-h-56 place-items-center text-center"><div className="max-w-60"><img className="mx-auto size-12 rounded-2xl object-cover shadow-sm" src={zominAiButtonUrl} alt="ZominAI Pegasus" /><p className="mt-4 text-sm font-semibold text-slate-900">Ask about your Drive</p><p className="mt-2 text-xs leading-5 text-slate-500">ZominAI can search and read supported Drive files, inspect databases, and run read-only queries. Results stay with this local model.</p></div></div> : activeSession.messages.map((message, index) => <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`} key={`${message.role}-${index}`}><div className="max-w-[88%]"><div className={`whitespace-pre-wrap rounded-2xl px-3 py-2.5 text-sm leading-6 ${message.role === "user" ? "rounded-br-md bg-cyan-800 text-white" : message.failed ? "rounded-bl-md border border-red-200 bg-red-50 text-red-800" : "rounded-bl-md border border-slate-200 bg-white text-slate-700"}`}>{message.content}</div>{message.role === "assistant" && <div className="mt-1 flex items-center gap-2 px-1">{typeof message.elapsedMs === "number" && <p aria-label="ZominAI response metrics" className="text-[10px] text-slate-400">Completed in {zominAiElapsedLabel(message.elapsedMs)}{typeof message.tokensPerSecond === "number" ? ` · ${zominAiTokensPerSecondLabel(message.tokensPerSecond)}` : ""}</p>}{message.failed && index === activeSession.messages.length - 1 && <button aria-label="Retry message to ZominAI" className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-semibold text-cyan-800 transition hover:bg-cyan-50 disabled:text-slate-300" disabled={sending} onClick={() => void retryLastMessage()} type="button"><RotateCcw size={12} /> Try again</button>}</div>}</div></div>)}
             {sending && <div className="flex justify-start"><div className="max-w-[88%]"><div className={`rounded-2xl rounded-bl-md border border-slate-200 bg-white px-3 py-2.5 text-sm leading-6 ${streamingReply ? "whitespace-pre-wrap text-slate-700" : "inline-flex items-center gap-2 text-slate-500"}`}>{streamingReply || <><LoaderCircle className="animate-spin" size={15} /> Thinking…</>}</div><p aria-live="polite" className="mt-1 px-1 text-[10px] font-medium text-slate-400">{streamingReply ? "Responding" : "Elapsed"} · {zominAiElapsedLabel(elapsedMs)}</p></div></div>}
           </div>
           <div aria-label="ZominAI context used" className="flex items-center gap-3 border-t border-slate-200 bg-white px-3 py-2">
@@ -2004,7 +2057,7 @@ function ZominAiWorkspace({ initialPane = "verify" }: { initialPane?: ZominAiPan
       <div className="min-w-0">
         {activePane === "verify" && <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-700">Runtime status</p><h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">Verify the Zo Computer runtime.</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">ZominAI runs on the Zo Computer, not in this browser. This checks the private Bonsai service through Zo Drive’s authenticated gateway.</p></div><button aria-label="Verify ZominAI install" className="inline-flex items-center gap-2 rounded-lg bg-cyan-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-cyan-800 disabled:bg-slate-300" disabled={verifying} onClick={() => void verify()}>{verifying ? <LoaderCircle className="animate-spin" size={17} /> : <ShieldCheck size={17} />}{verifying ? "Checking…" : "Check runtime"}</button></div>{verification ? <div className="mt-6 grid gap-3"><ZominAiCheck label="Zo Computer runtime" result={verification.runtime} /><p className="pt-1 text-xs text-slate-400">Last checked {new Date(verification.checkedAt).toLocaleString()}.</p></div> : <div className="mt-6 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">No runtime check has run yet.</div>}</section>}
         {activePane === "install" && <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-700">Zo Computer installation</p><h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">Install Bonsai 8B once on this Zo Computer.</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">ZominAI is a private supervised service on the Zo Computer. Web, iPhone, and Android clients all use the same authenticated Zo Drive gateway; the model port stays private at <span className="font-mono text-slate-700">127.0.0.1:57183</span>.</p><div className="mt-6 rounded-xl border border-cyan-100 bg-cyan-50/60 p-4"><p className="text-sm font-semibold text-slate-900">Managed runtime</p><p className="mt-1 text-sm leading-6 text-slate-600">The Bonsai 8B model and llama.cpp runtime are installed once and restarted automatically by Zo. Your browser does not need WebGPU, disk space for the model, or any local setup.</p></div><ZominAiDownloadProgress status={downloadStatus} unavailable={downloadStatusUnavailable} /><div className="mt-5 flex flex-wrap gap-3"><a className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="https://huggingface.co/prism-ml/Bonsai-8B-gguf" rel="noreferrer" target="_blank">Bonsai 8B model <ExternalLink size={16} /></a><button className="inline-flex items-center gap-2 rounded-lg bg-cyan-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-cyan-800" onClick={() => { setActivePane("verify"); void verify(); }}>Check runtime <ShieldCheck size={16} /></button></div></section>}
-        {activePane === "settings" && <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-700">Connection settings</p><h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">ZominAI settings</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">These values stay in this browser only. The endpoint must be local to protect Drive data from accidental remote inference routing.</p><div className="mt-6 grid gap-5 md:grid-cols-2"><label className="block text-sm font-semibold text-slate-700">Local runtime address<input aria-label="ZominAI runtime address" className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-mono text-sm outline-none focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100" value={settings.endpoint} onChange={(event) => { setUninstalled(false); setSettings((current) => ({ ...current, endpoint: event.target.value })); }} /></label><label className="block text-sm font-semibold text-slate-700">Model file<input aria-label="ZominAI model file" className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-mono text-sm outline-none focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100" value={settings.model} onChange={(event) => { setUninstalled(false); setSettings((current) => ({ ...current, model: event.target.value })); }} /></label><label className="block text-sm font-semibold text-slate-700">Context window<input aria-label="ZominAI context window" className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100" max={32768} min={1024} step={1024} type="number" value={settings.contextTokens} onChange={(event) => { setUninstalled(false); setSettings((current) => ({ ...current, contextTokens: Number(event.target.value) || 1024 })); }} /></label></div><div className="mt-6 flex flex-wrap items-center gap-3"><button className="inline-flex items-center gap-2 rounded-lg bg-cyan-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-cyan-800" onClick={() => void verify()}><Cpu size={17} /> Save and verify</button><p className="text-xs text-slate-400">Saved automatically in this browser.</p></div></section>}
+        {activePane === "settings" && <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-700">Connection and behaviour</p><h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">ZominAI settings</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">These values stay in this browser only. The endpoint must be local to protect Drive data from accidental remote inference routing.</p><div className="mt-6 grid gap-5 md:grid-cols-2"><label className="block text-sm font-semibold text-slate-700">Local runtime address<input aria-label="ZominAI runtime address" className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-mono text-sm outline-none focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100" value={settings.endpoint} onChange={(event) => { setUninstalled(false); setSettings((current) => ({ ...current, endpoint: event.target.value })); }} /></label><label className="block text-sm font-semibold text-slate-700">Model file<input aria-label="ZominAI model file" className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-mono text-sm outline-none focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100" value={settings.model} onChange={(event) => { setUninstalled(false); setSettings((current) => ({ ...current, model: event.target.value })); }} /></label><label className="block text-sm font-semibold text-slate-700">Context window<input aria-label="ZominAI context window" className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100" max={32768} min={1024} step={1024} type="number" value={settings.contextTokens} onChange={(event) => { setUninstalled(false); setSettings((current) => ({ ...current, contextTokens: Number(event.target.value) || 1024 })); }} /></label></div><div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><label className="text-sm font-semibold text-slate-800" htmlFor="zominai-system-instructions">System instructions</label><p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">Customise ZominAI’s tone and response preferences. Privacy, truthfulness, and read-only tool rules remain enforced.</p></div><button className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:border-cyan-300 hover:text-cyan-800" onClick={() => setSettings((current) => ({ ...current, systemInstructions: defaultZominAiSystemInstructions }))} type="button">Restore default</button></div><textarea aria-label="ZominAI system instructions" className="mt-3 min-h-36 w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm leading-6 outline-none focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100" id="zominai-system-instructions" maxLength={zominAiSystemInstructionsMaxCharacters} onChange={(event) => { setUninstalled(false); setSettings((current) => ({ ...current, systemInstructions: event.target.value })); }} value={settings.systemInstructions} /><p aria-live="polite" className="mt-2 text-right text-xs tabular-nums text-slate-400">{settings.systemInstructions.length.toLocaleString()} / {zominAiSystemInstructionsMaxCharacters.toLocaleString()} characters</p></div><div className="mt-6 flex flex-wrap items-center gap-3"><button className="inline-flex items-center gap-2 rounded-lg bg-cyan-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-cyan-800" onClick={() => void verify()}><Cpu size={17} /> Save and verify</button><p className="text-xs text-slate-400">Saved automatically in this browser.</p></div></section>}
         {activePane === "uninstall" && <section className="rounded-2xl border border-red-200 bg-white p-6 shadow-sm"><p className="text-xs font-bold uppercase tracking-[0.16em] text-red-600">Remove local settings</p><h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">Uninstall ZominAI from this browser</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">This clears ZominAI’s local endpoint, model preference, and verification record from this browser. It cannot remove the model or llama.cpp runtime from your Mac, iPhone, or another device.</p>{confirmUninstall ? <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4"><p className="text-sm font-medium text-red-900">Remove ZominAI browser settings now?</p><div className="mt-4 flex gap-3"><button aria-label="Confirm uninstall ZominAI" className="rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700" onClick={uninstall}>Remove settings</button><button className="rounded-lg border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-red-50" onClick={() => setConfirmUninstall(false)}>Cancel</button></div></div> : <button aria-label="Uninstall ZominAI browser settings" className="mt-6 inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-50" onClick={() => setConfirmUninstall(true)}><Trash2 size={17} /> Uninstall ZominAI</button>}</section>}
       </div>
     </div>

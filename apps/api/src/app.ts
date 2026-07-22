@@ -194,6 +194,7 @@ const zominAiChatSchema = z.object({
   })).min(1).max(30),
   model: z.string().trim().min(1).max(256).optional(),
   stream: z.boolean().optional(),
+  stream_options: z.object({ include_usage: z.boolean() }).optional(),
   tool_choice: z.literal("auto").optional(),
   tools: z.array(z.unknown()).max(10).optional()
 }).refine((value) => JSON.stringify(value).length <= 1_000_000, "ZominAI request is too large");

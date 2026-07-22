@@ -48,7 +48,7 @@ describe("DriveApp", () => {
       expect(screen.getByRole("heading", { name: "Run private databases beside your files" })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Automate with Zo Functions" })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Ask about your Drive without granting write access" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 1.32.0" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 1.33.0" })).toBeInTheDocument();
       expect(screen.getByText("Product")).toBeInTheDocument();
       expect(screen.getByRole("navigation", { name: "Choose documentation product" })).toBeInTheDocument();
       expect(screen.getByRole("navigation", { name: "Documentation sections" })).toHaveTextContent("Zo Originals");
@@ -58,7 +58,7 @@ describe("DriveApp", () => {
         expect(modeSwitch).toHaveTextContent("CLI");
       }
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI releases version 1.32.0" })).toHaveAttribute("href", expect.stringContaining("?releases=1&mode=gui"));
+      expect(screen.getByRole("link", { name: "GUI releases version 1.33.0" })).toHaveAttribute("href", expect.stringContaining("?releases=1&mode=gui"));
       expect(screen.queryByRole("heading", { name: "GUI changelog" })).not.toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
 
@@ -96,7 +96,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.32.0")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.33.0")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();
@@ -111,9 +111,9 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "Private local AI for your Drive." })).toBeInTheDocument();
-      expect(screen.getByText("ZominAI documentation · v1.5.0")).toBeInTheDocument();
+      expect(screen.getByText("ZominAI documentation · v1.6.0")).toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "ZominAI" })[0]).toHaveAttribute("aria-current", "page");
-      expect(screen.getByRole("heading", { name: "ZominAI version 1.5.0" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "ZominAI version 1.6.0" })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "ZominAI changelog" })).toBeInTheDocument();
 
       cleanup();
@@ -121,7 +121,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "ZominAI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.5.0")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.6.0")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&product=zominai"));
 
       cleanup();
@@ -374,7 +374,7 @@ describe("DriveApp", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Message ZominAI" }), { target: { value: "Hello ZominAI" } });
     fireEvent.click(screen.getByRole("button", { name: "Send message to ZominAI" }));
     expect(await screen.findByText("Hello from your local Bonsai runtime.")).toBeInTheDocument();
-    expect(screen.getByLabelText("ZominAI response time")).toHaveTextContent("Completed in");
+    expect(screen.getByLabelText("ZominAI response metrics")).toHaveTextContent("Completed in");
     expect(fetchSpy).toHaveBeenCalledWith("http://localhost:3000/zominai/chat", expect.objectContaining({ method: "POST" }));
     const firstChatRequest = fetchSpy.mock.calls.find(([input]) => String(input).includes("/zominai/chat"));
     expect(JSON.parse(String(firstChatRequest?.[1]?.body))).toMatchObject({ model: "Bonsai-27B-Q4_K_M.gguf" });
@@ -393,9 +393,20 @@ describe("DriveApp", () => {
     expect(client.getUsage).toHaveBeenCalled();
     const storageRequest = JSON.parse(String(fetchSpy.mock.calls[0]?.[1]?.body)) as { messages: Array<{ content: string; role: string }>; stream: boolean; tool_choice?: string; tools?: unknown[] };
     expect(storageRequest.stream).toBe(true);
+    expect(storageRequest).toMatchObject({ stream_options: { include_usage: true } });
     expect(storageRequest.tool_choice).toBeUndefined();
     expect(storageRequest.tools).toBeUndefined();
     expect(storageRequest.messages[0]).toEqual(expect.objectContaining({ role: "system", content: expect.stringContaining("get_storage_usage tool") }));
+    fireEvent.click(screen.getByRole("button", { name: "New ZominAI chat" }));
+    fetchSpy.mockReset();
+    fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify({ choices: [{ message: { content: "Your Zo Drive contains 28 files. That is the Drive count, not every operating-system file." } }] }), { status: 200 }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Message ZominAI" }), { target: { value: "How many files do I have on my system?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send message to ZominAI" }));
+    expect(await screen.findByText("Your Zo Drive contains 28 files. That is the Drive count, not every operating-system file.")).toBeInTheDocument();
+    const fileCountRequest = JSON.parse(String(fetchSpy.mock.calls[0]?.[1]?.body)) as { messages: Array<{ content: string; role: string }>; tools?: unknown[] };
+    expect(fileCountRequest.tools).toBeUndefined();
+    expect(fileCountRequest.messages[0]?.content).toContain('"fileCount":28');
+    expect(fileCountRequest.messages[0]?.content).toContain("not a count of every operating-system file");
     fireEvent.click(screen.getByRole("button", { name: "New ZominAI chat" }));
     fetchSpy.mockReset();
     fetchSpy
@@ -410,11 +421,12 @@ describe("DriveApp", () => {
     expect(toolFollowUp.messages).toEqual(expect.arrayContaining([expect.objectContaining({ role: "assistant", tool_calls: [expect.objectContaining({ type: "function" })] })]));
     fireEvent.click(screen.getByRole("button", { name: "New ZominAI chat" }));
     fetchSpy.mockReset();
-    fetchSpy.mockResolvedValueOnce(new Response('data: {"choices":[{"delta":{"content":"Streamed"}}]}\n\ndata: {"choices":[{"delta":{"content":" response."}}]}\n\ndata: [DONE]\n\n', { headers: { "content-type": "text/event-stream" }, status: 200 }));
+    fetchSpy.mockResolvedValueOnce(new Response('data: {"choices":[{"delta":{"content":"Streamed"}}]}\n\ndata: {"choices":[{"delta":{"content":" response."}}]}\n\ndata: {"choices":[],"usage":{"completion_tokens":12},"timings":{"predicted_n":12,"predicted_ms":500,"predicted_per_second":24}}\n\ndata: [DONE]\n\n', { headers: { "content-type": "text/event-stream" }, status: 200 }));
     fireEvent.change(screen.getByRole("textbox", { name: "Message ZominAI" }), { target: { value: "Stream this reply" } });
     fireEvent.click(screen.getByRole("button", { name: "Send message to ZominAI" }));
     expect(await screen.findByText("Streamed response.")).toBeInTheDocument();
-    expect(screen.getAllByLabelText("ZominAI response time").at(-1)).toHaveTextContent("Completed in");
+    expect(screen.getAllByLabelText("ZominAI response metrics").at(-1)).toHaveTextContent("Completed in");
+    expect(screen.getAllByLabelText("ZominAI response metrics").at(-1)).toHaveTextContent("24.0 tok/s");
     fireEvent.click(screen.getByRole("button", { name: "New ZominAI chat" }));
     fireEvent.click(screen.getByRole("button", { name: "Delete chat New chat" }));
     expect(screen.queryByRole("button", { name: "Delete chat New chat" })).not.toBeInTheDocument();
@@ -461,8 +473,13 @@ describe("DriveApp", () => {
     expect(screen.getByRole("link", { name: /Bonsai model & licence/ })).toHaveAttribute("href", "https://huggingface.co/prism-ml/Bonsai-27B-gguf");
     expect(screen.getByRole("link", { name: /Runtime installation docs/ })).toHaveAttribute("href", "https://github.com/ggml-org/llama.cpp/blob/master/docs/install.md");
     fireEvent.click(screen.getByRole("button", { name: "ZominAI menu: ZominAI settings" }));
+    const systemInstructions = screen.getByRole("textbox", { name: "ZominAI system instructions" });
+    expect(systemInstructions).toHaveAttribute("maxLength", "2000");
+    expect((systemInstructions as HTMLTextAreaElement).value).toContain("Answer directly");
+    fireEvent.change(systemInstructions, { target: { value: "Reply as a concise operator." } });
+    expect(screen.getByText("28 / 2,000 characters")).toBeInTheDocument();
     fireEvent.change(screen.getByRole("textbox", { name: "ZominAI runtime address" }), { target: { value: "http://127.0.0.1:9000" } });
-    await waitFor(() => expect(window.localStorage.getItem("zo-drive:zominai:v1")).toContain("9000"));
+    await waitFor(() => expect(window.localStorage.getItem("zo-drive:zominai:v1")).toContain("Reply as a concise operator."));
     fireEvent.click(screen.getByRole("button", { name: "ZominAI menu: Uninstall ZominAI" }));
     fireEvent.click(screen.getByRole("button", { name: "Uninstall ZominAI browser settings" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirm uninstall ZominAI" }));

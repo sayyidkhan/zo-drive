@@ -125,7 +125,8 @@ surface and use JSON except for object upload/download.
 - [CLI guide](./?docs=1&mode=cli): Install, configure, and use `zo-drive`.
 - [Browser guide](./?docs=1&mode=gui): Browser workspace and account controls.
 - [ZominAI guide](./?docs=1&product=zominai): Private local runtime, selectable
-  loaded models, read-only Drive tools, privacy boundary, and release history.
+  loaded models, bounded custom instructions, read-only Drive tools, response
+  timing and token speed, privacy boundary, and release history.
 - [Source repository](https://github.com/sayyidkhan/zo-drive): SDK source,
   endpoint implementations, tests, and deployment instructions.
 
