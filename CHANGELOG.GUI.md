@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.24.1 - 2026-07-22
+
+### Added
+
+- Added ZominAI's dedicated public documentation and changelog routes, with an
+  independent ZominAI version and release history.
+
 ## v1.24.0 - 2026-07-22
 
 ### Added

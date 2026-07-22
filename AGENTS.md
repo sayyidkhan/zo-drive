@@ -6,13 +6,15 @@ Zo Drive is one repository with independent user-facing release tracks:
 
 - GUI: `apps/web`, package version `@zo-drive/web`, Git tag `gui-vX.Y.Z`.
 - CLI: `apps/cli`, package version `@zo-drive/cli`, Git tag `cli-vX.Y.Z`.
+- ZominAI: local-AI product version in `apps/web/src/drive-app.tsx`, Git tag
+  `zominai-vX.Y.Z`.
 - API, SDK, and types are compatibility dependencies. Version them when their
   public contract changes, but do not use their version as a GUI or CLI release
   number.
 
-Keep the GUI and CLI versions independent. A GUI-only release must not require
-local CLI users to update, and a CLI-only release must not imply a browser UI
-change.
+Keep the GUI, CLI, and ZominAI versions independent. A ZominAI-only release
+must not require local CLI users to update. A GUI integration change that makes
+ZominAI visible or changes its browser behaviour requires a GUI release too.
 
 ## Choosing the increment
 
@@ -34,11 +36,11 @@ patch, or no GUI release at all.
 2. Select the smallest justified semantic version increment for each affected
    track.
 3. Update the matching package version and any displayed version constant.
-4. Add an entry to `CHANGELOG.GUI.md`, `CHANGELOG.CLI.md`, or both before
-   committing.
+4. Add an entry to `CHANGELOG.GUI.md`, `CHANGELOG.CLI.md`,
+   `CHANGELOG.ZOMINAI.md`, or the relevant combination before committing.
 5. Run `pnpm test`, `pnpm typecheck`, and `pnpm build`.
 6. Commit the verified change, push `main`, and create an annotated tag for
-   each affected track: `gui-vX.Y.Z` and/or `cli-vX.Y.Z`.
+   each affected track: `gui-vX.Y.Z`, `cli-vX.Y.Z`, and/or `zominai-vX.Y.Z`.
 7. Restart the Zo Drive service for a GUI/API deployment. A CLI-only release
    still needs its tag pushed but does not require a service restart.
 
@@ -53,11 +55,13 @@ surface's user-facing documentation.
 - When the API changes, test the currently released CLI against it before
   tagging either track.
 - `zo-drive --version` must report the CLI package version.
-- The GUI documentation page must show the active GUI and CLI versions.
+- The public documentation pages must show the active GUI, CLI, and ZominAI
+  versions.
 
 ## Changelog rules
 
-- Keep `CHANGELOG.GUI.md` and `CHANGELOG.CLI.md` concise and user-facing.
+- Keep `CHANGELOG.GUI.md`, `CHANGELOG.CLI.md`, and `CHANGELOG.ZOMINAI.md`
+  concise and user-facing.
 - Add entries under the relevant `Unreleased` heading while work is in
   progress.
 - If one change affects both surfaces, record it in both changelogs and

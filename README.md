@@ -2,9 +2,10 @@
 
 Zo Drive is a private Drive-like file manager for your Zo server. The source code stays in this repository; uploaded data lives in one configured data root outside it.
 
-Release histories are maintained in [CHANGELOG.GUI.md](CHANGELOG.GUI.md) and
-[CHANGELOG.CLI.md](CHANGELOG.CLI.md). See [AGENTS.md](AGENTS.md) for the
-GUI/CLI versioning and release policy.
+Release histories are maintained in [CHANGELOG.GUI.md](CHANGELOG.GUI.md),
+[CHANGELOG.CLI.md](CHANGELOG.CLI.md), and
+[CHANGELOG.ZOMINAI.md](CHANGELOG.ZOMINAI.md). See [AGENTS.md](AGENTS.md) for
+the GUI, CLI, and ZominAI versioning and release policy.
 
 For AI agents interacting with a hosted Drive, use the machine-oriented
 [`/drive/llms.txt`](apps/web/public/llms.txt) entry point before the
@@ -108,7 +109,7 @@ folder.
 
 #### GUI versioning
 
-The browser GUI has its own release track, currently `GUI v1.24.0`. GUI changes
+The browser GUI has its own release track, currently `GUI v1.24.1`. GUI changes
 are deployed to Zo Drive directly; browser users receive the current version by
 loading the page. Use `gui-v*` Git tags to trace a deployed GUI release. CLI
 releases are separate and do not change the GUI version.
