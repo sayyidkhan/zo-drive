@@ -263,10 +263,15 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.23.4";
+const GUI_VERSION = "1.23.5";
 const CLI_VERSION = "1.2.1";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.23.5",
+    date: "2026-07-22",
+    changes: ["Removed the duplicate Zo Paste creation button from its hero panel."]
+  },
   {
     version: "v1.23.4",
     date: "2026-07-22",
@@ -3735,7 +3740,7 @@ function ZoPaste({ files, isError, isLoading, onCreate, onDelete, onPreview, onR
       <div className="relative overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-cyan-950 px-7 py-9 text-white md:px-10">
         <div className="absolute -right-28 -top-32 size-80 rounded-full bg-cyan-300/15 blur-3xl" />
         <div className="absolute -bottom-24 left-1/3 size-64 rounded-full bg-blue-500/15 blur-3xl" />
-        <div className="relative max-w-3xl"><span className="inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-cyan-200/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100"><Code2 size={14} /> Snippets, simplified</span><h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">Write it once. Share it when ready.</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300 md:text-base">Zo Paste keeps code, logs, notes, and configuration snippets private by default. Add syntax and tags, then create a protected or expiring link only when you need to send it.</p><p className="mt-4 text-xs font-medium text-cyan-100/80">Inspired by Pastebin.</p><button className="mt-6 inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-cyan-50" onClick={onCreate}><Plus size={17} /> Create a new paste</button></div>
+        <div className="relative max-w-3xl"><span className="inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-cyan-200/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100"><Code2 size={14} /> Snippets, simplified</span><h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">Write it once. Share it when ready.</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300 md:text-base">Zo Paste keeps code, logs, notes, and configuration snippets private by default. Add syntax and tags, then create a protected or expiring link only when you need to send it.</p><p className="mt-4 text-xs font-medium text-cyan-100/80">Inspired by Pastebin.</p></div>
       </div>
       <div className="grid divide-y divide-slate-100 md:grid-cols-3 md:divide-x md:divide-y-0"><div className="flex gap-3 p-5"><span className="grid size-9 shrink-0 place-items-center rounded-lg bg-slate-900 text-cyan-300"><LockKeyhole size={18} /></span><div><p className="text-sm font-semibold text-slate-800">Private by default</p><p className="mt-1 text-xs leading-5 text-slate-500">Your paste stays in Zo Drive until you deliberately share it.</p></div></div><div className="flex gap-3 p-5"><span className="grid size-9 shrink-0 place-items-center rounded-lg bg-cyan-50 text-cyan-700"><Code2 size={18} /></span><div><p className="text-sm font-semibold text-slate-800">Built for text and code</p><p className="mt-1 text-xs leading-5 text-slate-500">Label the syntax and add tags so each snippet remains useful later.</p></div></div><div className="flex gap-3 p-5"><span className="grid size-9 shrink-0 place-items-center rounded-lg bg-blue-50 text-blue-700"><Share2 size={18} /></span><div><p className="text-sm font-semibold text-slate-800">Share on your terms</p><p className="mt-1 text-xs leading-5 text-slate-500">Use an expiry or passcode when a paste needs to leave your Drive.</p></div></div></div>
     </section>

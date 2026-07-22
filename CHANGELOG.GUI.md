@@ -2,6 +2,12 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.23.5 - 2026-07-22
+
+### Changed
+
+- Removed the duplicate Zo Paste creation button from its hero panel.
+
 ## v1.23.4 - 2026-07-22
 
 ### Changed
