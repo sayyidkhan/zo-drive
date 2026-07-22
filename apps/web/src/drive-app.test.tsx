@@ -42,9 +42,9 @@ describe("DriveApp", () => {
 
       expect(screen.getByRole("heading", { name: "Manage files in your private Drive." })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Share files on your terms" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 1.23.8" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "GUI version 1.23.9" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI changelog version 1.23.8" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
+      expect(screen.getByRole("link", { name: "GUI changelog version 1.23.9" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
       expect(screen.getByText((_, element) => element?.tagName === "H3" && element.textContent === "GUI v1.17.0")).toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
@@ -79,7 +79,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.23.8")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.23.9")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();
@@ -291,6 +291,9 @@ describe("DriveApp", () => {
       if (String(input).includes("/zominai/status")) {
         return new Response(JSON.stringify({ state: "ready", downloadedBytes: 1, expectedBytes: 1, progress: 1, detail: "Ready", updatedAt: "2026-07-21T00:00:00.000Z" }), { status: 200 });
       }
+      if (String(input).includes("/v1/models")) {
+        return new Response(JSON.stringify({ data: [{ id: "prism-ml/Bonsai-27B-gguf" }] }), { status: 200 });
+      }
       if (String(input).includes("/v1/chat/completions")) {
         return new Response(JSON.stringify({ choices: [{ message: { content: "Hello from your local Bonsai runtime." } }] }), { status: 200 });
       }
@@ -301,6 +304,7 @@ describe("DriveApp", () => {
     expect(zominAiDrawer).toHaveClass("md:relative", "md:w-[var(--zominai-drawer-width)]", "md:border-l", "md:border-slate-200", "duration-500");
     expect(screen.getByRole("button", { name: "Resize ZominAI chat" })).toHaveClass("w-5", "cursor-col-resize", "group");
     expect(screen.getAllByAltText("ZominAI Pegasus")).toHaveLength(2);
+    expect(await screen.findByLabelText("ZominAI connected")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "New ZominAI chat" })).toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "ZominAI chat history" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Toggle ZominAI chat history" })).toHaveAttribute("aria-expanded", "false");
@@ -328,6 +332,10 @@ describe("DriveApp", () => {
     expect(client.list).toHaveBeenCalledWith({ prefix: undefined });
     const toolFollowUp = JSON.parse(String(fetchSpy.mock.calls[1]?.[1]?.body)) as { messages: Array<{ role: string; tool_call_id?: string }> };
     expect(toolFollowUp.messages).toEqual(expect.arrayContaining([expect.objectContaining({ role: "tool", tool_call_id: "drive-list" })]));
+    fetchSpy.mockResolvedValue(new Response("Runtime unavailable", { status: 500 }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Message ZominAI" }), { target: { value: "Are you there?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send message to ZominAI" }));
+    expect(await screen.findByLabelText("ZominAI not connected")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "ZominAI" }));
     expect(screen.queryByRole("complementary", { name: "ZominAI chat" })).not.toBeInTheDocument();
     fetchSpy.mockResolvedValue(new Response(JSON.stringify({ state: "downloading", downloadedBytes: 1, expectedBytes: 2, progress: 0.5, detail: "Downloading", updatedAt: "2026-07-21T00:00:00.000Z" }), { status: 200 }));

@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.23.9 - 2026-07-22
+
+### Fixed
+
+- Added a live ZominAI connection indicator in the chat header, with clear
+  green, amber, and red states based on the local Bonsai runtime.
+
 ## v1.23.8 - 2026-07-22
 
 ### Fixed

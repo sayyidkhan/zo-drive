@@ -125,6 +125,11 @@ type ZominAiDownloadStatus = {
   updatedAt: string;
 };
 
+type ZominAiConnection = {
+  detail: string;
+  state: "checking" | "connected" | "disconnected";
+};
+
 type ZominAiChatMessage = {
   content: string;
   role: "assistant" | "user";
@@ -263,10 +268,15 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.23.8";
+const GUI_VERSION = "1.23.9";
 const CLI_VERSION = "1.2.1";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.23.9",
+    date: "2026-07-22",
+    changes: ["Added a live ZominAI connection indicator with clear connected, checking, and disconnected states."]
+  },
   {
     version: "v1.23.8",
     date: "2026-07-22",
@@ -1047,6 +1057,22 @@ function localRuntimeChatUrl(endpoint: string): string | null {
   }
 }
 
+async function checkZominAiConnection(settings: ZominAiSettings, signal?: AbortSignal): Promise<ZominAiConnection> {
+  const modelsUrl = localRuntimeModelsUrl(settings.endpoint);
+  if (!modelsUrl) return { state: "disconnected", detail: "Use a localhost or 127.0.0.1 runtime address." };
+  try {
+    const response = await fetch(modelsUrl, { headers: { Accept: "application/json" }, signal });
+    if (!response.ok) return { state: "disconnected", detail: `The local runtime returned HTTP ${response.status}.` };
+    const body = await response.json() as { data?: Array<{ id?: unknown }> };
+    const bonsaiLoaded = (body.data ?? []).some((model) => typeof model.id === "string" && /bonsai/i.test(model.id));
+    return bonsaiLoaded
+      ? { state: "connected", detail: `Bonsai is ready at ${settings.endpoint}.` }
+      : { state: "disconnected", detail: "The local runtime is reachable, but Bonsai is not loaded." };
+  } catch {
+    return { state: "disconnected", detail: `No local ZominAI runtime is listening at ${settings.endpoint}.` };
+  }
+}
+
 const zominAiTools = [
   { type: "function", function: { name: "list_drive", description: "List files in the user's private Zo Drive. Use this to browse the Drive or a folder before reading a file.", parameters: { type: "object", properties: { prefix: { type: "string", description: "Optional folder path to list." } } } } },
   { type: "function", function: { name: "search_drive", description: "Find files by filename or supported text content in the user's private Zo Drive.", parameters: { type: "object", properties: { query: { type: "string", description: "Words to search for." }, prefix: { type: "string", description: "Optional folder path to search within." } }, required: ["query"] } } },
@@ -1285,7 +1311,7 @@ function ZominAiChat({ settings }: { settings: ZominAiSettings }) {
   </section>;
 }
 
-function ZominAiChatDrawer({ client, isOpen, onClose, settings }: { client: DriveClient; isOpen: boolean; onClose: () => void; settings: ZominAiSettings }) {
+function ZominAiChatDrawer({ client, connection, isOpen, onClose, onConnectionChange, settings }: { client: DriveClient; connection: ZominAiConnection; isOpen: boolean; onClose: () => void; onConnectionChange: (connection: ZominAiConnection) => void; settings: ZominAiSettings }) {
   const [sessions, setSessions] = useState<ZominAiChatSession[]>(readZominAiChatSessions);
   const [activeSessionId, setActiveSessionId] = useState(() => sessions[0]!.id);
   const [draft, setDraft] = useState("");
@@ -1356,9 +1382,11 @@ function ZominAiChatDrawer({ client, isOpen, onClose, settings }: { client: Driv
     setSending(true);
     try {
       const reply = await sendZominAiMessage(settings, nextMessages, createZominAiToolRunner(client));
+      onConnectionChange({ state: "connected", detail: `Bonsai replied from ${settings.endpoint}.` });
       setSessions((current) => current.map((session) => session.id === activeSession.id ? { ...session, messages: [...nextMessages, { role: "assistant", content: reply }], updatedAt: new Date().toISOString() } : session));
     } catch (error) {
       const detail = error instanceof Error ? error.message : "The local runtime could not be reached.";
+      onConnectionChange({ state: "disconnected", detail });
       setSessions((current) => current.map((session) => session.id === activeSession.id ? { ...session, messages: [...nextMessages, { role: "assistant", content: `I could not connect to ZominAI. ${detail}` }], updatedAt: new Date().toISOString() } : session));
     } finally {
       setSending(false);
@@ -1370,7 +1398,7 @@ function ZominAiChatDrawer({ client, isOpen, onClose, settings }: { client: Driv
     <div className={`flex h-full w-full flex-col bg-white transition-[transform,opacity] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none md:w-[var(--zominai-drawer-width)] ${isOpen ? "translate-x-0 opacity-100" : "translate-x-8 opacity-0"}`}>
       <header className="flex items-center gap-3 border-b border-slate-200 px-4 py-3">
         <span className="grid size-9 place-items-center overflow-hidden rounded-xl bg-cyan-950 p-0.5"><img className="size-full rounded-[0.6rem] object-cover" src={zominAiButtonUrl} alt="ZominAI Pegasus" /></span>
-        <div className="min-w-0 flex-1"><p className="text-sm font-semibold text-slate-900">ZominAI</p><p className="truncate text-xs text-slate-500">Local chat with read-only Drive tools</p></div>
+        <div className="min-w-0 flex-1"><div className="flex items-center gap-2"><p className="text-sm font-semibold text-slate-900">ZominAI</p><span aria-label={`ZominAI ${connection.state === "connected" ? "connected" : connection.state === "checking" ? "checking connection" : "not connected"}`} className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold ${connection.state === "connected" ? "bg-emerald-50 text-emerald-700" : connection.state === "checking" ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-700"}`} title={connection.detail}><span aria-hidden="true" className={`size-1.5 rounded-full ${connection.state === "connected" ? "bg-emerald-500" : connection.state === "checking" ? "bg-amber-500 animate-pulse" : "bg-red-500"}`} />{connection.state === "connected" ? "Connected" : connection.state === "checking" ? "Checking" : "Not connected"}</span></div><p className="truncate text-xs text-slate-500">Local chat with read-only Drive tools</p></div>
         <button aria-label="New ZominAI chat" className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-700 px-2.5 py-2 text-xs font-semibold text-white transition hover:bg-cyan-800" onClick={createChat}><Plus size={15} /> <span className="hidden sm:inline">New chat</span></button>
         <button aria-controls="zominai-chat-history" aria-expanded={historyOpen} aria-label="Toggle ZominAI chat history" className={`rounded-lg p-2 transition ${historyOpen ? "bg-cyan-50 text-cyan-800" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`} onClick={() => setHistoryOpen((open) => !open)} title="Chat history"><History size={18} /></button>
         <button aria-label="Close ZominAI chat" className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900" onClick={onClose}><X size={19} /></button>
@@ -1505,6 +1533,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
   const [zominAiPane, setZominAiPane] = useState<ZominAiPane>("verify");
   const [zominAiChatOpen, setZominAiChatOpen] = useState(false);
   const [zominAiChatSettings, setZominAiChatSettings] = useState<ZominAiSettings>(readZominAiSettings);
+  const [zominAiConnection, setZominAiConnection] = useState<ZominAiConnection>({ state: "checking", detail: "Checking the local Bonsai runtime." });
   const [search, setSearch] = useState("");
   const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);
   const [storageBreakdownOpen, setStorageBreakdownOpen] = useState(false);
@@ -1513,6 +1542,23 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
   const [recentFilters, setRecentFilters] = useState<RecentFilters>(defaultRecentFilters);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(() => typeof window === "undefined" || !window.matchMedia || window.matchMedia("(min-width: 768px)").matches);
+  useEffect(() => {
+    if (!zominAiChatOpen) return;
+    const controller = new AbortController();
+    let disposed = false;
+    const refreshConnection = async () => {
+      if (!disposed) setZominAiConnection({ state: "checking", detail: "Checking the local Bonsai runtime." });
+      const connection = await checkZominAiConnection(zominAiChatSettings, controller.signal);
+      if (!disposed) setZominAiConnection(connection);
+    };
+    void refreshConnection();
+    const interval = window.setInterval(() => void refreshConnection(), 30_000);
+    return () => {
+      disposed = true;
+      controller.abort();
+      window.clearInterval(interval);
+    };
+  }, [zominAiChatOpen, zominAiChatSettings]);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [folderDialogOpen, setFolderDialogOpen] = useState(false);
   const [folderName, setFolderName] = useState("");
@@ -1820,6 +1866,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
       const status = await getZominAiDownloadStatus();
       if (status.state === "ready") {
         setZominAiChatSettings(readZominAiSettings());
+        setZominAiConnection({ state: "checking", detail: "Checking the local Bonsai runtime." });
         setZominAiChatOpen(true);
         return;
       }
@@ -1996,7 +2043,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
             />
           )}
         </section>
-        <ZominAiChatDrawer client={client} isOpen={zominAiChatOpen} onClose={() => setZominAiChatOpen(false)} settings={zominAiChatSettings} />
+        <ZominAiChatDrawer client={client} connection={zominAiConnection} isOpen={zominAiChatOpen} onClose={() => setZominAiChatOpen(false)} onConnectionChange={setZominAiConnection} settings={zominAiChatSettings} />
       </div>
       {preview && <PreviewDialog preview={preview} onClose={closePreview} />}
       {nativeEditor && <NativeEditor key={nativeEditor.object.key} content={nativeEditor.content} fileName={nativeEditor.object.name} onClose={() => setNativeEditor(null)} onListResponses={(id) => client.listFormResponses(id)} onPublish={publishNativeForm} onRename={renameNativeFile} onSave={saveNativeFile} onShare={(settings) => { setShareSettings(settings ?? null); setShareFile(nativeEditor.object); }} />}
