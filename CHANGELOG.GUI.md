@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.29.1 - 2026-07-22
+
+### Fixed
+
+- Added a Refresh connection control to the ZominAI drawer and corrected the
+  storage-question request shape so the local runtime can answer it.
+
 ## v1.29.0 - 2026-07-22
 
 ### Added

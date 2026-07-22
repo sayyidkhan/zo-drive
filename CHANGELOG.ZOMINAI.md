@@ -3,6 +3,17 @@
 All notable changes to ZominAI are recorded here. ZominAI follows its own
 semantic-versioned release track, independent of the Zo Drive GUI and CLI.
 
+## v1.2.1 - 2026-07-22
+
+### Fixed
+
+- Retrieve storage usage before asking the local runtime to respond, avoiding
+  an unsupported forced-function request.
+
+### Added
+
+- Added an on-demand connection refresh control in the ZominAI chat header.
+
 ## v1.2.0 - 2026-07-22
 
 ### Added

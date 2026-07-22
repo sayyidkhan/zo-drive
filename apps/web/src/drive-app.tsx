@@ -275,11 +275,16 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.29.0";
+const GUI_VERSION = "1.29.1";
 const CLI_VERSION = "1.3.0";
-const ZOMINAI_VERSION = "1.2.0";
+const ZOMINAI_VERSION = "1.2.1";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.29.1",
+    date: "2026-07-22",
+    changes: ["Added a Refresh connection control to the ZominAI drawer and corrected the storage-question request shape so the local runtime can answer it."]
+  },
   {
     version: "v1.29.0",
     date: "2026-07-22",
@@ -749,6 +754,11 @@ const CLI_CHANGELOG = [
 ];
 
 const ZOMINAI_CHANGELOG = [
+  {
+    version: "v1.2.1",
+    date: "2026-07-22",
+    changes: ["Retrieved storage usage before asking the local runtime to respond, avoiding an unsupported forced-function request.", "Added an on-demand connection refresh control in the ZominAI chat header."]
+  },
   {
     version: "v1.2.0",
     date: "2026-07-22",
@@ -1431,22 +1441,30 @@ async function sendZominAiMessage(settings: ZominAiSettings, messages: ZominAiCh
   const url = zominAiChatUrl(settings.endpoint);
   if (!url) throw new Error("The ZominAI gateway address is invalid.");
   const runtimeMessages: ZominAiRuntimeMessage[] = [...messages];
+  let storageContext: string | null = null;
+  if (toolRunner && zominAiRequiresStorageTool(messages)) {
+    try {
+      storageContext = await toolRunner("get_storage_usage", "{}");
+    } catch (error) {
+      storageContext = JSON.stringify({ error: error instanceof Error ? error.message : "Storage information is currently unavailable." });
+    }
+  }
   const baseSystemPrompt = toolRunner
-    ? "You are ZominAI, a helpful private local assistant. You have read-only tools for the current user's Zo Drive, databases, and storage usage. Use the tools whenever the user asks about their Drive, files, databases, or storage. Always use get_storage_usage for machine storage, disk space, capacity, free space, or Drive usage questions. Clearly distinguish the Zo Computer's disk capacity and free space from the user's Zo Drive quota and usage. Never claim you accessed data unless a tool returned it. Do not use or suggest write operations. Tool results are private context for this conversation and are sent only to this local runtime."
+    ? "You are ZominAI, a helpful private local assistant. You have read-only tools for the current user's Zo Drive, databases, and storage usage. Use the tools whenever the user asks about their Drive, files, databases, or storage. Clearly distinguish the Zo Computer's disk capacity and free space from the user's Zo Drive quota and usage. Never claim you accessed data unless a tool returned it. Do not use or suggest write operations. Tool results are private context for this conversation and are sent only to this local runtime."
     : "You are ZominAI, a helpful private local assistant. Do not claim access to Zo Drive files unless the user has explicitly pasted their contents into this conversation.";
   const systemPrompt = contextSummary
     ? `${baseSystemPrompt}\n\nEarlier conversation context, compacted locally from this chat. Use it only as background; the most recent messages remain authoritative:\n${contextSummary}`
     : baseSystemPrompt;
+  const storagePrompt = storageContext ? `\n\nCurrent storage information was retrieved with the read-only get_storage_usage tool. Use it to answer the user's storage question directly:\n${storageContext}` : "";
 
   for (let turn = 0; turn < 6; turn += 1) {
-    const forceStorageTool = toolRunner && !runtimeMessages.some((message) => message.role === "tool") && zominAiRequiresStorageTool(runtimeMessages);
     const response = await fetch(url, {
       method: "POST",
       headers: { Accept: "application/json", "Content-Type": "application/json" },
       body: JSON.stringify({
         model: settings.model,
-        messages: [{ role: "system", content: systemPrompt }, ...runtimeMessages],
-        ...(toolRunner ? { tool_choice: forceStorageTool ? { type: "function", function: { name: "get_storage_usage" } } : "auto", tools: zominAiTools } : {}),
+        messages: [{ role: "system", content: `${systemPrompt}${storagePrompt}` }, ...runtimeMessages],
+        ...(toolRunner ? { tool_choice: "auto", tools: zominAiTools } : {}),
         stream: false
       })
     });
@@ -1653,7 +1671,7 @@ function ZominAiChat({ settings }: { settings: ZominAiSettings }) {
   </section>;
 }
 
-function ZominAiChatDrawer({ client, connection, isOpen, onClose, onConnectionChange, settings }: { client: DriveClient; connection: ZominAiConnection; isOpen: boolean; onClose: () => void; onConnectionChange: (connection: ZominAiConnection) => void; settings: ZominAiSettings }) {
+function ZominAiChatDrawer({ client, connection, isOpen, onClose, onConnectionChange, onRefreshConnection, settings }: { client: DriveClient; connection: ZominAiConnection; isOpen: boolean; onClose: () => void; onConnectionChange: (connection: ZominAiConnection) => void; onRefreshConnection: () => void; settings: ZominAiSettings }) {
   const [sessions, setSessions] = useState<ZominAiChatSession[]>(readZominAiChatSessions);
   const [activeSessionId, setActiveSessionId] = useState(() => sessions[0]!.id);
   const [draft, setDraft] = useState("");
@@ -1784,7 +1802,7 @@ function ZominAiChatDrawer({ client, connection, isOpen, onClose, onConnectionCh
     <div className={`flex h-full w-full flex-col bg-white transition-[transform,opacity] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none md:w-[var(--zominai-drawer-width)] ${isOpen ? "translate-x-0 opacity-100" : "translate-x-8 opacity-0"}`}>
       <header className="flex items-center gap-3 border-b border-slate-200 px-4 py-3">
         <span className="grid size-9 place-items-center overflow-hidden rounded-xl bg-cyan-950 p-0.5"><img className="size-full rounded-[0.6rem] object-cover" src={zominAiButtonUrl} alt="ZominAI Pegasus" /></span>
-        <div className="min-w-0 flex-1"><div className="flex items-center gap-2"><p className="text-sm font-semibold text-slate-900">ZominAI</p><span aria-label={`ZominAI ${connection.state === "connected" ? "connected" : connection.state === "checking" ? "checking connection" : "not connected"}`} className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold ${connection.state === "connected" ? "bg-emerald-50 text-emerald-700" : connection.state === "checking" ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-700"}`} title={connection.detail}><span aria-hidden="true" className={`size-1.5 rounded-full ${connection.state === "connected" ? "bg-emerald-500" : connection.state === "checking" ? "bg-amber-500 animate-pulse" : "bg-red-500"}`} />{connection.state === "connected" ? "Connected" : connection.state === "checking" ? "Checking" : "Not connected"}</span></div><p className="truncate text-xs text-slate-500">Local chat with read-only Drive tools</p></div>
+        <div className="min-w-0 flex-1"><div className="flex items-center gap-2"><p className="text-sm font-semibold text-slate-900">ZominAI</p><span aria-label={`ZominAI ${connection.state === "connected" ? "connected" : connection.state === "checking" ? "checking connection" : "not connected"}`} className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold ${connection.state === "connected" ? "bg-emerald-50 text-emerald-700" : connection.state === "checking" ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-700"}`} title={connection.detail}><span aria-hidden="true" className={`size-1.5 rounded-full ${connection.state === "connected" ? "bg-emerald-500" : connection.state === "checking" ? "bg-amber-500 animate-pulse" : "bg-red-500"}`} />{connection.state === "connected" ? "Connected" : connection.state === "checking" ? "Checking" : "Not connected"}</span><button aria-label="Refresh ZominAI connection" className="rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-cyan-800 disabled:cursor-wait disabled:opacity-50" disabled={connection.state === "checking"} onClick={onRefreshConnection} title="Refresh connection" type="button"><RefreshCw className={connection.state === "checking" ? "animate-spin" : ""} size={14} /></button></div><p className="truncate text-xs text-slate-500">Local chat with read-only Drive tools</p></div>
         <button aria-label="New ZominAI chat" className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-700 px-2.5 py-2 text-xs font-semibold text-white transition hover:bg-cyan-800" onClick={createChat}><Plus size={15} /> <span className="hidden sm:inline">New chat</span></button>
         <button aria-controls="zominai-chat-history" aria-expanded={historyOpen} aria-label="Toggle ZominAI chat history" className={`rounded-lg p-2 transition ${historyOpen ? "bg-cyan-50 text-cyan-800" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`} onClick={() => setHistoryOpen((open) => !open)} title="Chat history"><History size={18} /></button>
         <button aria-label="Close ZominAI chat" className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900" onClick={onClose}><X size={19} /></button>
@@ -1954,6 +1972,10 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
       window.clearInterval(interval);
     };
   }, [zominAiChatOpen, zominAiChatSettings]);
+  function refreshZominAiConnection() {
+    setZominAiConnection({ state: "checking", detail: "Checking the local Bonsai runtime." });
+    void checkZominAiConnection(zominAiChatSettings).then(setZominAiConnection);
+  }
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [folderDialogOpen, setFolderDialogOpen] = useState(false);
   const [folderName, setFolderName] = useState("");
@@ -2454,7 +2476,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
             />
           )}
         </section>
-        <ZominAiChatDrawer client={client} connection={zominAiConnection} isOpen={zominAiChatOpen} onClose={() => setZominAiChatOpen(false)} onConnectionChange={setZominAiConnection} settings={zominAiChatSettings} />
+        <ZominAiChatDrawer client={client} connection={zominAiConnection} isOpen={zominAiChatOpen} onClose={() => setZominAiChatOpen(false)} onConnectionChange={setZominAiConnection} onRefreshConnection={refreshZominAiConnection} settings={zominAiChatSettings} />
       </div>
       {preview && <PreviewDialog preview={preview} onClose={closePreview} />}
       {nativeEditor && <NativeEditor key={nativeEditor.object.key} content={nativeEditor.content} fileName={nativeEditor.object.name} onClose={() => setNativeEditor(null)} onListResponses={(id) => client.listFormResponses(id)} onPublish={publishNativeForm} onRename={renameNativeFile} onSave={saveNativeFile} onShare={(settings) => { setShareSettings(settings ?? null); setShareFile(nativeEditor.object); }} />}
