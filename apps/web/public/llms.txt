@@ -116,7 +116,9 @@ surface and use JSON except for object upload/download.
   its responses.
 - `GET /auth/status`, `POST /auth/register`, `POST /auth/login`,
   `POST /auth/logout`, `PATCH /auth/profile`, `POST /auth/password`, and
-  `DELETE /auth/account` — owner account and browser-session management.
+  `DELETE /auth/account` — owner account and browser-session management. An
+  unauthenticated status response includes public demo credentials when a
+  super user has enabled the single regular, read-only demo account.
 
 ## Official clients and guides
 

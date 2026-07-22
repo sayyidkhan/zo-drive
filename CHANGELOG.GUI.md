@@ -2,6 +2,15 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.34.0 - 2026-07-22
+
+### Added
+
+- Added one public demo account whose username and password are shown on the
+  sign-in page, with one-click credential filling.
+- Added explicit User access warnings and server-enforced regular, read-only
+  restrictions for demo accounts.
+
 ## v1.33.0 - 2026-07-22
 
 ### Added

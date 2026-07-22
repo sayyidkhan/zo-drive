@@ -10,14 +10,17 @@ export type AuthenticatedUser = {
   access: "read" | "write";
   role: "regular" | "super";
   isOwner: boolean;
+  isDemo: boolean;
   createdAt: string;
 };
 
-type StoredUser = Omit<AuthenticatedUser, "access" | "role" | "isOwner"> & {
+type StoredUser = Omit<AuthenticatedUser, "access" | "role" | "isOwner" | "isDemo"> & {
   accountOwnerId?: string;
   access?: "read" | "write";
   role?: "regular" | "super";
   isOwner?: boolean;
+  isDemo?: boolean;
+  demoPassword?: string;
   passwordHash: string;
 };
 
@@ -50,7 +53,8 @@ export class LocalAuthStore {
       accountOwnerId: normalizedUsername,
       access: "write",
       role: "super",
-      isOwner: true
+      isOwner: true,
+      isDemo: false
     };
     users.users.push(user);
     await this.writeUsers(users);
@@ -68,6 +72,12 @@ export class LocalAuthStore {
     const users = await this.readUsers();
     const user = users.users.find((candidate) => candidate.id === id);
     return user ? publicUser(user, users.users) : null;
+  }
+
+  async getDemoAccountCredentials(): Promise<{ username: string; password: string } | null> {
+    const users = await this.readUsers();
+    const demo = users.users.find((candidate) => normaliseStoredUser(candidate, users.users).isDemo && candidate.demoPassword);
+    return demo?.demoPassword ? { username: demo.username, password: demo.demoPassword } : null;
   }
 
   async renameUser(id: string, username: string): Promise<AuthenticatedUser | null> {
@@ -97,21 +107,24 @@ export class LocalAuthStore {
       .map((member) => publicUser(member, users.users));
   }
 
-  async createAccountMember(actorId: string, { username, password, access, role }: { username: string; password: string; access: "read" | "write"; role: "regular" | "super" }): Promise<AuthenticatedUser | null> {
+  async createAccountMember(actorId: string, { username, password, access, role, isDemo = false }: { username: string; password: string; access: "read" | "write"; role: "regular" | "super"; isDemo?: boolean }): Promise<AuthenticatedUser | null> {
     const users = await this.readUsers();
     const actor = users.users.find((candidate) => candidate.id === actorId);
     if (!actor || !canManage(actor, users.users)) return null;
     const normalizedUsername = normalizeUsername(username);
     if (users.users.some((candidate) => candidate.id === normalizedUsername || candidate.username === normalizedUsername)) return null;
+    if (isDemo && users.users.some((candidate) => normaliseStoredUser(candidate, users.users).isDemo)) return null;
     const user: StoredUser = {
       id: normalizedUsername,
       username: normalizedUsername,
       passwordHash: await hashPassword(password),
       createdAt: new Date().toISOString(),
       accountOwnerId: accountOwnerId(actor, users.users),
-      access,
-      role,
-      isOwner: false
+      access: isDemo ? "read" : access,
+      role: isDemo ? "regular" : role,
+      isOwner: false,
+      isDemo,
+      ...(isDemo ? { demoPassword: password } : {})
     };
     users.users.push(user);
     await this.writeUsers(users);
@@ -124,6 +137,7 @@ export class LocalAuthStore {
     const member = users.users.find((candidate) => candidate.id === memberId);
     if (!actor || !member || !canManage(actor, users.users) || accountOwnerId(actor, users.users) !== accountOwnerId(member, users.users)) return null;
     if (member.isOwner) return "forbidden";
+    if (normaliseStoredUser(member, users.users).isDemo && (changes.access === "write" || changes.role === "super")) return "forbidden";
     if (changes.access) member.access = changes.access;
     if (changes.role) member.role = changes.role;
     await this.writeUsers(users);
@@ -163,6 +177,12 @@ export class LocalAuthStore {
     return Boolean(users.users.find((candidate) => candidate.id === userId)?.isOwner);
   }
 
+  async isDemoAccount(userId: string): Promise<boolean> {
+    const users = await this.readUsers();
+    const user = users.users.find((candidate) => candidate.id === userId);
+    return Boolean(user && normaliseStoredUser(user, users.users).isDemo);
+  }
+
   async verifyPasswordForUser(id: string, password: string): Promise<boolean> {
     const user = (await this.readUsers()).users.find((candidate) => candidate.id === id);
     return Boolean(user && await verifyPassword(password, user.passwordHash));
@@ -171,7 +191,7 @@ export class LocalAuthStore {
   async changePassword(id: string, currentPassword: string, newPassword: string): Promise<boolean> {
     const users = await this.readUsers();
     const user = users.users.find((candidate) => candidate.id === id);
-    if (!user || !(await verifyPassword(currentPassword, user.passwordHash))) return false;
+    if (!user || normaliseStoredUser(user, users.users).isDemo || !(await verifyPassword(currentPassword, user.passwordHash))) return false;
     user.passwordHash = await hashPassword(newPassword);
     await this.writeUsers(users);
     return true;
@@ -220,7 +240,7 @@ function normalizeUsername(username: string): string {
 
 function publicUser(user: StoredUser, users: StoredUser[]): AuthenticatedUser {
   const normalized = normaliseStoredUser(user, users);
-  return { id: normalized.id, username: normalized.username, access: normalized.access, role: normalized.role, isOwner: normalized.isOwner, createdAt: normalized.createdAt };
+  return { id: normalized.id, username: normalized.username, access: normalized.access, role: normalized.role, isOwner: normalized.isOwner, isDemo: normalized.isDemo, createdAt: normalized.createdAt };
 }
 
 function accountOwnerId(user: StoredUser, users: StoredUser[]): string {
@@ -232,14 +252,17 @@ function canManage(user: StoredUser, users: StoredUser[]): boolean {
   return normalized.isOwner || normalized.role === "super";
 }
 
-function normaliseStoredUser(user: StoredUser, users: StoredUser[], assumeOwner = false): StoredUser & Required<Pick<StoredUser, "accountOwnerId" | "access" | "role" | "isOwner">> {
+function normaliseStoredUser(user: StoredUser, users: StoredUser[], assumeOwner = false): StoredUser & Required<Pick<StoredUser, "accountOwnerId" | "access" | "role" | "isOwner" | "isDemo">> {
   const owner = user.accountOwnerId ?? (user.isOwner || assumeOwner ? user.id : users.find((candidate) => candidate.isOwner)?.id ?? users[0]?.id ?? user.id);
+  const isOwner = user.isOwner === true || (assumeOwner && !user.accountOwnerId);
+  const isDemo = !isOwner && user.isDemo === true;
   return {
     ...user,
     accountOwnerId: owner,
-    access: user.access === "read" ? "read" : "write",
-    role: user.role === "super" ? "super" : (user.isOwner || assumeOwner ? "super" : "regular"),
-    isOwner: user.isOwner === true || (assumeOwner && !user.accountOwnerId)
+    access: isDemo || user.access === "read" ? "read" : "write",
+    role: isDemo ? "regular" : user.role === "super" ? "super" : (isOwner ? "super" : "regular"),
+    isOwner,
+    isDemo
   };
 }
 

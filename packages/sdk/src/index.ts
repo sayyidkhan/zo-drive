@@ -449,8 +449,8 @@ export class ZoDriveClient {
     return listAccountMembersResponseSchema.parse(await response.json()).members;
   }
 
-  async createAccountMember({ username, password, access, role }: { username: string; password: string; access: AccountAccess; role: AccountRole }): Promise<AccountMember> {
-    const response = await this.request("/auth/users", { body: JSON.stringify({ username, password, access, role }), headers: { "content-type": "application/json" }, method: "POST" });
+  async createAccountMember({ username, password, access, role, isDemo = false }: { username: string; password: string; access: AccountAccess; role: AccountRole; isDemo?: boolean }): Promise<AccountMember> {
+    const response = await this.request("/auth/users", { body: JSON.stringify({ username, password, access, role, isDemo }), headers: { "content-type": "application/json" }, method: "POST" });
     return accountMemberSchema.parse(await response.json());
   }
 

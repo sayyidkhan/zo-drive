@@ -666,7 +666,7 @@ describe("Zo Drive API", () => {
     });
 
     const beforeRegistration = await app.request("http://localhost/auth/status");
-    await expect(beforeRegistration.json()).resolves.toEqual({ authenticated: false, registrationAllowed: true, user: null });
+    await expect(beforeRegistration.json()).resolves.toEqual({ authenticated: false, registrationAllowed: true, user: null, demoAccount: null });
     expect((await app.request("http://localhost/objects")).status).toBe(401);
 
     const registration = await app.request("http://localhost/auth/register", {
@@ -682,6 +682,7 @@ describe("Zo Drive API", () => {
     await expect(afterRegistration.json()).resolves.toEqual({
       authenticated: true,
       registrationAllowed: false,
+      demoAccount: null,
       user: expect.objectContaining({ id: "sayyid", username: "sayyid" })
     });
 
@@ -724,7 +725,7 @@ describe("Zo Drive API", () => {
     expect(deleted.status).toBe(204);
     expect(deleted.headers.get("set-cookie")).toContain("Max-Age=0");
     expect((await app.request("http://localhost/objects", { headers: { cookie: renamedCookie! } })).status).toBe(401);
-    await expect((await app.request("http://localhost/auth/status", { headers: { cookie: cookie! } })).json()).resolves.toEqual({ authenticated: false, registrationAllowed: true, user: null });
+    await expect((await app.request("http://localhost/auth/status", { headers: { cookie: cookie! } })).json()).resolves.toEqual({ authenticated: false, registrationAllowed: true, user: null, demoAccount: null });
   });
 
   it("shares the owner Drive with member users and enforces access, super-user, and owner protections", async () => {
@@ -745,6 +746,11 @@ describe("Zo Drive API", () => {
     expect(reader.status).toBe(201);
     const superUser = await createMember("admin", "read", "super");
     expect(superUser.status).toBe(201);
+    const demo = await app.request("http://localhost/auth/users", { method: "POST", headers: { "content-type": "application/json", cookie: ownerCookie }, body: JSON.stringify({ username: "demo", password: "public-demo", access: "write", role: "super", isDemo: true }) });
+    expect(demo.status).toBe(201);
+    await expect(demo.json()).resolves.toMatchObject({ username: "demo", access: "read", role: "regular", isDemo: true });
+    await expect((await app.request("http://localhost/auth/status")).json()).resolves.toMatchObject({ authenticated: false, demoAccount: { username: "demo", password: "public-demo" } });
+    expect((await app.request("http://localhost/auth/users", { method: "POST", headers: { "content-type": "application/json", cookie: ownerCookie }, body: JSON.stringify({ username: "demo-two", password: "public-demo-two", access: "read", role: "regular", isDemo: true }) })).status).toBe(409);
     expect((await app.request("http://localhost/objects", { method: "POST", headers: { "content-type": "text/plain", cookie: ownerCookie, "x-zo-drive-file-name": "owner-file.txt" }, body: "shared account file" })).status).toBe(201);
 
     const readerLogin = await app.request("http://localhost/auth/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: "reader", password: "reader-secret" }) });
@@ -760,6 +766,16 @@ describe("Zo Drive API", () => {
     expect((await app.request("http://localhost/auth/users/owner", { method: "PATCH", headers: { "content-type": "application/json", cookie: superCookie }, body: JSON.stringify({ access: "read", role: "regular" }) })).status).toBe(403);
     expect((await app.request("http://localhost/auth/users/owner", { method: "DELETE", headers: { cookie: superCookie } })).status).toBe(403);
     expect((await app.request("http://localhost/objects", { method: "POST", headers: { "content-type": "text/plain", cookie: readerCookie, "x-zo-drive-file-name": "member-file.txt" }, body: "now allowed" })).status).toBe(201);
+
+    const demoLogin = await app.request("http://localhost/auth/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: "demo", password: "public-demo" }) });
+    const demoCookie = demoLogin.headers.get("set-cookie")!;
+    expect((await app.request("http://localhost/objects", { headers: { cookie: demoCookie } })).status).toBe(200);
+    expect((await app.request("http://localhost/objects", { method: "POST", headers: { "content-type": "text/plain", cookie: demoCookie, "x-zo-drive-file-name": "demo-write.txt" }, body: "blocked" })).status).toBe(401);
+    expect((await app.request("http://localhost/auth/profile", { method: "PATCH", headers: { "content-type": "application/json", cookie: demoCookie }, body: JSON.stringify({ username: "hijacked-demo" }) })).status).toBe(403);
+    expect((await app.request("http://localhost/auth/password", { method: "POST", headers: { "content-type": "application/json", cookie: demoCookie }, body: JSON.stringify({ currentPassword: "public-demo", newPassword: "hijacked-password" }) })).status).toBe(403);
+    expect((await app.request("http://localhost/auth/users/demo", { method: "PATCH", headers: { "content-type": "application/json", cookie: ownerCookie }, body: JSON.stringify({ access: "write" }) })).status).toBe(403);
+    expect((await app.request("http://localhost/auth/users/demo", { method: "DELETE", headers: { cookie: ownerCookie } })).status).toBe(204);
+    await expect((await app.request("http://localhost/auth/status")).json()).resolves.toMatchObject({ demoAccount: null });
   });
 
   it("issues revocable scoped device keys without exposing their secrets after creation", async () => {

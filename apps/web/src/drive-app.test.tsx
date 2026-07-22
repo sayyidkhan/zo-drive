@@ -48,7 +48,7 @@ describe("DriveApp", () => {
       expect(screen.getByRole("heading", { name: "Run private databases beside your files" })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Automate with Zo Functions" })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Ask about your Drive without granting write access" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 1.33.0" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 1.34.0" })).toBeInTheDocument();
       expect(screen.getByText("Product")).toBeInTheDocument();
       expect(screen.getByRole("navigation", { name: "Choose documentation product" })).toBeInTheDocument();
       expect(screen.getByRole("navigation", { name: "Documentation sections" })).toHaveTextContent("Zo Originals");
@@ -58,7 +58,7 @@ describe("DriveApp", () => {
         expect(modeSwitch).toHaveTextContent("CLI");
       }
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI releases version 1.33.0" })).toHaveAttribute("href", expect.stringContaining("?releases=1&mode=gui"));
+      expect(screen.getByRole("link", { name: "GUI releases version 1.34.0" })).toHaveAttribute("href", expect.stringContaining("?releases=1&mode=gui"));
       expect(screen.queryByRole("heading", { name: "GUI changelog" })).not.toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
 
@@ -96,7 +96,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.33.0")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.34.0")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();
@@ -191,6 +191,31 @@ describe("DriveApp", () => {
     render(<DriveApp authClient={authClient} />);
 
     expect(await screen.findByRole("heading", { name: "Sign in to Zo Drive" })).toBeInTheDocument();
+  });
+
+  it("shows public demo credentials on the sign-in page and fills them on request", async () => {
+    const authClient = {
+      getAuthStatus: vi.fn().mockResolvedValue({ authenticated: false, registrationAllowed: false, user: null, demoAccount: { username: "demo", password: "public-demo" } }),
+      login: vi.fn().mockResolvedValue({ id: "demo", username: "demo", access: "read", role: "regular", isOwner: false, isDemo: true }),
+      logout: vi.fn(),
+      registerInitialUser: vi.fn(),
+      updateProfile: vi.fn(),
+      changePassword: vi.fn(),
+      deleteAccount: vi.fn()
+    };
+
+    window.history.pushState({}, "", "?login=1");
+    render(<DriveApp authClient={authClient} />);
+
+    const credentials = await screen.findByRole("region", { name: "Demo account credentials" });
+    expect(credentials).toHaveTextContent("demo");
+    expect(credentials).toHaveTextContent("public-demo");
+    expect(credentials).toHaveTextContent("read-only");
+    fireEvent.click(screen.getByRole("button", { name: "Use demo credentials" }));
+    expect(screen.getByRole("textbox", { name: "Username" })).toHaveValue("demo");
+    expect(screen.getByLabelText("Password")).toHaveValue("public-demo");
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    await waitFor(() => expect(authClient.login).toHaveBeenCalledWith({ username: "demo", password: "public-demo" }));
   });
 
   it("renders documentation without checking the visitor's sign-in session", () => {
@@ -299,7 +324,11 @@ describe("DriveApp", () => {
       registerInitialUser: vi.fn(),
       updateProfile: vi.fn(),
       changePassword: vi.fn(),
-      deleteAccount: vi.fn()
+      deleteAccount: vi.fn(),
+      listAccountMembers: vi.fn().mockResolvedValue([{ id: "owner", username: "sayyid", access: "write", role: "super", isOwner: true, isDemo: false, createdAt: "2026-01-01T00:00:00.000Z" }]),
+      createAccountMember: vi.fn().mockResolvedValue({ id: "demo", username: "demo", access: "read", role: "regular", isOwner: false, isDemo: true, createdAt: "2026-07-22T00:00:00.000Z" }),
+      updateAccountMember: vi.fn(),
+      deleteAccountMember: vi.fn()
     };
 
     render(<DriveApp client={client} authClient={authClient} />);
@@ -487,6 +516,16 @@ describe("DriveApp", () => {
     fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
     expect(screen.getByRole("button", { name: "User access" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Theme" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "User access" }));
+    expect(await screen.findByText("Demo credentials are public")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Demo account" }));
+    expect(screen.getByRole("combobox", { name: "New user access" })).toBeDisabled();
+    expect(screen.getByRole("combobox", { name: "New user role" })).toBeDisabled();
+    fireEvent.change(screen.getByRole("textbox", { name: "New user username" }), { target: { value: "demo" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "New user password" }), { target: { value: "public-demo" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add user" }));
+    await waitFor(() => expect(authClient.createAccountMember).toHaveBeenCalledWith({ username: "demo", password: "public-demo", access: "read", role: "regular", isDemo: true }));
+    fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
     fireEvent.click(screen.getByRole("button", { name: "Theme" }));
     expect(await screen.findByRole("heading", { name: "Choose your Drive theme." })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Use Zo Computer" }));

@@ -95,7 +95,8 @@ const credentialsSchema = z.object({
 });
 const accountMemberCreateSchema = credentialsSchema.extend({
   access: z.enum(["read", "write"]),
-  role: z.enum(["regular", "super"])
+  role: z.enum(["regular", "super"]),
+  isDemo: z.boolean().optional().default(false)
 });
 const accountMemberUpdateSchema = z.object({
   access: z.enum(["read", "write"]).optional(),
@@ -366,7 +367,8 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
       return context.json({
         authenticated: Boolean(user),
         registrationAllowed: !(await auth.store.hasUsers()),
-        user
+        user,
+        demoAccount: await auth.store.getDemoAccountCredentials()
       });
     });
 
@@ -399,6 +401,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     app.patch("/auth/profile", async (context) => {
       const userId = await resolveAuthenticatedUser(context.req.raw);
       if (!userId) return unauthorized(context);
+      if (await auth.store.isDemoAccount(userId)) return context.json({ error: { code: "DEMO_ACCOUNT_PROTECTED", message: "Demo account sign-in details are managed by a super user" } }, 403);
       const parsed = usernameSchema.safeParse(await context.req.json().catch(() => null));
       if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Username must be 3–32 letters, numbers, underscores, or hyphens" } }, 400);
       const nextUserId = parsed.data.username.trim().toLowerCase();
@@ -421,6 +424,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     app.post("/auth/password", async (context) => {
       const userId = await resolveAuthenticatedUser(context.req.raw);
       if (!userId) return unauthorized(context);
+      if (await auth.store.isDemoAccount(userId)) return context.json({ error: { code: "DEMO_ACCOUNT_PROTECTED", message: "Demo account sign-in details are managed by a super user" } }, 403);
       const parsed = passwordChangeSchema.safeParse(await context.req.json().catch(() => null));
       if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Passwords must have at least 6 characters" } }, 400);
       if (!(await auth.store.changePassword(userId, parsed.data.currentPassword, parsed.data.newPassword))) {
@@ -464,7 +468,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
       const parsed = accountMemberCreateSchema.safeParse(await context.req.json().catch(() => null));
       if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Enter a unique username, password, role, and access level" } }, 400);
       const member = await auth.store.createAccountMember(userId, parsed.data);
-      if (!member) return context.json({ error: { code: "USER_CREATE_FAILED", message: "Only super users can add unique account members" } }, 409);
+      if (!member) return context.json({ error: { code: "USER_CREATE_FAILED", message: "Only super users can add unique account members, and each Drive can have one demo account" } }, 409);
       return context.json(member, 201);
     });
 
@@ -474,7 +478,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
       const parsed = accountMemberUpdateSchema.safeParse(await context.req.json().catch(() => null));
       if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Choose a role or access level" } }, 400);
       const member = await auth.store.updateAccountMember(userId, context.req.param("id"), parsed.data);
-      if (member === "forbidden") return context.json({ error: { code: "OWNER_PROTECTED", message: "The original owner always retains super user and read & write access" } }, 403);
+      if (member === "forbidden") return context.json({ error: { code: "ACCOUNT_PROTECTED", message: "Owner and demo account access restrictions cannot be changed" } }, 403);
       if (!member) return context.json({ error: { code: "NOT_FOUND", message: "User not found or access cannot be managed" } }, 404);
       return context.json(member);
     });
