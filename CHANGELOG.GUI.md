@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.29.2 - 2026-07-22
+
+### Fixed
+
+- Simplified ZominAI setup around the managed Zo Computer runtime and removed
+  browser WebGPU and disk-space checks that do not affect server inference.
+
 ## v1.29.1 - 2026-07-22
 
 ### Fixed

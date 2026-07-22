@@ -3,6 +3,13 @@
 All notable changes to ZominAI are recorded here. ZominAI follows its own
 semantic-versioned release track, independent of the Zo Drive GUI and CLI.
 
+## v1.2.2 - 2026-07-22
+
+### Fixed
+
+- Added a supervised private Bonsai 8B runtime launcher for Zo Computer and
+  streamlined setup around its server-side health check.
+
 ## v1.2.1 - 2026-07-22
 
 ### Fixed
