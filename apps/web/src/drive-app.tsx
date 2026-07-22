@@ -272,11 +272,16 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.24.4";
-const CLI_VERSION = "1.2.2";
+const GUI_VERSION = "1.24.5";
+const CLI_VERSION = "1.3.0";
 const ZOMINAI_VERSION = "1.0.1";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.24.5",
+    date: "2026-07-22",
+    changes: ["Updated the CLI guide for terminal CRUD support across Zo Paste, Zo Transfer, Zo Shared Drives, Zo Databases, and Zo Functions."]
+  },
   {
     version: "v1.24.4",
     date: "2026-07-22",
@@ -654,6 +659,11 @@ const GUI_CHANGELOG = [
 
 const CLI_CHANGELOG = [
   {
+    version: "v1.3.0",
+    date: "2026-07-22",
+    changes: ["Added Zo Originals command families for Zo Paste, Zo Transfer, Zo Shared Drives, Zo Databases, and Zo Functions, including CRUD operations and JSON output for automation."]
+  },
+  {
     version: "v1.2.2",
     date: "2026-07-22",
     changes: ["Expanded CLI documentation with file operations, dry runs, health and capacity checks, script automation, and the boundary with GUI-managed product workspaces."]
@@ -840,7 +850,7 @@ function DocsGuidesPage({ mode }: { mode: "gui" | "cli" }) {
   const changelog = isGui ? GUI_CHANGELOG : CLI_CHANGELOG;
   const hero = isGui
     ? { title: "Run your private cloud from one workspace.", body: "Use the browser GUI for files, private apps, controlled sharing, local AI, databases, and automations beside the data they use." }
-    : { title: "Operate your Drive from the terminal.", body: "Use the CLI for fast file operations, safe checks, device health, and scriptable automation against the same private Drive." };
+    : { title: "Operate your Drive from the terminal.", body: "Use the CLI for fast file operations, Zo Originals CRUD, safe checks, device health, and scriptable automation against the same private Drive." };
   const sections = isGui
     ? [
         { id: "gui", eyebrow: "Browser GUI", icon: <MonitorUp size={20} />, title: "Upload from the Drive", body: "Use the browser interface for everyday uploads, folders and sharing.", steps: ["Select Zo Drive in the top-right navigation and sign in with the owner account.", "Use the blue Upload button at the bottom-right of the Drive.", "Drop a file or folder into the panel, or choose File or Folder. Folder uploads preserve the directory structure."] },
@@ -862,7 +872,7 @@ function DocsGuidesPage({ mode }: { mode: "gui" | "cli" }) {
         { id: "safe-operations", eyebrow: "Safe delivery", icon: <ShieldCheck size={20} />, title: "Validate before transferring or deleting", body: "Dry runs, progress reporting, and Trash-backed removal make CLI work safer when a script is about to move or transfer important data.", steps: ["Use zo-drive upload --dry-run or download --dry-run to validate the connection, quota, destination, and file before data moves.", "Use the live progress bar for large interactive uploads.", "Use rm for a reversible move to Trash; permanent deletion stays a deliberate GUI action."] },
         { id: "health", eyebrow: "Operations", icon: <Cloud size={20} />, title: "Check health and capacity before automation", body: "The CLI can verify that your credential, Drive API, storage, and backing filesystem are ready before a job depends on them.", steps: ["Run zo-drive health before a scheduled or important transfer.", "Run zo-drive usage or zo-drive usage --json to inspect storage consumption.", "Use zo-drive status when you only need the saved connection and authenticated account state."] },
         { id: "automation", eyebrow: "Automation", icon: <Code2 size={20} />, title: "Build reliable scripts around Drive", body: "Use JSON output, exact-file checks, and the TypeScript SDK when a local script or application needs predictable Drive behaviour.", steps: ["Use exists for an exit-code check and stat --json for structured metadata.", "Use scoped API keys per machine or automation so access can be revoked without affecting other devices.", "Move to the shared TypeScript SDK when your job needs reusable upload, list, or download logic in code."] },
-        { id: "gui-workspaces", eyebrow: "Product workspaces", icon: <MonitorUp size={20} />, title: "Use the GUI for Zo-native products", body: "Zo Paste, Zo Transfer, Zo Functions, Zo Databases, Zo Shared Drives, and ZominAI are managed in the browser workspace. The CLI focuses on direct file operations and automation against the same Drive.", steps: ["Use the GUI to create and manage the product workspace that fits the job.", "Use the CLI to move files into or out of the Drive around that workflow.", "Use the separate ZominAI product guide when configuring local AI on a device."] },
+        { id: "zo-originals-cli", eyebrow: "Zo Originals", icon: <MonitorUp size={20} />, title: "Operate Zo Originals from the CLI", body: "The CLI now provides authenticated CRUD commands for Zo Paste, Zo Transfer, Zo Shared Drives, Zo Databases, and Zo Functions. ZominAI remains deliberately browser-only while its product direction evolves.", steps: ["Use paste to create, update, inspect, share, and remove private snippets with language and tag metadata.", "Use transfer to create, rotate, list, and revoke controlled file-delivery links; use shared to manage invitations, mounts, peers, and mounted-folder files.", "Use database and function for private database engines, queries, credentials, handlers, runs, schedules, and source updates. Add --json when a script needs structured output."] },
         { id: "updates", eyebrow: "CLI releases", icon: <RefreshCw size={20} />, title: `CLI version ${CLI_VERSION}`, body: "The local CLI has its own release track. Pull and rebuild when a CLI update is released; you do not need to install it again.", steps: ["Run zo-drive --version to check the installed CLI version.", "Use the main branch when you want the latest changes as they are pushed.", "Use a cli-v Git release tag when you want a fixed, reproducible CLI version on a machine."] },
         { id: "sdk", eyebrow: "TypeScript SDK", icon: <Database size={20} />, title: "Automate uploads in code", body: "Use the shared @zo-drive/sdk package from this repository for scripts, jobs and app integrations.", steps: ["Build the workspace SDK with pnpm --filter @zo-drive/sdk build.", "Store a scoped API key in your automation secret manager and send it as a Bearer token.", "Create ZoDriveClient with your Drive URL, then call upload with a Blob, filename and optional folder path."] }
       ];

@@ -7,11 +7,11 @@ import { readFile as readFileFromDisk, stat as statFileFromDisk, writeFile as wr
 import { createInterface } from "node:readline/promises";
 
 import { DriveApiError, ZoDriveClient } from "@zo-drive/sdk";
-import type { DriveFolder, DriveObject, StorageUsage } from "@zo-drive/types";
+import type { DatabaseEngineId, DriveFolder, DriveObject, FunctionRuntime, FunctionVisibility, StorageUsage } from "@zo-drive/types";
 
 import { readLocalConfig, writeLocalConfig } from "./config.js";
 
-const CLI_VERSION = "1.2.1";
+const CLI_VERSION = "1.3.0";
 const PROGRESS_BAR_MIN_BYTES = 1_024 ** 2;
 
 export const ZO_DRIVE_LOGO = [
@@ -105,7 +105,8 @@ export const CONFIGURATION_VERIFICATION_GUIDE = [
   "  zo-drive health"
 ].join("\n");
 
-type CliClient = Partial<Pick<ZoDriveClient, "copy" | "createFolder" | "delete" | "download" | "getHealth" | "getUsage" | "list" | "listFolders" | "move" | "upload">>;
+type CliClient = Partial<Pick<ZoDriveClient,
+  "copy" | "createClusterFolder" | "createClusterInvitation" | "createClusterMount" | "createDatabase" | "createDatabaseApiKey" | "createFolder" | "createFunction" | "createNativeFile" | "createShare" | "delete" | "deleteClusterInvitation" | "deleteClusterMount" | "deleteClusterObject" | "deleteClusterPeer" | "deleteDatabase" | "deleteFunction" | "download" | "downloadClusterObject" | "executeDatabase" | "exportDatabase" | "getDatabaseImportSettings" | "getHealth" | "getUsage" | "importDatabase" | "installDatabaseEngine" | "list" | "listClusterInvitations" | "listClusterMounts" | "listClusterObjects" | "listClusterPeers" | "listDatabaseApiKeys" | "listDatabaseEngines" | "listDatabaseRows" | "listDatabaseTables" | "listDatabases" | "listFolders" | "listFunctionRuns" | "listFunctions" | "listShares" | "move" | "queryDatabase" | "renameClusterObject" | "revokeDatabaseApiKey" | "revokeShare" | "runFunction" | "saveNativeFile" | "setDatabaseImportLimit" | "updateClusterPeerRole" | "updateDatabaseEngine" | "updateFunction" | "updateSharePasscode" | "upload" | "uploadClusterObject">>;
 
 type CliDependencies = {
   client: CliClient;
@@ -336,6 +337,18 @@ export async function runCli(args: string[], dependencies: CliDependencies): Pro
         write(options.json ? `${JSON.stringify(report)}\n` : formatHealth(report));
         return 0;
       }
+      case "paste":
+        return await runPasteCommand(commandArgs, { client: dependencies.client, error, readFile, write });
+      case "transfer":
+        return await runTransferCommand(commandArgs, { client: dependencies.client, readFile, write });
+      case "shared":
+        return await runSharedCommand(commandArgs, { client: dependencies.client, readFile, write, writeFile });
+      case "database":
+      case "db":
+        return await runDatabaseCommand(commandArgs, { client: dependencies.client, readFile, write, writeFile });
+      case "function":
+      case "fn":
+        return await runFunctionCommand(commandArgs, { client: dependencies.client, readFile, write });
       case "logo": {
         const { positionals } = parseArguments(commandArgs, []);
         if (positionals.length > 0) {
@@ -363,6 +376,185 @@ export async function runCli(args: string[], dependencies: CliDependencies): Pro
     return 1;
   }
 }
+
+type OriginalCommandDependencies = Pick<CliDependencies, "client" | "readFile" | "writeFile"> & { write: (message: string) => void; error?: (message: string) => void };
+
+async function runPasteCommand(args: string[], dependencies: OriginalCommandDependencies): Promise<number> {
+  const [action, ...rest] = args;
+  const readFile = dependencies.readFile ?? readFileFromDisk;
+  const write = dependencies.write;
+  if (action === "list") {
+    const { options } = parseArguments(rest, [], ["json"]);
+    const pastes = (await requireMethod(dependencies.client, "list")()).filter((item) => item.nativeType === "paste");
+    write(options.json ? `${JSON.stringify(pastes)}\n` : formatRecords(pastes, ["key", "name", "updatedAt"]));
+    return 0;
+  }
+  if (action === "create" || action === "update") {
+    const { positionals, options } = parseArguments(rest, ["path", "text", "file", "language", "tags"]);
+    if ((action === "create" && positionals.length !== 1) || (action === "update" && positionals.length !== 1)) throw new CliUsageError(`Usage: zo-drive paste ${action} <${action === "create" ? "name" : "key"}> [--text <text> | --file <file>] [--language <language>] [--tags <a,b>]${action === "create" ? " [--path <folder>]" : ""}`);
+    const key = positionals[0]!;
+    let current = { language: "plaintext", tags: [] as string[], text: "" };
+    if (action === "update") current = await readPaste(dependencies.client, key);
+    const text = typeof options.text === "string" ? options.text : typeof options.file === "string" ? await readFile(options.file, "utf8") : current.text;
+    if (action === "create" && typeof options.text !== "string" && typeof options.file !== "string") throw new CliUsageError("Provide paste content with --text or --file.");
+    const content = pasteContent({ language: typeof options.language === "string" ? options.language : current.language, tags: typeof options.tags === "string" ? splitCsv(options.tags) : current.tags, text });
+    if (action === "create") {
+      const created = await requireMethod(dependencies.client, "createNativeFile")({ name: key, path: typeof options.path === "string" ? options.path : undefined, type: "paste" });
+      await requireMethod(dependencies.client, "saveNativeFile")(created.key, content);
+      write(`Created paste ${created.key}\n`);
+    } else {
+      await requireMethod(dependencies.client, "saveNativeFile")(key, content);
+      write(`Updated paste ${key}\n`);
+    }
+    return 0;
+  }
+  if (action === "show") {
+    const { positionals, options } = parseArguments(rest, [], ["json"]);
+    if (positionals.length !== 1) throw new CliUsageError("Usage: zo-drive paste show <key> [--json]");
+    const paste = await readPaste(dependencies.client, positionals[0]!);
+    write(options.json ? `${JSON.stringify(paste)}\n` : `${paste.text}${paste.text.endsWith("\n") ? "" : "\n"}`);
+    return 0;
+  }
+  if (action === "share") {
+    const { positionals, options } = parseArguments(rest, ["access", "passcode", "expires"], ["editable", "json"]);
+    if (positionals.length !== 1) throw new CliUsageError("Usage: zo-drive paste share <key> --access <public|passcode> [--passcode <code>] [--editable] [--expires <ISO date|1d|7d|30d|never>]");
+    const access = shareAccess(options.access);
+    const share = await requireMethod(dependencies.client, "createShare")({ key: positionals[0]!, access, editable: options.editable === true, passcode: typeof options.passcode === "string" ? options.passcode : undefined, expiresAt: parseExpiry(options.expires) });
+    write(options.json ? `${JSON.stringify(share)}\n` : `Created paste link ${share.id}\n`);
+    return 0;
+  }
+  if (action === "delete") {
+    const { positionals } = parseArguments(rest, []);
+    if (positionals.length !== 1) throw new CliUsageError("Usage: zo-drive paste delete <key>");
+    await requireMethod(dependencies.client, "delete")(positionals[0]!);
+    write(`Moved paste ${positionals[0]} to Trash\n`);
+    return 0;
+  }
+  throw new CliUsageError(pasteHelpText());
+}
+
+async function runTransferCommand(args: string[], dependencies: OriginalCommandDependencies): Promise<number> {
+  const [action, ...rest] = args;
+  const readFile = dependencies.readFile ?? readFileFromDisk;
+  const write = dependencies.write;
+  if (action === "list") {
+    const { options } = parseArguments(rest, [], ["json"]);
+    const transfers = (await requireMethod(dependencies.client, "listShares")()).filter((item) => item.kind === "transfer");
+    write(options.json ? `${JSON.stringify(transfers)}\n` : formatRecords(transfers, ["id", "name", "access", "expiresAt"]));
+    return 0;
+  }
+  if (action === "create" || action === "upload") {
+    const { positionals, options } = parseArguments(rest, ["access", "passcode", "expires", "path"], ["json"]);
+    if (positionals.length !== 1) throw new CliUsageError(`Usage: zo-drive transfer ${action} <${action === "create" ? "key" : "file"}> --access <public|passcode> [--passcode <code>] [--expires <ISO date|1d|7d|30d|never>]${action === "upload" ? " [--path <folder>]" : ""}`);
+    const key = action === "upload"
+      ? (await requireMethod(dependencies.client, "upload")({ file: new Blob([await readFile(positionals[0]!)]), fileName: basename(positionals[0]!), path: typeof options.path === "string" ? options.path : undefined })).key
+      : positionals[0]!;
+    const share = await createTransfer(dependencies.client, key, options);
+    write(options.json ? `${JSON.stringify(share)}\n` : `Created transfer ${share.id} for ${key}\n`);
+    return 0;
+  }
+  if (action === "revoke") {
+    const { positionals } = parseArguments(rest, []);
+    if (positionals.length !== 1) throw new CliUsageError("Usage: zo-drive transfer revoke <id>");
+    await requireMethod(dependencies.client, "revokeShare")(positionals[0]!);
+    write(`Revoked transfer ${positionals[0]}\n`);
+    return 0;
+  }
+  if (action === "passcode") {
+    const { positionals, options } = parseArguments(rest, ["value"]);
+    if (positionals.length !== 1 || typeof options.value !== "string") throw new CliUsageError("Usage: zo-drive transfer passcode <id> --value <new-passcode>");
+    await requireMethod(dependencies.client, "updateSharePasscode")({ id: positionals[0]!, passcode: options.value });
+    write(`Updated transfer passcode ${positionals[0]}\n`);
+    return 0;
+  }
+  throw new CliUsageError(transferHelpText());
+}
+
+async function runSharedCommand(args: string[], dependencies: OriginalCommandDependencies): Promise<number> {
+  const [area, action, ...rest] = args;
+  const readFile = dependencies.readFile ?? readFileFromDisk;
+  const writeFile = dependencies.writeFile ?? writeFileToDisk;
+  const write = dependencies.write;
+  if (area === "invite") {
+    if (action === "list") { const { options } = parseArguments(rest, [], ["json"]); const items = await requireMethod(dependencies.client, "listClusterInvitations")(); write(options.json ? `${JSON.stringify(items)}\n` : formatRecords(items, ["id", "folder", "role", "recipient", "expiresAt"])); return 0; }
+    if (action === "create") { const { positionals, options } = parseArguments(rest, ["role", "recipient"], ["json"]); if (positionals.length !== 1) throw new CliUsageError("Usage: zo-drive shared invite create <folder> [--role <viewer|editor>] [--recipient <name>]"); const item = await requireMethod(dependencies.client, "createClusterInvitation")({ folder: positionals[0]!, role: clusterRole(options.role), recipient: typeof options.recipient === "string" ? options.recipient : null }); write(options.json ? `${JSON.stringify(item)}\n` : `Created invitation ${item.id}\nToken: ${item.token}\n`); return 0; }
+    if (action === "revoke") { const { positionals } = parseArguments(rest, []); if (positionals.length !== 1) throw new CliUsageError("Usage: zo-drive shared invite revoke <id>"); await requireMethod(dependencies.client, "deleteClusterInvitation")(positionals[0]!); write(`Revoked invitation ${positionals[0]}\n`); return 0; }
+  }
+  if (area === "mount") {
+    if (action === "list") { const { options } = parseArguments(rest, [], ["json"]); const items = await requireMethod(dependencies.client, "listClusterMounts")(); write(options.json ? `${JSON.stringify(items)}\n` : formatRecords(items, ["id", "folder", "role", "remoteUrl", "author"])); return 0; }
+    if (action === "add") { const { positionals, options } = parseArguments(rest, ["url", "token"], ["json"]); if (positionals.length !== 0 || typeof options.url !== "string" || typeof options.token !== "string") throw new CliUsageError("Usage: zo-drive shared mount add --url <remote-drive-url> --token <invitation-token>"); const mount = await requireMethod(dependencies.client, "createClusterMount")({ remoteUrl: options.url, inviteToken: options.token }); write(options.json ? `${JSON.stringify(mount)}\n` : `Mounted ${mount.folder} as ${mount.id}\n`); return 0; }
+    if (action === "remove") { const { positionals } = parseArguments(rest, []); if (positionals.length !== 1) throw new CliUsageError("Usage: zo-drive shared mount remove <id>"); await requireMethod(dependencies.client, "deleteClusterMount")(positionals[0]!); write(`Removed shared mount ${positionals[0]}\n`); return 0; }
+  }
+  if (area === "peer") {
+    if (action === "list") { const { options } = parseArguments(rest, [], ["json"]); const items = await requireMethod(dependencies.client, "listClusterPeers")(); write(options.json ? `${JSON.stringify(items)}\n` : formatRecords(items, ["id", "folder", "role", "recipient"])); return 0; }
+    if (action === "role") { const { positionals, options } = parseArguments(rest, ["value"]); if (positionals.length !== 1) throw new CliUsageError("Usage: zo-drive shared peer role <id> --value <viewer|editor>"); const peer = await requireMethod(dependencies.client, "updateClusterPeerRole")({ id: positionals[0]!, role: clusterRole(options.value) }); write(`Updated peer ${peer.id} to ${peer.role}\n`); return 0; }
+    if (action === "remove") { const { positionals } = parseArguments(rest, []); if (positionals.length !== 1) throw new CliUsageError("Usage: zo-drive shared peer remove <id>"); await requireMethod(dependencies.client, "deleteClusterPeer")(positionals[0]!); write(`Removed shared peer ${positionals[0]}\n`); return 0; }
+  }
+  if (area === "file") {
+    if (action === "list") { const { positionals, options } = parseArguments(rest, [], ["json"]); if (positionals.length !== 1) throw new CliUsageError("Usage: zo-drive shared file list <mount-id> [--json]"); const items = await requireMethod(dependencies.client, "listClusterObjects")(positionals[0]!); write(options.json ? `${JSON.stringify(items)}\n` : formatRecords(items, ["key", "size", "updatedAt"])); return 0; }
+    if (action === "mkdir") { const { positionals } = parseArguments(rest, []); if (positionals.length !== 2) throw new CliUsageError("Usage: zo-drive shared file mkdir <mount-id> <path>"); const folder = await requireMethod(dependencies.client, "createClusterFolder")({ id: positionals[0]!, path: positionals[1]! }); write(`Created shared folder ${folder.key}\n`); return 0; }
+    if (action === "upload") { const { positionals, options } = parseArguments(rest, ["path"]); if (positionals.length !== 2) throw new CliUsageError("Usage: zo-drive shared file upload <mount-id> <file> [--path <folder>]"); const object = await requireMethod(dependencies.client, "uploadClusterObject")({ id: positionals[0]!, file: new Blob([await readFile(positionals[1]!)]), fileName: basename(positionals[1]!), path: typeof options.path === "string" ? options.path : undefined }); write(`Uploaded shared file ${object.key}\n`); return 0; }
+    if (action === "download") { const { positionals, options } = parseArguments(rest, ["output"]); if (positionals.length !== 2) throw new CliUsageError("Usage: zo-drive shared file download <mount-id> <key> [--output <file>]"); const target = typeof options.output === "string" ? options.output : basename(positionals[1]!); const response = await requireMethod(dependencies.client, "downloadClusterObject")({ id: positionals[0]!, key: positionals[1]! }); await writeFile(target, Buffer.from(await response.arrayBuffer())); write(`Downloaded shared file ${positionals[1]} to ${target}\n`); return 0; }
+    if (action === "rename") { const { positionals, options } = parseArguments(rest, ["name"]); if (positionals.length !== 2 || typeof options.name !== "string") throw new CliUsageError("Usage: zo-drive shared file rename <mount-id> <key> --name <name>"); const object = await requireMethod(dependencies.client, "renameClusterObject")({ id: positionals[0]!, key: positionals[1]!, name: options.name }); write(`Renamed shared file to ${object.key}\n`); return 0; }
+    if (action === "delete") { const { positionals } = parseArguments(rest, []); if (positionals.length !== 2) throw new CliUsageError("Usage: zo-drive shared file delete <mount-id> <key>"); await requireMethod(dependencies.client, "deleteClusterObject")({ id: positionals[0]!, key: positionals[1]! }); write(`Deleted shared file ${positionals[1]}\n`); return 0; }
+  }
+  throw new CliUsageError(sharedHelpText());
+}
+
+async function runDatabaseCommand(args: string[], dependencies: OriginalCommandDependencies): Promise<number> {
+  const [action, ...rest] = args;
+  const readFile = dependencies.readFile ?? readFileFromDisk;
+  const writeFile = dependencies.writeFile ?? writeFileToDisk;
+  const write = dependencies.write;
+  if (action === "list" || action === "engines") { const { options } = parseArguments(rest, [], ["json"]); const items = action === "list" ? await requireMethod(dependencies.client, "listDatabases")() : await requireMethod(dependencies.client, "listDatabaseEngines")(); write(options.json ? `${JSON.stringify(items)}\n` : formatRecords(items, action === "list" ? ["id", "name", "engine", "sizeBytes"] : ["engine", "installed", "installedVersion", "protocol"])); return 0; }
+  if (action === "create") { const { positionals, options } = parseArguments(rest, ["engine"], ["json"]); if (positionals.length !== 1) throw new CliUsageError("Usage: zo-drive database create <name> [--engine <engine>]"); const db = await requireMethod(dependencies.client, "createDatabase")(positionals[0]!, databaseEngine(options.engine)); write(options.json ? `${JSON.stringify(db)}\n` : `Created database ${db.name} (${db.id})\n`); return 0; }
+  if (action === "delete") { const { positionals } = parseArguments(rest, []); if (positionals.length !== 1) throw new CliUsageError("Usage: zo-drive database delete <id>"); await requireMethod(dependencies.client, "deleteDatabase")(positionals[0]!); write(`Deleted database ${positionals[0]}\n`); return 0; }
+  if (action === "engine") { const [verb, engine, ...tail] = rest; const { options } = parseArguments(tail, [], ["json"]); if (!engine || !["install", "update"].includes(verb ?? "")) throw new CliUsageError("Usage: zo-drive database engine <install|update> <engine> [--json]"); const result = verb === "install" ? await requireMethod(dependencies.client, "installDatabaseEngine")(databaseEngine(engine)) : await requireMethod(dependencies.client, "updateDatabaseEngine")(databaseEngine(engine)); write(options.json ? `${JSON.stringify(result)}\n` : `${verb === "install" ? "Installed" : "Updated"} ${result.name}\n`); return 0; }
+  if (action === "import") { const { positionals, options } = parseArguments(rest, ["name"], ["json"]); if (positionals.length !== 1 || typeof options.name !== "string") throw new CliUsageError("Usage: zo-drive database import <sqlite-file> --name <name>"); const db = await requireMethod(dependencies.client, "importDatabase")({ file: new Blob([await readFile(positionals[0]!)]), name: options.name }); write(options.json ? `${JSON.stringify(db)}\n` : `Imported database ${db.name} (${db.id})\n`); return 0; }
+  if (action === "export") { const { positionals, options } = parseArguments(rest, ["output"]); if (positionals.length !== 1) throw new CliUsageError("Usage: zo-drive database export <id> [--output <file>]"); const target = typeof options.output === "string" ? options.output : `${positionals[0]}.sqlite`; await writeFile(target, Buffer.from(await (await requireMethod(dependencies.client, "exportDatabase")(positionals[0]!)).arrayBuffer())); write(`Exported database ${positionals[0]} to ${target}\n`); return 0; }
+  if (action === "tables") { const { positionals, options } = parseArguments(rest, [], ["json"]); if (positionals.length !== 1) throw new CliUsageError("Usage: zo-drive database tables <id> [--json]"); const items = await requireMethod(dependencies.client, "listDatabaseTables")(positionals[0]!); write(options.json ? `${JSON.stringify(items)}\n` : formatRecords(items, ["name", "schema"])); return 0; }
+  if (action === "rows") { const { positionals, options } = parseArguments(rest, ["limit", "offset"], ["json"]); if (positionals.length !== 2) throw new CliUsageError("Usage: zo-drive database rows <id> <table> [--limit <1-100>] [--offset <n>] [--json]"); const rows = await requireMethod(dependencies.client, "listDatabaseRows")({ id: positionals[0]!, table: positionals[1]!, limit: integerOption(options.limit, "limit", 100), offset: integerOption(options.offset, "offset", 0) }); write(`${JSON.stringify(rows)}\n`); return 0; }
+  if (action === "query") { const { positionals, options } = parseArguments(rest, ["sql", "params"], ["json"]); if (positionals.length !== 1 || typeof options.sql !== "string") throw new CliUsageError("Usage: zo-drive database query <id> --sql <statement> [--params <json-array>] [--json]"); const result = await requireMethod(dependencies.client, "queryDatabase")({ id: positionals[0]!, sql: options.sql, params: jsonArray(options.params, "--params") }); write(`${JSON.stringify(result)}\n`); return 0; }
+  if (action === "execute") { const { positionals, options } = parseArguments(rest, ["request"]); if (positionals.length !== 1 || typeof options.request !== "string") throw new CliUsageError("Usage: zo-drive database execute <id> --request <json-object>"); const result = await requireMethod(dependencies.client, "executeDatabase")({ id: positionals[0]!, request: jsonObject(options.request, "--request") }); write(`${JSON.stringify(result)}\n`); return 0; }
+  if (action === "settings") { const [verb, ...tail] = rest; if (verb === "get") { const { options } = parseArguments(tail, [], ["json"]); const settings = await requireMethod(dependencies.client, "getDatabaseImportSettings")(); write(options.json ? `${JSON.stringify(settings)}\n` : `Import limit: ${formatBytes(settings.importLimitBytes)}\n`); return 0; } if (verb === "set") { const { options } = parseArguments(tail, ["import-limit"]); if (typeof options["import-limit"] !== "string") throw new CliUsageError("Usage: zo-drive database settings set --import-limit <bytes>"); const settings = await requireMethod(dependencies.client, "setDatabaseImportLimit")(integerOption(options["import-limit"], "import-limit")); write(`Set database import limit to ${formatBytes(settings.importLimitBytes)}\n`); return 0; } }
+  if (action === "key") { const [verb, ...tail] = rest; if (verb === "list") { const { positionals, options } = parseArguments(tail, [], ["json"]); if (positionals.length !== 1) throw new CliUsageError("Usage: zo-drive database key list <database-id> [--json]"); const keys = await requireMethod(dependencies.client, "listDatabaseApiKeys")(positionals[0]!); write(options.json ? `${JSON.stringify(keys)}\n` : formatRecords(keys, ["id", "name", "prefix", "scopes", "expiresAt"])); return 0; } if (verb === "create") { const { positionals, options } = parseArguments(tail, ["name", "scopes", "expires"], ["json"]); if (positionals.length !== 1 || typeof options.name !== "string") throw new CliUsageError("Usage: zo-drive database key create <database-id> --name <name> [--scopes <read,write>] [--expires <ISO date|never>]"); const key = await requireMethod(dependencies.client, "createDatabaseApiKey")({ databaseId: positionals[0]!, name: options.name, scopes: databaseScopes(options.scopes), expiresAt: parseExpiry(options.expires) }); write(options.json ? `${JSON.stringify(key)}\n` : `Created database key ${key.id}\nKey (shown once): ${key.apiKey}\n`); return 0; } if (verb === "revoke") { const { positionals } = parseArguments(tail, []); if (positionals.length !== 2) throw new CliUsageError("Usage: zo-drive database key revoke <database-id> <key-id>"); await requireMethod(dependencies.client, "revokeDatabaseApiKey")({ databaseId: positionals[0]!, keyId: positionals[1]! }); write(`Revoked database key ${positionals[1]}\n`); return 0; } }
+  throw new CliUsageError(databaseHelpText());
+}
+
+async function runFunctionCommand(args: string[], dependencies: OriginalCommandDependencies): Promise<number> {
+  const [action, ...rest] = args;
+  const readFile = dependencies.readFile ?? readFileFromDisk;
+  const write = dependencies.write;
+  if (action === "list") { const { options } = parseArguments(rest, [], ["json"]); const items = await requireMethod(dependencies.client, "listFunctions")(); write(options.json ? `${JSON.stringify(items)}\n` : formatRecords(items, ["id", "name", "runtime", "visibility", "cron", "enabled", "lastRunStatus"])); return 0; }
+  if (action === "create" || action === "update") { const { positionals, options } = parseArguments(rest, ["name", "runtime", "source", "source-file", "visibility", "cron"], ["enabled", "disabled", "json"]); if ((action === "create" && typeof options.name !== "string") || (action === "update" && positionals.length !== 1)) throw new CliUsageError(`Usage: zo-drive function ${action}${action === "create" ? " --name <name>" : " <id>"} [--runtime <javascript|python>] [--source <code> | --source-file <file>] [--visibility <private|public>] [--cron <UTC cron>] [--enabled|--disabled]`); const source = typeof options.source === "string" ? options.source : typeof options["source-file"] === "string" ? await readFile(options["source-file"], "utf8") : undefined; if (action === "create" && !source) throw new CliUsageError("Provide function code with --source or --source-file."); const changes = { name: typeof options.name === "string" ? options.name : undefined, runtime: functionRuntime(options.runtime), source, visibility: functionVisibility(options.visibility), cron: typeof options.cron === "string" ? options.cron : undefined, enabled: options.enabled === true ? true : options.disabled === true ? false : undefined }; const fn = action === "create" ? await requireMethod(dependencies.client, "createFunction")({ name: changes.name!, runtime: changes.runtime ?? "javascript", source: changes.source!, visibility: changes.visibility ?? "private", cron: changes.cron ?? null, enabled: changes.enabled ?? true }) : await requireMethod(dependencies.client, "updateFunction")({ id: positionals[0]!, ...changes }); write(options.json ? `${JSON.stringify(fn)}\n` : `${action === "create" ? "Created" : "Updated"} function ${fn.name} (${fn.id})\n`); return 0; }
+  if (action === "delete") { const { positionals } = parseArguments(rest, []); if (positionals.length !== 1) throw new CliUsageError("Usage: zo-drive function delete <id>"); await requireMethod(dependencies.client, "deleteFunction")(positionals[0]!); write(`Deleted function ${positionals[0]}\n`); return 0; }
+  if (action === "run") { const { positionals, options } = parseArguments(rest, ["input", "input-file"], ["json"]); if (positionals.length !== 1) throw new CliUsageError("Usage: zo-drive function run <id> [--input <json>] [--input-file <file>] [--json]"); const input = typeof options.input === "string" ? jsonValue(options.input, "--input") : typeof options["input-file"] === "string" ? jsonValue(await readFile(options["input-file"], "utf8"), "--input-file") : {}; const run = await requireMethod(dependencies.client, "runFunction")(positionals[0]!, input); write(`${JSON.stringify(run)}\n`); return 0; }
+  if (action === "runs") { const { positionals, options } = parseArguments(rest, [], ["json"]); if (positionals.length !== 1) throw new CliUsageError("Usage: zo-drive function runs <id> [--json]"); const runs = await requireMethod(dependencies.client, "listFunctionRuns")(positionals[0]!); write(options.json ? `${JSON.stringify(runs)}\n` : formatRecords(runs, ["id", "status", "trigger", "startedAt", "finishedAt"])); return 0; }
+  throw new CliUsageError(functionHelpText());
+}
+
+function pasteContent({ language, tags, text }: { language: string; tags: string[]; text: string }) { return { format: "zo-native" as const, type: "paste" as const, version: 1 as const, language, tags, text }; }
+async function readPaste(client: CliClient, key: string): Promise<{ language: string; tags: string[]; text: string }> { const response = await requireMethod(client, "download")(key); const value = jsonObject(await response.text(), `paste ${key}`); if (value.type !== "paste" || typeof value.text !== "string" || typeof value.language !== "string" || !Array.isArray(value.tags)) throw new CliUsageError(`${key} is not a Zo Paste.`); return { language: value.language, tags: value.tags.filter((item): item is string => typeof item === "string"), text: value.text }; }
+function createTransfer(client: CliClient, key: string, options: Record<string, string | boolean | undefined>) { return requireMethod(client, "createShare")({ key, access: shareAccess(options.access), kind: "transfer", passcode: typeof options.passcode === "string" ? options.passcode : undefined, expiresAt: parseExpiry(options.expires) }); }
+function shareAccess(value: unknown): "public" | "passcode" { if (value === "public" || value === "passcode") return value; throw new CliUsageError("Set --access to public or passcode."); }
+function clusterRole(value: unknown): "viewer" | "editor" { if (value === undefined) return "editor"; if (value === "viewer" || value === "editor") return value; throw new CliUsageError("Role must be viewer or editor."); }
+function databaseEngine(value: unknown): DatabaseEngineId { const engines: DatabaseEngineId[] = ["sqlite", "duckdb", "libsql", "pglite", "lancedb", "leveldb", "redis", "kuzu"]; if (value === undefined) return "sqlite"; if (typeof value === "string" && engines.includes(value as DatabaseEngineId)) return value as DatabaseEngineId; throw new CliUsageError(`Unsupported database engine: ${String(value)}`); }
+function functionRuntime(value: unknown): FunctionRuntime | undefined { if (value === undefined) return undefined; if (value === "javascript" || value === "python") return value; throw new CliUsageError("Runtime must be javascript or python."); }
+function functionVisibility(value: unknown): FunctionVisibility | undefined { if (value === undefined) return undefined; if (value === "private" || value === "public") return value; throw new CliUsageError("Visibility must be private or public."); }
+function databaseScopes(value: unknown): Array<"read" | "write"> { if (value === undefined) return ["read", "write"]; const scopes = splitCsv(String(value)); if (!scopes.length || scopes.some((scope) => scope !== "read" && scope !== "write")) throw new CliUsageError("Scopes must be read, write, or read,write."); return [...new Set(scopes)] as Array<"read" | "write">; }
+function parseExpiry(value: unknown): string | null { if (value === undefined || value === "never") return null; if (value === "1d" || value === "7d" || value === "30d") return new Date(Date.now() + { "1d": 86_400_000, "7d": 604_800_000, "30d": 2_592_000_000 }[value]).toISOString(); const date = new Date(String(value)); if (Number.isNaN(date.getTime()) || date.getTime() <= Date.now()) throw new CliUsageError("Expiry must be a future ISO date, 1d, 7d, 30d, or never."); return date.toISOString(); }
+function splitCsv(value: string): string[] { return value.split(",").map((item) => item.trim()).filter(Boolean); }
+function integerOption(value: unknown, name: string, fallback?: number): number { if (value === undefined && fallback !== undefined) return fallback; const parsed = Number(value); if (!Number.isInteger(parsed) || parsed < 0) throw new CliUsageError(`--${name} must be a non-negative whole number.`); return parsed; }
+function jsonValue(value: string, name: string): unknown { try { return JSON.parse(value); } catch { throw new CliUsageError(`${name} must be valid JSON.`); } }
+function jsonObject(value: string, name: string): Record<string, unknown> { const parsed = jsonValue(value, name); if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") throw new CliUsageError(`${name} must be a JSON object.`); return parsed as Record<string, unknown>; }
+function jsonArray(value: unknown, name: string): Array<string | number | boolean | null> { if (value === undefined) return []; const parsed = jsonValue(String(value), name); if (!Array.isArray(parsed) || parsed.some((item) => !["string", "number", "boolean"].includes(typeof item) && item !== null)) throw new CliUsageError(`${name} must be a JSON array of strings, numbers, booleans, or null.`); return parsed as Array<string | number | boolean | null>; }
+function formatRecords(records: Array<Record<string, unknown>>, fields: string[]): string { if (!records.length) return "No results.\n"; return `${fields.join("\t")}\n${records.map((record) => fields.map((field) => stringifyRecordValue(record[field])).join("\t")).join("\n")}\n`; }
+function stringifyRecordValue(value: unknown): string { return value === null || value === undefined ? "-" : Array.isArray(value) ? value.join(",") : String(value); }
+function pasteHelpText() { return "Usage: zo-drive paste <list|create|show|update|share|delete>\n"; }
+function transferHelpText() { return "Usage: zo-drive transfer <list|create|upload|passcode|revoke>\n"; }
+function sharedHelpText() { return "Usage: zo-drive shared <invite|mount|peer|file> <action>\n"; }
+function databaseHelpText() { return "Usage: zo-drive database <list|engines|engine|create|delete|import|export|tables|rows|query|execute|settings|key>\n"; }
+function functionHelpText() { return "Usage: zo-drive function <list|create|update|delete|run|runs>\n"; }
 
 class CliUsageError extends Error {}
 
@@ -492,7 +684,7 @@ function parseArguments(args: string[], valueOptions: string[], booleanOptions =
     options[option] = value;
     index += 1;
   }
-  return { positionals, options: options as { force?: boolean; json?: boolean; "dry-run"?: boolean; password?: string; path?: string; output?: string; username?: string } };
+  return { positionals, options: options as Record<string, string | boolean | undefined> & { force?: boolean; json?: boolean; "dry-run"?: boolean; password?: string; path?: string; output?: string; username?: string } };
 }
 
 function isLsShorthand(command: string | undefined): boolean {
@@ -748,6 +940,11 @@ function helpText(): string {
     "  cp <source> <destination> [--force]",
     "  exists <key>",
     "  stat <key> [--json]",
+    "  paste <list|create|show|update|share|delete>",
+    "  transfer <list|create|upload|passcode|revoke>",
+    "  shared <invite|mount|peer|file> <action>",
+    "  database, db <list|engines|engine|create|delete|import|export|tables|rows|query|execute|settings|key>",
+    "  function, fn <list|create|update|delete|run|runs>",
     "  usage [--json]",
     "  status",
     "  health [--json]",

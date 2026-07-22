@@ -188,7 +188,7 @@ describe("zo-drive CLI", () => {
     const code = await runCli(["--version"], { client: {}, write });
 
     expect(code).toBe(0);
-    expect(write).toHaveBeenCalledWith("zo-drive 1.2.1\n");
+    expect(write).toHaveBeenCalledWith("zo-drive 1.3.0\n");
   });
 
   it("moves files, sends rm targets to Trash, and checks whether files exist", async () => {
@@ -316,6 +316,50 @@ describe("zo-drive CLI", () => {
     expect(write).toHaveBeenCalledWith(expect.stringContaining("API: ok ("));
     expect(write).toHaveBeenCalledWith(expect.stringContaining("Authentication: ok"));
     expect(write).toHaveBeenCalledWith(expect.stringContaining("Disk: 50.0 GB available of 100.0 GB"));
+  });
+
+  it("creates, reads, updates, shares, and deletes Zo Paste files", async () => {
+    const write = vi.fn();
+    const createNativeFile = vi.fn().mockResolvedValue({ key: "Snippets/example", name: "example", size: 0, contentType: "application/vnd.zo.paste+json", updatedAt: "2026-01-01T00:00:00.000Z", starred: false, nativeType: "paste" });
+    const saveNativeFile = vi.fn().mockResolvedValue({});
+    const createShare = vi.fn().mockResolvedValue({ id: "share-1", key: "Snippets/example", name: "example", size: 10, contentType: "application/vnd.zo.paste+json", access: "public", editable: false, kind: "share", expiresAt: null, createdAt: "2026-01-01T00:00:00.000Z" });
+    const client = { createNativeFile, saveNativeFile, createShare, delete: vi.fn().mockResolvedValue(undefined), download: vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify({ format: "zo-native", type: "paste", version: 1, language: "typescript", tags: ["demo"], text: "const x = 1;" })))) };
+
+    await expect(runCli(["paste", "create", "example", "--path", "Snippets", "--text", "const x = 1;", "--language", "typescript", "--tags", "demo,cli"], { client, write })).resolves.toBe(0);
+    await expect(runCli(["paste", "show", "Snippets/example"], { client, write })).resolves.toBe(0);
+    await expect(runCli(["paste", "update", "Snippets/example", "--text", "const x = 2;"], { client, write })).resolves.toBe(0);
+    await expect(runCli(["paste", "share", "Snippets/example", "--access", "public"], { client, write })).resolves.toBe(0);
+    await expect(runCli(["paste", "delete", "Snippets/example"], { client, write })).resolves.toBe(0);
+
+    expect(createNativeFile).toHaveBeenCalledWith({ name: "example", path: "Snippets", type: "paste" });
+    expect(saveNativeFile).toHaveBeenLastCalledWith("Snippets/example", expect.objectContaining({ text: "const x = 2;", language: "typescript" }));
+    expect(createShare).toHaveBeenCalledWith(expect.objectContaining({ key: "Snippets/example", access: "public" }));
+    expect(client.delete).toHaveBeenCalledWith("Snippets/example");
+  });
+
+  it("manages transfer links and exposes the Zo Originals command families", async () => {
+    const write = vi.fn();
+    const createShare = vi.fn().mockResolvedValue({ id: "transfer-1", key: "Files/report.pdf", name: "report.pdf", size: 1, contentType: "application/pdf", access: "passcode", editable: false, kind: "transfer", expiresAt: null, createdAt: "2026-01-01T00:00:00.000Z" });
+    const createDatabase = vi.fn().mockResolvedValue({ id: "db-1", name: "metrics", engine: "sqlite", sizeBytes: 0 });
+    const createFunction = vi.fn().mockResolvedValue({ id: "fn-1", name: "echo", runtime: "javascript", visibility: "private", cron: null, enabled: true });
+    const createClusterInvitation = vi.fn().mockResolvedValue({ id: "invite-1", token: "zci_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_secret", folder: "Shared", role: "editor", recipient: null });
+    const client = { createShare, revokeShare: vi.fn().mockResolvedValue(undefined), updateSharePasscode: vi.fn().mockResolvedValue({}), createDatabase, createFunction, createClusterInvitation };
+
+    await expect(runCli(["transfer", "create", "Files/report.pdf", "--access", "passcode", "--passcode", "secret"], { client, write })).resolves.toBe(0);
+    await expect(runCli(["transfer", "passcode", "transfer-1", "--value", "new-secret"], { client, write })).resolves.toBe(0);
+    await expect(runCli(["transfer", "revoke", "transfer-1"], { client, write })).resolves.toBe(0);
+    await expect(runCli(["database", "create", "metrics"], { client, write })).resolves.toBe(0);
+    await expect(runCli(["function", "create", "--name", "echo", "--source", "export default async input => input"], { client, write })).resolves.toBe(0);
+    await expect(runCli(["shared", "invite", "create", "Shared"], { client, write })).resolves.toBe(0);
+    await expect(runCli(["help"], { client: {}, write })).resolves.toBe(0);
+
+    expect(createShare).toHaveBeenCalledWith(expect.objectContaining({ kind: "transfer", access: "passcode", passcode: "secret" }));
+    expect(client.updateSharePasscode).toHaveBeenCalledWith({ id: "transfer-1", passcode: "new-secret" });
+    expect(client.revokeShare).toHaveBeenCalledWith("transfer-1");
+    expect(createDatabase).toHaveBeenCalledWith("metrics", "sqlite");
+    expect(createFunction).toHaveBeenCalledWith(expect.objectContaining({ name: "echo", runtime: "javascript" }));
+    expect(createClusterInvitation).toHaveBeenCalledWith({ folder: "Shared", role: "editor", recipient: null });
+    expect(write).toHaveBeenCalledWith(expect.stringContaining("paste <list|create|show|update|share|delete>"));
   });
 
   it("recognizes an npm-linked executable as the main module", async () => {

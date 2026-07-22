@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.24.5 - 2026-07-22
+
+### Changed
+
+- Updated the public CLI guide for Zo Originals terminal CRUD support. ZominAI
+  remains a separate browser product and is not included in the CLI.
+
 ## v1.24.4 - 2026-07-22
 
 ### Changed

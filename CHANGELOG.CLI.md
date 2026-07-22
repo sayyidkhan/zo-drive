@@ -2,7 +2,20 @@
 
 All notable changes to the `zo-drive` command-line tool are recorded here.
 
-## Unreleased
+## v1.3.0 - 2026-07-22
+
+### Added
+
+- Added terminal CRUD command families for Zo Paste, Zo Transfer, Zo Shared
+  Drives, Zo Databases, and Zo Functions. Commands use the same authenticated
+  API as the GUI and support JSON output where automation needs it.
+- Added Paste creation, inspection, updates, secure sharing, and Trash-backed
+  removal; Transfer creation, upload, passcode rotation, listing, and
+  revocation; and Shared Drive invitation, mount, peer, and mounted-file
+  management.
+- Added database engine, instance, import/export, table/row, query/execute,
+  import-limit, and scoped-key operations, plus Function create, update, run,
+  run-history, and deletion commands.
 
 ## v1.2.2 - 2026-07-22
 

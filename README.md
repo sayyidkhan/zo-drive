@@ -109,7 +109,7 @@ folder.
 
 #### GUI versioning
 
-The browser GUI has its own release track, currently `GUI v1.24.3`. GUI changes
+The browser GUI has its own release track, currently `GUI v1.24.5`. GUI changes
 are deployed to Zo Drive directly; browser users receive the current version by
 loading the page. Use `gui-v*` Git tags to trace a deployed GUI release. CLI
 releases are separate and do not change the GUI version.
@@ -227,6 +227,34 @@ zo-drive cp Product/Launch/launch-plan.pdf Archive/2026/launch-plan-copy.pdf
 zo-drive cp Product/Launch/launch-plan.pdf Archive/2026/launch-plan-copy.pdf --force
 ```
 
+#### Zo Originals from the CLI
+
+The CLI also manages Zo Paste, Zo Transfer, Zo Shared Drives, Zo Databases, and
+Zo Functions through the same authenticated API as the browser workspace.
+ZominAI is intentionally not part of the CLI.
+
+```bash
+# Create and share a private paste.
+zo-drive paste create deployment-notes --path Notes --file ./notes.md --language markdown --tags release,ops
+zo-drive paste share Notes/deployment-notes --access passcode --passcode "share-this" --expires 7d
+
+# Create a controlled transfer link for a Drive file.
+zo-drive transfer create Product/Launch/launch-plan.pdf --access public --expires 7d
+
+# Install SQLite, create a database, and run a query.
+zo-drive database engine install sqlite
+zo-drive database create metrics --engine sqlite
+zo-drive database query <database-id> --sql "SELECT 1 AS ready" --json
+
+# Create and run a JavaScript function.
+zo-drive function create --name echo --source 'export default async input => input'
+zo-drive function run <function-id> --input '{"ok":true}' --json
+```
+
+Run `zo-drive shared`, `zo-drive database`, or `zo-drive function` without
+subcommands to see the command family for invitations and mounts, database
+credentials and import/export, or function runs and source updates.
+
 #### Check Drive status
 
 Confirm the connection and storage usage:
@@ -255,7 +283,7 @@ zo-drive logo
 #### CLI updates and versioning
 
 The CLI has its own independent release track. This checkout reports `CLI
-v1.2.0`; check an installed copy with `zo-drive --version`.
+v1.3.0`; check an installed copy with `zo-drive --version`.
 
 For a developer checkout linked with npm, rebuild after pulling changes; the
 existing link then uses the updated build:
