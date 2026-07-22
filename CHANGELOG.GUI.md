@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.24.2 - 2026-07-22
+
+### Changed
+
+- Separated documentation products from Zo Drive modes: ZominAI is now a
+  product, while GUI and CLI remain the two Zo Drive modes.
+
 ## v1.24.1 - 2026-07-22
 
 ### Added

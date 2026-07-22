@@ -42,9 +42,16 @@ describe("DriveApp", () => {
 
       expect(screen.getByRole("heading", { name: "Manage files in your private Drive." })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Share files on your terms" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "GUI version 1.24.1" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 1.24.2" })).toBeInTheDocument();
+      expect(screen.getByText("Product")).toBeInTheDocument();
+      expect(screen.getByRole("navigation", { name: "Choose documentation product" })).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "ZominAI" })).toHaveAttribute("href", expect.stringContaining("?docs=1&product=zominai"));
+      for (const modeSwitch of screen.getAllByRole("navigation", { name: "Choose Zo Drive mode" })) {
+        expect(modeSwitch).toHaveTextContent("GUI");
+        expect(modeSwitch).toHaveTextContent("CLI");
+      }
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI changelog version 1.24.1" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
+      expect(screen.getByRole("link", { name: "GUI changelog version 1.24.2" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
       expect(screen.getByText((_, element) => element?.tagName === "H3" && element.textContent === "GUI v1.17.0")).toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
@@ -79,7 +86,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.24.1")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.24.2")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();
@@ -90,22 +97,28 @@ describe("DriveApp", () => {
       expect(screen.getAllByText("CLI v1.2.0").length).toBeGreaterThanOrEqual(1);
 
       cleanup();
+      window.history.pushState({}, "", "?docs=1&product=zominai");
+      render(<DriveApp />);
+
+      expect(screen.getByRole("heading", { name: "Private local AI for your Drive." })).toBeInTheDocument();
+      expect(screen.getByText("ZominAI documentation · v1.0.1")).toBeInTheDocument();
+      expect(screen.getAllByRole("link", { name: "ZominAI" })[0]).toHaveAttribute("aria-current", "page");
+      expect(screen.getByRole("heading", { name: "ZominAI version 1.0.1" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "ZominAI changelog" })).toBeInTheDocument();
+
+      cleanup();
+      window.history.pushState({}, "", "?docs=1&product=zominai&page=changelog");
+      render(<DriveApp />);
+
+      expect(screen.getByRole("heading", { name: "ZominAI changelog" })).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.0.1")).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&product=zominai"));
+
+      cleanup();
       window.history.pushState({}, "", "?docs=1&mode=zominai");
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "Private local AI for your Drive." })).toBeInTheDocument();
-      expect(screen.getByText("ZominAI documentation · v1.0.0")).toBeInTheDocument();
-      expect(screen.getAllByRole("link", { name: "ZominAI" })[0]).toHaveAttribute("aria-current", "page");
-      expect(screen.getByRole("heading", { name: "ZominAI version 1.0.0" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "ZominAI changelog" })).toBeInTheDocument();
-
-      cleanup();
-      window.history.pushState({}, "", "?docs=1&mode=zominai&page=changelog");
-      render(<DriveApp />);
-
-      expect(screen.getByRole("heading", { name: "ZominAI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.0.0")).toBeInTheDocument();
-      expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=zominai"));
     } finally {
       window.history.pushState({}, "", originalPath);
     }
