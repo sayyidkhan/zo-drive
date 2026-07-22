@@ -2,6 +2,12 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.23.4 - 2026-07-22
+
+### Changed
+
+- Credited Synology NAS Drive as the inspiration for Zo Shared Drives.
+
 ## v1.23.3 - 2026-07-22
 
 ### Changed

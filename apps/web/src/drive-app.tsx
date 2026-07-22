@@ -263,10 +263,15 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.23.3";
+const GUI_VERSION = "1.23.4";
 const CLI_VERSION = "1.2.1";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.23.4",
+    date: "2026-07-22",
+    changes: ["Added Synology NAS Drive as the inspiration for Zo Shared Drives."]
+  },
   {
     version: "v1.23.3",
     date: "2026-07-22",
@@ -2377,6 +2382,9 @@ function ClusterDatabases({ client }: { client: DriveClient }) {
             Select the folders you are happy to expose, generate a one-time
             pairing key for each, choose Viewer or Editor access, and send it
             to the other Zo Drive owner. Everything else stays private.
+          </p>
+          <p className="mt-4 text-xs font-medium text-cyan-100/80">
+            Inspired by Synology NAS Drive.
           </p>
         </div>
       </section>
