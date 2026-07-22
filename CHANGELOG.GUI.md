@@ -2,6 +2,12 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.23.7 - 2026-07-22
+
+### Changed
+
+- Removed the duplicate View your databases action from the database catalogue hero.
+
 ## v1.23.6 - 2026-07-22
 
 ### Changed
