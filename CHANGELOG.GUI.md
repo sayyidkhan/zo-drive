@@ -2,6 +2,12 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.26.2 - 2026-07-22
+
+### Fixed
+
+- Restricted the User access menu and workspace to super users only.
+
 ## v1.26.1 - 2026-07-22
 
 ### Fixed
