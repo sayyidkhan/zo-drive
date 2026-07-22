@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.38.0 - 2026-07-22
+
+### Added
+
+- Added a browser-local **Google Drive** theme with familiar white surfaces,
+  Google-blue actions, and pale-blue selection states.
+
 ## v1.37.0 - 2026-07-22
 
 ### Added
