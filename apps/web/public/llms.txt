@@ -62,6 +62,10 @@ surface and use JSON except for object upload/download.
 ### Authenticated routes
 
 - `GET|POST /folders` — list folders or create one.
+- `GET /zominai/health`, `GET /zominai/time`, and `POST /zominai/chat` —
+  inspect the private model runtime, retrieve the current Zo Computer clock,
+  and stream local-model responses. These routes require an authenticated
+  browser session and never expose the private runtime port.
 - `GET|POST /clusters/invitations` and `DELETE /clusters/invitations/{id}` —
   create, list, or cancel unclaimed one-time pairing keys. Listing never
   returns a key secret; creation is the only time the key is returned.
@@ -77,6 +81,9 @@ surface and use JSON except for object upload/download.
   download, rename, and move a mounted peer file to the remote owner's Trash.
   The browser API never receives the peer credential; all paths are relative
   to the explicitly shared folder.
+  Successful mounted-folder listings and reads may be retained in a private,
+  bounded LRU cache. It is used only when the remote source is unavailable;
+  the `x-zo-drive-cluster-cache: stale` response header marks cached responses.
 - `GET|POST /objects` — list objects or upload raw file content. Uploads use
   `x-zo-drive-file-name` and optional `x-zo-drive-path` headers.
 - `GET|PATCH|DELETE /objects/{key}` — download, rename/move/copy, or move an

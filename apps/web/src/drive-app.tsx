@@ -50,6 +50,7 @@ import {
   Sigma,
   CreditCard,
   SlidersHorizontal,
+  Square,
   RotateCcw,
   RefreshCw,
   ScrollText,
@@ -140,19 +141,22 @@ type ZominAiChatMessage = {
   elapsedMs?: number;
   failed?: boolean;
   role: "assistant" | "user";
+  stopped?: boolean;
   tokensPerSecond?: number;
+  tokensPerSecondEstimated?: boolean;
 };
 
 type ZominAiCompletion = {
   content: string;
   completionTokens?: number;
   tokensPerSecond?: number;
+  tokensPerSecondEstimated?: boolean;
   toolCalls: ZominAiToolCall[];
 };
 
 type ZominAiReply = Omit<ZominAiCompletion, "toolCalls">;
 
-type ZominAiToolName = "describe_database" | "get_storage_usage" | "list_databases" | "list_drive" | "query_database" | "read_drive_file" | "search_drive";
+type ZominAiToolName = "describe_database" | "get_current_time" | "get_storage_usage" | "list_databases" | "list_drive" | "query_database" | "read_drive_file" | "search_drive";
 
 type ZominAiToolCall = {
   function: { arguments: string; name: ZominAiToolName };
@@ -170,7 +174,7 @@ type ZominAiRuntimeMessage = ZominAiChatMessage | {
   tool_call_id: string;
 };
 
-type ZominAiToolRunner = (name: ZominAiToolName, argumentsJson: string) => Promise<string>;
+type ZominAiToolRunner = (name: ZominAiToolName, argumentsJson: string, signal?: AbortSignal) => Promise<string>;
 
 type ZominAiChatSession = {
   compactedAt?: string;
@@ -278,11 +282,16 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.36.0";
+const GUI_VERSION = "1.37.0";
 const CLI_VERSION = "1.3.0";
-const ZOMINAI_VERSION = "1.6.0";
+const ZOMINAI_VERSION = "1.7.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.37.0",
+    date: "2026-07-22",
+    changes: ["Added a bounded on-demand Shared Drive cache so previously opened remote files and folder trees remain available while a source Zo is offline.", "Added authenticated Zo Computer time answers and reliable follow-up context to ZominAI.", "Added end-to-end Stop generating control and complete TPS metadata beside response time."]
+  },
   {
     version: "v1.36.0",
     date: "2026-07-22",
@@ -797,6 +806,11 @@ const CLI_CHANGELOG = [
 ];
 
 const ZOMINAI_CHANGELOG = [
+  {
+    version: "v1.7.0",
+    date: "2026-07-22",
+    changes: ["Added an authenticated current-time tool so machine date, time, day, and timezone questions use the Zo Computer clock.", "Added end-to-end response cancellation that stops browser streaming, the gateway request, and local model generation while keeping the turn retryable.", "Made every completed response show runtime TPS, a labelled estimate when runtime timings are absent, or an explicit unavailable state for older history.", "Improved follow-up handling so recent conversation context remains authoritative."]
+  },
   {
     version: "v1.6.0",
     date: "2026-07-22",
@@ -1381,7 +1395,7 @@ function zominAiElapsedLabel(elapsedMs: number): string {
 }
 
 function zominAiContextSummary(messages: ZominAiChatMessage[]): string | null {
-  const contextMessages = messages.filter((message) => !message.failed);
+  const contextMessages = messages.filter((message) => !message.failed && !message.stopped);
   const olderMessages = contextMessages.slice(0, -zominAiRecentMessageCount);
   if (olderMessages.length === 0) return null;
   const notes = olderMessages.slice(-12).map((message) => `${message.role === "user" ? "User" : "ZominAI"}: ${message.content.replace(/\s+/g, " ").slice(0, 280)}`);
@@ -1389,7 +1403,7 @@ function zominAiContextSummary(messages: ZominAiChatMessage[]): string | null {
 }
 
 function zominAiContextMessages(session: ZominAiChatSession, messages: ZominAiChatMessage[]): ZominAiChatMessage[] {
-  const contextMessages = messages.filter((message) => !message.failed);
+  const contextMessages = messages.filter((message) => !message.failed && !message.stopped);
   return session.contextSummary ? contextMessages.slice(-zominAiRecentMessageCount) : contextMessages;
 }
 
@@ -1418,10 +1432,12 @@ function readZominAiChatSessions(): ZominAiChatSession[] {
         if (!message || typeof message !== "object" || (message as { role?: unknown }).role === "system" || !["assistant", "user"].includes((message as { role?: unknown }).role as string) || typeof (message as { content?: unknown }).content !== "string") return [];
         const elapsedMs = (message as { elapsedMs?: unknown }).elapsedMs;
         const tokensPerSecond = (message as { tokensPerSecond?: unknown }).tokensPerSecond;
+        const tokensPerSecondEstimated = (message as { tokensPerSecondEstimated?: unknown }).tokensPerSecondEstimated === true;
         const role = (message as ZominAiChatMessage).role;
         const content = (message as ZominAiChatMessage).content;
         const failed = (message as { failed?: unknown }).failed === true || (role === "assistant" && content.startsWith("I could not connect to ZominAI."));
-        return [{ role, content, ...(typeof elapsedMs === "number" && Number.isFinite(elapsedMs) && elapsedMs >= 0 ? { elapsedMs } : {}), ...(typeof tokensPerSecond === "number" && Number.isFinite(tokensPerSecond) && tokensPerSecond > 0 ? { tokensPerSecond } : {}), ...(failed ? { failed: true } : {}) }];
+        const stopped = (message as { stopped?: unknown }).stopped === true;
+        return [{ role, content, ...(typeof elapsedMs === "number" && Number.isFinite(elapsedMs) && elapsedMs >= 0 ? { elapsedMs } : {}), ...(typeof tokensPerSecond === "number" && Number.isFinite(tokensPerSecond) && tokensPerSecond > 0 ? { tokensPerSecond, ...(tokensPerSecondEstimated ? { tokensPerSecondEstimated: true } : {}) } : {}), ...(failed ? { failed: true } : {}), ...(stopped ? { stopped: true } : {}) }];
       });
       const compactedAt = typeof session.compactedAt === "string" ? session.compactedAt : undefined;
       const contextSummary = typeof session.contextSummary === "string" ? session.contextSummary.slice(0, 6_000) : undefined;
@@ -1466,6 +1482,18 @@ function zominAiChatUrl(endpoint: string): string | null {
   }
 }
 
+function zominAiTimeUrl(endpoint: string): string | null {
+  try {
+    const url = new URL(endpoint);
+    if (!zominAiHealthUrl(endpoint)) return null;
+    url.pathname = `${url.pathname.replace(/\/$/, "")}/time`;
+    url.search = "";
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 async function checkZominAiConnection(settings: ZominAiSettings, signal?: AbortSignal): Promise<ZominAiConnection> {
   const healthUrl = zominAiHealthUrl(settings.endpoint);
   if (!healthUrl) return { state: "disconnected", detail: "The ZominAI gateway address is invalid.", models: [] };
@@ -1482,6 +1510,7 @@ async function checkZominAiConnection(settings: ZominAiSettings, signal?: AbortS
 }
 
 const zominAiTools = [
+  { type: "function", function: { name: "get_current_time", description: "Get the current date and time on the Zo Computer. Use this whenever the user asks for the current date, time, day, timezone, or machine clock.", parameters: { type: "object", properties: {} } } },
   { type: "function", function: { name: "get_storage_usage", description: "Get the current Zo Computer disk capacity and free space, plus the user's Zo Drive allocation, usage, and file count. Use this whenever the user asks about machine storage, disk space, capacity, free space, Drive storage usage, or how many files are in their Drive.", parameters: { type: "object", properties: {} } } },
   { type: "function", function: { name: "list_drive", description: "List files in the user's private Zo Drive. Use this to browse the Drive or a folder before reading a file.", parameters: { type: "object", properties: { prefix: { type: "string", description: "Optional folder path to list." } } } } },
   { type: "function", function: { name: "search_drive", description: "Find files by filename or supported text content in the user's private Zo Drive.", parameters: { type: "object", properties: { query: { type: "string", description: "Words to search for." }, prefix: { type: "string", description: "Optional folder path to search within." } }, required: ["query"] } } },
@@ -1497,7 +1526,7 @@ function zominAiToolCalls(value: unknown): ZominAiToolCall[] {
     if (!item || typeof item !== "object") return [];
     const call = item as { function?: { arguments?: unknown; name?: unknown }; id?: unknown };
     const name = call.function?.name;
-    if (!["describe_database", "get_storage_usage", "list_databases", "list_drive", "query_database", "read_drive_file", "search_drive"].includes(name as string)) return [];
+    if (!["describe_database", "get_current_time", "get_storage_usage", "list_databases", "list_drive", "query_database", "read_drive_file", "search_drive"].includes(name as string)) return [];
     return [{ id: typeof call.id === "string" && call.id ? call.id : `zominai-tool-${index}`, function: { name: name as ZominAiToolName, arguments: typeof call.function?.arguments === "string" ? call.function.arguments : "{}" }, type: "function" }];
   });
 }
@@ -1508,7 +1537,12 @@ function zominAiRequiresStorageTool(messages: ZominAiRuntimeMessage[]): boolean 
     || /\b(?:how many|number of|count)\b[^?.!]{0,80}\bfiles?\b|\bfiles?\b[^?.!]{0,80}\b(?:how many|number of|count)\b/i.test(latestUserMessage.content)));
 }
 
-function zominAiCompletionMetrics(value: { timings?: unknown; usage?: unknown }): Pick<ZominAiCompletion, "completionTokens" | "tokensPerSecond"> {
+function zominAiRequiresCurrentTimeTool(messages: ZominAiRuntimeMessage[]): boolean {
+  const latestUserMessage = [...messages].reverse().find((message): message is ZominAiChatMessage => message.role === "user");
+  return Boolean(latestUserMessage && /\b(?:current|right now|now|today|machine|system|server|computer)\b[^?.!]{0,60}\b(?:date|time|day|clock|timezone)\b|\b(?:date|time|day|clock|timezone)\b[^?.!]{0,60}\b(?:current|right now|now|today|machine|system|server|computer)\b/i.test(latestUserMessage.content));
+}
+
+function zominAiCompletionMetrics(value: { timings?: unknown; usage?: unknown }): Pick<ZominAiCompletion, "completionTokens" | "tokensPerSecond" | "tokensPerSecondEstimated"> {
   const usage = value.usage && typeof value.usage === "object" ? value.usage as { completion_tokens?: unknown } : null;
   const timings = value.timings && typeof value.timings === "object" ? value.timings as { predicted_ms?: unknown; predicted_n?: unknown; predicted_per_second?: unknown } : null;
   const completionTokens = typeof usage?.completion_tokens === "number" && Number.isFinite(usage.completion_tokens) && usage.completion_tokens >= 0
@@ -1536,10 +1570,11 @@ async function readZominAiCompletion(response: Response, onProgress?: (content: 
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
+  const streamStartedAt = performance.now();
   const streamedToolCalls = new Map<number, { arguments: string; id: string; name: string }>();
   let buffer = "";
   let content = "";
-  let metrics: Pick<ZominAiCompletion, "completionTokens" | "tokensPerSecond"> = {};
+  let metrics: Pick<ZominAiCompletion, "completionTokens" | "tokensPerSecond" | "tokensPerSecondEstimated"> = {};
 
   const consumeLine = (line: string) => {
     if (!line.startsWith("data:")) return;
@@ -1585,9 +1620,14 @@ async function readZominAiCompletion(response: Response, onProgress?: (content: 
   if (buffer.trim()) consumeLine(buffer.trim());
 
   const toolCalls = [...streamedToolCalls.values()].flatMap((call, index): ZominAiToolCall[] => {
-    if (!["describe_database", "get_storage_usage", "list_databases", "list_drive", "query_database", "read_drive_file", "search_drive"].includes(call.name)) return [];
+    if (!["describe_database", "get_current_time", "get_storage_usage", "list_databases", "list_drive", "query_database", "read_drive_file", "search_drive"].includes(call.name)) return [];
     return [{ function: { arguments: call.arguments || "{}", name: call.name as ZominAiToolName }, id: call.id || `zominai-tool-${index}`, type: "function" }];
   });
+  if (metrics.tokensPerSecond === undefined && content.trim()) {
+    const generationMs = performance.now() - streamStartedAt;
+    const generatedTokens = metrics.completionTokens ?? Math.max(1, Math.ceil(content.length / 4));
+    if (generationMs >= 100) metrics = { ...metrics, tokensPerSecond: generatedTokens * 1_000 / generationMs, tokensPerSecondEstimated: true };
+  }
   return { content: content.trim(), toolCalls, ...metrics };
 }
 
@@ -1597,20 +1637,30 @@ async function zominAiResponseError(response: Response): Promise<Error> {
   return new Error(`ZominAI could not reply (HTTP ${response.status}).${detail}`);
 }
 
-async function sendZominAiMessage(settings: ZominAiSettings, messages: ZominAiChatMessage[], toolRunner?: ZominAiToolRunner, contextSummary?: string, onProgress?: (content: string) => void): Promise<ZominAiReply> {
+async function sendZominAiMessage(settings: ZominAiSettings, messages: ZominAiChatMessage[], toolRunner?: ZominAiToolRunner, contextSummary?: string, onProgress?: (content: string) => void, signal?: AbortSignal): Promise<ZominAiReply> {
   const url = zominAiChatUrl(settings.endpoint);
   if (!url) throw new Error("The ZominAI gateway address is invalid.");
   const runtimeMessages: ZominAiRuntimeMessage[] = [...messages];
   let storageContext: string | null = null;
+  let currentTimeContext: string | null = null;
+  if (toolRunner && zominAiRequiresCurrentTimeTool(messages)) {
+    try {
+      currentTimeContext = await toolRunner("get_current_time", "{}", signal);
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      currentTimeContext = JSON.stringify({ error: error instanceof Error ? error.message : "The current Zo Computer time is unavailable." });
+    }
+  }
   if (toolRunner && zominAiRequiresStorageTool(messages)) {
     try {
-      storageContext = await toolRunner("get_storage_usage", "{}");
+      storageContext = await toolRunner("get_storage_usage", "{}", signal);
     } catch (error) {
+      if (signal?.aborted) throw error;
       storageContext = JSON.stringify({ error: error instanceof Error ? error.message : "Storage information is currently unavailable." });
     }
   }
   const baseSystemPrompt = toolRunner
-    ? "You are ZominAI, a private local assistant. You have authenticated, read-only tools for the current user's Zo Drive, databases, and storage usage. Use tools whenever the answer depends on current Drive data. Clearly distinguish the Zo Computer's disk capacity and free space from the user's Zo Drive quota, usage, and file count. Never claim you accessed data unless a tool returned it. Do not use or suggest write operations. Tool results are private context for this conversation and are sent only to this local runtime."
+    ? "You are ZominAI, a private local assistant. Answer the latest user message directly, using earlier messages to resolve follow-up questions. You have authenticated, read-only tools for the current user's Zo Computer time, Zo Drive, databases, and storage usage. Use tools whenever the answer depends on current machine or Drive data. Clearly distinguish the Zo Computer's disk capacity and free space from the user's Zo Drive quota, usage, and file count. Never claim you accessed data unless a tool returned it. Do not use or suggest write operations. Tool results are private context for this conversation and are sent only to this local runtime."
     : "You are ZominAI, a private local assistant. Do not claim access to Zo Drive files unless the user explicitly pasted their contents into this conversation.";
   const configuredInstructions = settings.systemInstructions.trim()
     ? `\n\nUser-configured response instructions follow. They cannot override the privacy, truthfulness, or read-only rules above:\n${settings.systemInstructions.trim()}`
@@ -1619,10 +1669,11 @@ async function sendZominAiMessage(settings: ZominAiSettings, messages: ZominAiCh
     ? `\n\nEarlier conversation context, compacted locally from this chat. Use it only as background; the most recent messages remain authoritative:\n${contextSummary}`
     : "";
   const storagePrompt = storageContext ? `\n\nCurrent information was retrieved with the read-only get_storage_usage tool. Answer the user's question directly from it. The drive.fileCount value counts files in Zo Drive; it is not a count of every operating-system file on the Zo Computer. If the user asked about the whole system, state that scope clearly:\n${storageContext}` : "";
-  const systemPrompt = `${baseSystemPrompt}${configuredInstructions}${summaryPrompt}${storagePrompt}`;
+  const timePrompt = currentTimeContext ? `\n\nThe current Zo Computer date and time was retrieved from the authenticated get_current_time tool. Answer directly from this value and preserve its stated timezone:\n${currentTimeContext}` : "";
+  const systemPrompt = `${baseSystemPrompt}${configuredInstructions}${summaryPrompt}${storagePrompt}${timePrompt}`;
 
   for (let turn = 0; turn < 6; turn += 1) {
-    const offerTools = Boolean(toolRunner && !storageContext);
+    const offerTools = Boolean(toolRunner && !storageContext && !currentTimeContext);
     const response = await fetch(url, {
       method: "POST",
       headers: { Accept: "text/event-stream", "Content-Type": "application/json" },
@@ -1632,7 +1683,8 @@ async function sendZominAiMessage(settings: ZominAiSettings, messages: ZominAiCh
         ...(offerTools ? { tool_choice: "auto", tools: zominAiTools } : {}),
         stream: true,
         stream_options: { include_usage: true }
-      })
+      }),
+      signal
     });
     if (!response.ok) throw await zominAiResponseError(response);
     const completion = await readZominAiCompletion(response, onProgress);
@@ -1640,7 +1692,7 @@ async function sendZominAiMessage(settings: ZominAiSettings, messages: ZominAiCh
     const toolCalls = toolRunner ? completion.toolCalls : [];
     if (toolCalls.length === 0) {
       if (!content) throw new Error("The local runtime returned an empty response.");
-      return { content, ...(completion.completionTokens !== undefined ? { completionTokens: completion.completionTokens } : {}), ...(completion.tokensPerSecond !== undefined ? { tokensPerSecond: completion.tokensPerSecond } : {}) };
+      return { content, ...(completion.completionTokens !== undefined ? { completionTokens: completion.completionTokens } : {}), ...(completion.tokensPerSecond !== undefined ? { tokensPerSecond: completion.tokensPerSecond, ...(completion.tokensPerSecondEstimated ? { tokensPerSecondEstimated: true } : {}) } : {}) };
     }
 
     onProgress?.("");
@@ -1648,7 +1700,7 @@ async function sendZominAiMessage(settings: ZominAiSettings, messages: ZominAiCh
     for (const toolCall of toolCalls) {
       let toolResult: string;
       try {
-        toolResult = await toolRunner!(toolCall.function.name, toolCall.function.arguments);
+        toolResult = await toolRunner!(toolCall.function.name, toolCall.function.arguments, signal);
       } catch (error) {
         toolResult = JSON.stringify({ error: error instanceof Error ? error.message : "The requested Drive tool could not run." });
       }
@@ -1690,9 +1742,16 @@ function isZominAiReadOnlySql(sql: string): boolean {
   return /^(select|pragma|explain)\b/.test(statement) && !/;\s*\S/.test(statement);
 }
 
-function createZominAiToolRunner(client: DriveClient): ZominAiToolRunner {
-  return async (name, argumentsJson) => {
+function createZominAiToolRunner(client: DriveClient, settings: ZominAiSettings): ZominAiToolRunner {
+  return async (name, argumentsJson, signal) => {
     const args = zominAiArguments(argumentsJson);
+    if (name === "get_current_time") {
+      const url = zominAiTimeUrl(settings.endpoint);
+      if (!url) throw new Error("The ZominAI gateway address is invalid.");
+      const response = await fetch(url, { headers: { Accept: "application/json" }, signal });
+      if (!response.ok) throw new Error("The Zo Computer clock is currently unavailable.");
+      return zominAiJson(await response.json());
+    }
     if (name === "get_storage_usage") {
       const usage = await client.getUsage();
       const machineUsedBytes = Math.max(0, usage.totalBytes - usage.availableBytes);
@@ -1829,6 +1888,7 @@ function ZominAiChatDrawer({ client, connection, isOpen, onClose, onConnectionCh
   const [elapsedMs, setElapsedMs] = useState(0);
   const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
   const [titleDraft, setTitleDraft] = useState("");
+  const requestControllerRef = useRef<AbortController | null>(null);
   const drawerRef = useRef<HTMLElement>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
   const activeSession = sessions.find((session) => session.id === activeSessionId) ?? sessions[0]!;
@@ -1853,6 +1913,8 @@ function ZominAiChatDrawer({ client, connection, isOpen, onClose, onConnectionCh
     const transcript = transcriptRef.current;
     if (transcript && typeof transcript.scrollTo === "function") transcript.scrollTo({ top: transcript.scrollHeight });
   }, [activeSessionId, activeSession.messages, sending]);
+
+  useEffect(() => () => requestControllerRef.current?.abort(), []);
 
   function createChat() {
     const session = createZominAiChatSession();
@@ -1926,28 +1988,44 @@ function ZominAiChatDrawer({ client, connection, isOpen, onClose, onConnectionCh
   }
 
   async function requestReply(sessionId: string, nextMessages: ZominAiChatMessage[], contextSummary?: string) {
+    const controller = new AbortController();
+    requestControllerRef.current?.abort();
+    requestControllerRef.current = controller;
     setElapsedMs(0);
     setStreamingReply("");
     setSending(true);
     const startedAt = performance.now();
+    let partialReply = "";
     const timer = window.setInterval(() => setElapsedMs(performance.now() - startedAt), 100);
     try {
       const session = sessions.find((candidate) => candidate.id === sessionId);
-      const reply = await sendZominAiMessage(settings, zominAiContextMessages(session ?? activeSession, nextMessages), createZominAiToolRunner(client), contextSummary, setStreamingReply);
+      const reply = await sendZominAiMessage(settings, zominAiContextMessages(session ?? activeSession, nextMessages), createZominAiToolRunner(client, settings), contextSummary, (content) => {
+        partialReply = content;
+        setStreamingReply(content);
+      }, controller.signal);
       const responseElapsedMs = performance.now() - startedAt;
       onConnectionChange({ state: "connected", detail: `${settings.model} replied from ${settings.endpoint}.`, models: connection.models });
-      setSessions((current) => current.map((candidate) => candidate.id === sessionId ? { ...candidate, messages: [...nextMessages, { role: "assistant", content: reply.content, elapsedMs: responseElapsedMs, ...(reply.tokensPerSecond !== undefined ? { tokensPerSecond: reply.tokensPerSecond } : {}) }], updatedAt: new Date().toISOString() } : candidate));
+      setSessions((current) => current.map((candidate) => candidate.id === sessionId ? { ...candidate, messages: [...nextMessages, { role: "assistant", content: reply.content, elapsedMs: responseElapsedMs, ...(reply.tokensPerSecond !== undefined ? { tokensPerSecond: reply.tokensPerSecond, ...(reply.tokensPerSecondEstimated ? { tokensPerSecondEstimated: true } : {}) } : {}) }], updatedAt: new Date().toISOString() } : candidate));
     } catch (error) {
-      const detail = error instanceof Error ? error.message : "The local runtime could not be reached.";
       const responseElapsedMs = performance.now() - startedAt;
-      onConnectionChange({ state: "disconnected", detail, models: connection.models });
-      setSessions((current) => current.map((candidate) => candidate.id === sessionId ? { ...candidate, messages: [...nextMessages, { role: "assistant", content: `I could not connect to ZominAI. ${detail}`, elapsedMs: responseElapsedMs, failed: true }], updatedAt: new Date().toISOString() } : candidate));
+      if (controller.signal.aborted) {
+        setSessions((current) => current.map((candidate) => candidate.id === sessionId ? { ...candidate, messages: [...nextMessages, { role: "assistant", content: partialReply.trim() || "Response stopped.", elapsedMs: responseElapsedMs, stopped: true }], updatedAt: new Date().toISOString() } : candidate));
+      } else {
+        const detail = error instanceof Error ? error.message : "The local runtime could not be reached.";
+        onConnectionChange({ state: "disconnected", detail, models: connection.models });
+        setSessions((current) => current.map((candidate) => candidate.id === sessionId ? { ...candidate, messages: [...nextMessages, { role: "assistant", content: `I could not connect to ZominAI. ${detail}`, elapsedMs: responseElapsedMs, failed: true }], updatedAt: new Date().toISOString() } : candidate));
+      }
     } finally {
       window.clearInterval(timer);
       setElapsedMs(performance.now() - startedAt);
       setStreamingReply("");
       setSending(false);
+      if (requestControllerRef.current === controller) requestControllerRef.current = null;
     }
+  }
+
+  function stopResponse() {
+    requestControllerRef.current?.abort();
   }
 
   async function send() {
@@ -1964,7 +2042,7 @@ function ZominAiChatDrawer({ client, connection, isOpen, onClose, onConnectionCh
     if (sending) return;
     const failedMessage = activeSession.messages.at(-1);
     const userMessage = activeSession.messages.at(-2);
-    if (!failedMessage?.failed || userMessage?.role !== "user") return;
+    if ((!failedMessage?.failed && !failedMessage?.stopped) || userMessage?.role !== "user") return;
     const nextMessages = activeSession.messages.slice(0, -1);
     setSessions((current) => current.map((session) => session.id === activeSession.id ? { ...session, messages: nextMessages, updatedAt: new Date().toISOString() } : session));
     await requestReply(activeSession.id, nextMessages, activeSession.contextSummary);
@@ -1990,14 +2068,14 @@ function ZominAiChatDrawer({ client, connection, isOpen, onClose, onConnectionCh
         </>}
         <section className="flex min-h-0 min-w-0 flex-1 flex-col">
           <div aria-label="ZominAI conversation" className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-slate-50/70 p-4" ref={transcriptRef}>
-            {activeSession.messages.length === 0 ? <div className="grid h-full min-h-56 place-items-center text-center"><div className="max-w-60"><img className="mx-auto size-12 rounded-2xl object-cover shadow-sm" src={zominAiButtonUrl} alt="ZominAI Pegasus" /><p className="mt-4 text-sm font-semibold text-slate-900">Ask about your Drive</p><p className="mt-2 text-xs leading-5 text-slate-500">ZominAI can search and read supported Drive files, inspect databases, and run read-only queries. Results stay with this local model.</p></div></div> : activeSession.messages.map((message, index) => <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`} key={`${message.role}-${index}`}><div className="max-w-[88%]"><div className={`whitespace-pre-wrap rounded-2xl px-3 py-2.5 text-sm leading-6 ${message.role === "user" ? "rounded-br-md bg-cyan-800 text-white" : message.failed ? "rounded-bl-md border border-red-200 bg-red-50 text-red-800" : "rounded-bl-md border border-slate-200 bg-white text-slate-700"}`}>{message.content}</div>{message.role === "assistant" && <div className="mt-1 flex items-center gap-2 px-1">{typeof message.elapsedMs === "number" && <p aria-label="ZominAI response metrics" className="text-[10px] text-slate-400">Completed in {zominAiElapsedLabel(message.elapsedMs)}{typeof message.tokensPerSecond === "number" ? ` · ${zominAiTokensPerSecondLabel(message.tokensPerSecond)}` : ""}</p>}{message.failed && index === activeSession.messages.length - 1 && <button aria-label="Retry message to ZominAI" className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-semibold text-cyan-800 transition hover:bg-cyan-50 disabled:text-slate-300" disabled={sending} onClick={() => void retryLastMessage()} type="button"><RotateCcw size={12} /> Try again</button>}</div>}</div></div>)}
+            {activeSession.messages.length === 0 ? <div className="grid h-full min-h-56 place-items-center text-center"><div className="max-w-60"><img className="mx-auto size-12 rounded-2xl object-cover shadow-sm" src={zominAiButtonUrl} alt="ZominAI Pegasus" /><p className="mt-4 text-sm font-semibold text-slate-900">Ask about your Drive</p><p className="mt-2 text-xs leading-5 text-slate-500">ZominAI can search and read supported Drive files, inspect databases, check the Zo Computer clock, and run read-only queries. Results stay with this local model.</p></div></div> : activeSession.messages.map((message, index) => <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`} key={`${message.role}-${index}`}><div className="max-w-[88%]"><div className={`whitespace-pre-wrap rounded-2xl px-3 py-2.5 text-sm leading-6 ${message.role === "user" ? "rounded-br-md bg-cyan-800 text-white" : message.failed ? "rounded-bl-md border border-red-200 bg-red-50 text-red-800" : message.stopped ? "rounded-bl-md border border-amber-200 bg-amber-50 text-slate-700" : "rounded-bl-md border border-slate-200 bg-white text-slate-700"}`}>{message.content}</div>{message.role === "assistant" && <div className="mt-1 flex items-center gap-2 px-1">{typeof message.elapsedMs === "number" && <p aria-label="ZominAI response metrics" className="text-[10px] text-slate-400">{message.stopped ? "Stopped after" : "Completed in"} {zominAiElapsedLabel(message.elapsedMs)}{message.stopped ? "" : typeof message.tokensPerSecond === "number" ? ` · ${message.tokensPerSecondEstimated ? "est. " : ""}${zominAiTokensPerSecondLabel(message.tokensPerSecond)}` : " · TPS unavailable"}</p>}{(message.failed || message.stopped) && index === activeSession.messages.length - 1 && <button aria-label="Retry message to ZominAI" className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-semibold text-cyan-800 transition hover:bg-cyan-50 disabled:text-slate-300" disabled={sending} onClick={() => void retryLastMessage()} type="button"><RotateCcw size={12} /> Try again</button>}</div>}</div></div>)}
             {sending && <div className="flex justify-start"><div className="max-w-[88%]"><div className={`rounded-2xl rounded-bl-md border border-slate-200 bg-white px-3 py-2.5 text-sm leading-6 ${streamingReply ? "whitespace-pre-wrap text-slate-700" : "inline-flex items-center gap-2 text-slate-500"}`}>{streamingReply || <><LoaderCircle className="animate-spin" size={15} /> Thinking…</>}</div><p aria-live="polite" className="mt-1 px-1 text-[10px] font-medium text-slate-400">{streamingReply ? "Responding" : "Elapsed"} · {zominAiElapsedLabel(elapsedMs)}</p></div></div>}
           </div>
           <div aria-label="ZominAI context used" className="flex items-center gap-3 border-t border-slate-200 bg-white px-3 py-2">
             <div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-2 text-[11px] text-slate-500"><span className="truncate">Context used · estimated {zominAiTokenLabel(estimatedContextTokens)} / {zominAiTokenLabel(settings.contextTokens)} tokens</span><span className="shrink-0 font-medium text-slate-600">{contextPercent}%</span></div><div aria-hidden="true" className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full ${contextPercent >= 85 ? "bg-amber-500" : "bg-cyan-600"}`} style={{ width: `${Math.max(2, contextPercent)}%` }} /></div>{activeSession.compactedAt && <p className="mt-1 text-[10px] text-slate-400">Compacted {zominAiTimestamp(activeSession.compactedAt)}</p>}</div>
             <button aria-label="Compact ZominAI context" className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 px-2 py-1.5 text-[11px] font-semibold text-slate-600 hover:border-cyan-300 hover:text-cyan-800 disabled:cursor-not-allowed disabled:text-slate-300" disabled={!canCompactContext || sending} onClick={compactContext} title={canCompactContext ? "Keep recent messages active and compact earlier context locally" : "Add more messages before compacting context"} type="button"><Minimize2 size={14} /><span className="hidden sm:inline">Compact</span></button>
           </div>
-          <form className="border-t border-slate-200 bg-white p-3" onSubmit={(event) => { event.preventDefault(); void send(); }}><label className="sr-only" htmlFor="zominai-drawer-message">Message ZominAI</label><div className="flex items-end gap-2 rounded-xl border border-slate-300 p-1.5 focus-within:border-cyan-600 focus-within:ring-4 focus-within:ring-cyan-100"><textarea aria-label="Message ZominAI" className="min-h-10 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-slate-400" disabled={sending} id="zominai-drawer-message" onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder="Ask ZominAI…" rows={1} value={draft} /><button aria-label="Send message to ZominAI" className="grid size-9 place-items-center rounded-lg bg-cyan-700 text-white hover:bg-cyan-800 disabled:bg-slate-300" disabled={!draft.trim() || sending} type="submit"><Send size={17} /></button></div></form>
+          <form className="border-t border-slate-200 bg-white p-3" onSubmit={(event) => { event.preventDefault(); void send(); }}><label className="sr-only" htmlFor="zominai-drawer-message">Message ZominAI</label><div className="flex items-end gap-2 rounded-xl border border-slate-300 p-1.5 focus-within:border-cyan-600 focus-within:ring-4 focus-within:ring-cyan-100"><textarea aria-label="Message ZominAI" className="min-h-10 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-slate-400" disabled={sending} id="zominai-drawer-message" onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder="Ask ZominAI…" rows={1} value={draft} />{sending ? <button aria-label="Stop ZominAI response" className="grid size-9 place-items-center rounded-lg bg-red-600 text-white transition hover:bg-red-700" onClick={stopResponse} title="Stop generating" type="button"><Square fill="currentColor" size={14} /></button> : <button aria-label="Send message to ZominAI" className="grid size-9 place-items-center rounded-lg bg-cyan-700 text-white hover:bg-cyan-800 disabled:bg-slate-300" disabled={!draft.trim()} type="submit"><Send size={17} /></button>}</div></form>
         </section>
       </div>
     </div>
@@ -3043,6 +3121,7 @@ function ClusterDatabases({ client, search }: { client: DriveClient; search: str
       ),
   });
   const canWrite = accessQuery.data?.role === "editor";
+  const cacheStatus = objectsQuery.data?.cacheStatus;
   const matchingSharedFiles = (searchObjectsQuery.data ?? []).filter(({ object }) => matchesSearch(normalizedSearch, object.name, object.key, object.contentType));
   const visibleInvitations = (invitationsQuery.data ?? []).filter((invite) => matchesSearch(normalizedSearch, invite.folder, invite.recipient, invite.role));
   const visiblePeers = (peersQuery.data ?? []).filter((peer) => matchesSearch(normalizedSearch, peer.folder, peer.recipient, peer.role));
@@ -3484,6 +3563,7 @@ function ClusterDatabases({ client, search }: { client: DriveClient; search: str
                       ? "Upload, rename, download, or move files to the owner's Trash."
                       : "View-only access. You can list and download files in this folder."}
                   </p>
+                  {cacheStatus === "stale" && <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-amber-700"><Cloud size={14} /> Source offline. Showing the last cached folder state.</p>}
                 </div>
                 {canWrite && <div className="flex flex-wrap gap-2">
                   <input

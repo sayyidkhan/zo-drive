@@ -50,6 +50,17 @@ describe("ZoDriveClient", () => {
     expect(fetcher).toHaveBeenNthCalledWith(6, `https://drive.example/clusters/peers/${peer.id}`, expect.objectContaining({ method: "DELETE" }));
   });
 
+  it("reports when a mounted folder listing comes from the local stale cache", async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ objects: [{ key: "cached.txt", name: "cached.txt", size: 6, contentType: "text/plain", updatedAt: "2026-07-22T00:00:00.000Z" }] }), { headers: { "x-zo-drive-cluster-cache": "stale", "x-zo-drive-cluster-cache-at": "2026-07-22T00:05:00.000Z" }, status: 200 }));
+    const client = new ZoDriveClient({ baseUrl: "https://drive.example", fetcher });
+
+    const files = await client.listClusterObjects("11111111-1111-4111-8111-111111111111");
+
+    expect(files).toHaveLength(1);
+    expect(files.cacheStatus).toBe("stale");
+    expect(files.cachedAt).toBe("2026-07-22T00:05:00.000Z");
+  });
+
   it("sends advanced file search options through the list endpoint", async () => {
     const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ objects: [] }), { status: 200 }));
     const client = new ZoDriveClient({ baseUrl: "https://drive.example", fetcher });

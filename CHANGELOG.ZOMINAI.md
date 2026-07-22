@@ -3,6 +3,24 @@
 All notable changes to ZominAI are recorded here. ZominAI follows its own
 semantic-versioned release track, independent of the Zo Drive GUI and CLI.
 
+## v1.7.0 - 2026-07-22
+
+### Added
+
+- Added an authenticated current-time tool so machine date, time, day, and
+  timezone questions use the Zo Computer clock instead of being guessed.
+- Added end-to-end response cancellation. **Stop generating** aborts browser
+  streaming, gateway forwarding, and local model generation while keeping the
+  stopped turn retryable.
+- Added complete TPS metadata beside elapsed time. Runtime timing is preferred,
+  estimates are labelled, and older replies explicitly show when TPS was never
+  recorded.
+
+### Changed
+
+- Made recent conversation history authoritative for follow-up questions and
+  excluded stopped partial responses from future model context.
+
 ## v1.6.0 - 2026-07-22
 
 ### Added

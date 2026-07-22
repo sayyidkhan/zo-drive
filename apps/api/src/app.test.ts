@@ -62,6 +62,24 @@ describe("Zo Drive API", () => {
     expect(runtimeFetch).toHaveBeenCalledTimes(4);
   });
 
+  it("returns the authenticated Zo Computer clock without calling the model", async () => {
+    const root = await mkdtemp(join(tmpdir(), "zo-drive-zominai-time-"));
+    roots.push(root);
+    const runtimeFetch = vi.fn();
+    const app = createApp({
+      storage: new LocalDriveStorage({ root }),
+      resolveUserId: (request) => request.headers.get("x-test-user-id"),
+      zominAi: { endpoint: "http://127.0.0.1:57183", fetch: runtimeFetch, model: "Bonsai-8B-Q1_0.gguf" }
+    });
+
+    expect((await app.request("http://localhost/zominai/time")).status).toBe(401);
+    const response = await app.request("http://localhost/zominai/time", { headers: { "x-test-user-id": "alice" } });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    await expect(response.json()).resolves.toMatchObject({ iso: expect.any(String), local: expect.any(String), timeZone: expect.any(String) });
+    expect(runtimeFetch).not.toHaveBeenCalled();
+  });
+
   it("streams authenticated ZominAI responses without buffering them", async () => {
     const root = await mkdtemp(join(tmpdir(), "zo-drive-zominai-stream-"));
     roots.push(root);
@@ -82,6 +100,29 @@ describe("Zo Drive API", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("text/event-stream");
     await expect(response.text()).resolves.toBe(events);
+  });
+
+  it("aborts private runtime generation when the downstream stream is cancelled", async () => {
+    const root = await mkdtemp(join(tmpdir(), "zo-drive-zominai-cancel-"));
+    roots.push(root);
+    let runtimeSignal: AbortSignal | null = null;
+    const runtimeFetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      runtimeSignal = init?.signal ?? null;
+      return new Response(new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new TextEncoder().encode('data: {"choices":[{"delta":{"content":"Partial"}}]}\n\n')); } }), { headers: { "content-type": "text/event-stream" } });
+    });
+    const app = createApp({
+      storage: new LocalDriveStorage({ root }),
+      resolveUserId: (request) => request.headers.get("x-test-user-id"),
+      zominAi: { endpoint: "http://127.0.0.1:57183", fetch: runtimeFetch, model: "Bonsai-8B-Q1_0.gguf" }
+    });
+
+    const response = await app.request("http://localhost/zominai/chat", { method: "POST", headers: { "content-type": "application/json", "x-test-user-id": "alice" }, body: JSON.stringify({ messages: [{ content: "Start a long answer", role: "user" }], stream: true }) });
+    const reader = response.body!.getReader();
+    await reader.read();
+    await reader.cancel("User stopped generation");
+
+    expect(runtimeSignal).not.toBeNull();
+    expect((runtimeSignal as unknown as AbortSignal).aborted).toBe(true);
   });
 
   it("requires an authenticated user for drive operations", async () => {
@@ -176,6 +217,42 @@ describe("Zo Drive API", () => {
     await expect(uploaded.json()).resolves.toMatchObject({ key: "from-bob.txt" });
     const remoteObjects = await remote.request("http://remote/objects?prefix=Shared", { headers: { "x-test-user-id": "alice" } });
     await expect(remoteObjects.json()).resolves.toMatchObject({ objects: [expect.objectContaining({ key: "Shared/from-bob.txt" })] });
+  });
+
+  it("uses a mount-scoped LRU cache only when the remote source is unavailable", async () => {
+    const remote = await createTestApp();
+    const local = await createTestApp();
+    let remoteOnline = true;
+    vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+      if (!remoteOnline) return Promise.reject(new Error("remote source is offline"));
+      return remote.request(input.toString(), init);
+    });
+    const ownerHeaders = { "content-type": "application/json", "x-test-user-id": "alice" };
+    await remote.request("http://remote/objects", { method: "POST", headers: { ...ownerHeaders, "x-zo-drive-file-name": encodeURIComponent("cached.txt"), "x-zo-drive-path": encodeURIComponent("Shared") }, body: "cached content" });
+    const invitation = await remote.request("http://remote/clusters/invitations", { method: "POST", headers: ownerHeaders, body: JSON.stringify({ folder: "Shared" }) });
+    const { token } = await invitation.json() as { token: string };
+    const mounted = await local.request("http://local/clusters/mounts", { method: "POST", headers: { "content-type": "application/json", "x-test-user-id": "bob" }, body: JSON.stringify({ remoteUrl: "http://remote", inviteToken: token }) });
+    const { id } = await mounted.json() as { id: string };
+    const localHeaders = { "x-test-user-id": "bob" };
+
+    const listed = await local.request(`http://local/clusters/mounts/${id}/objects`, { headers: localHeaders });
+    expect(listed.headers.get("x-zo-drive-cluster-cache")).toBe("remote");
+    await expect(listed.json()).resolves.toMatchObject({ objects: [expect.objectContaining({ key: "cached.txt" })] });
+    const downloaded = await local.request(`http://local/clusters/mounts/${id}/objects/cached.txt`, { headers: localHeaders });
+    await expect(downloaded.text()).resolves.toBe("cached content");
+
+    remoteOnline = false;
+    const staleListing = await local.request(`http://local/clusters/mounts/${id}/objects`, { headers: localHeaders });
+    expect(staleListing.headers.get("x-zo-drive-cluster-cache")).toBe("stale");
+    await expect(staleListing.json()).resolves.toMatchObject({ objects: [expect.objectContaining({ key: "cached.txt" })] });
+
+    let staleDownload = await local.request(`http://local/clusters/mounts/${id}/objects/cached.txt`, { headers: localHeaders });
+    for (let attempt = 0; staleDownload.status !== 200 && attempt < 20; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      staleDownload = await local.request(`http://local/clusters/mounts/${id}/objects/cached.txt`, { headers: localHeaders });
+    }
+    expect(staleDownload.headers.get("x-zo-drive-cluster-cache")).toBe("stale");
+    await expect(staleDownload.text()).resolves.toBe("cached content");
   });
 
   it("stores, runs, and publicly invokes owner-scoped functions", async () => {

@@ -77,6 +77,11 @@ export type UploadProgress = {
   total: number;
 };
 
+export type ClusterObjectList = DriveObject[] & {
+  cacheStatus: "remote" | "stale";
+  cachedAt: string | null;
+};
+
 export class DriveApiError extends Error {
   readonly code: string;
   readonly status: number;
@@ -156,9 +161,13 @@ export class ZoDriveClient {
     await this.request(`/clusters/peers/${encodeURIComponent(id)}`, { method: "DELETE" });
   }
 
-  async listClusterObjects(id: string): Promise<DriveObject[]> {
+  async listClusterObjects(id: string): Promise<ClusterObjectList> {
     const response = await this.request(`/clusters/mounts/${encodeURIComponent(id)}/objects`, { method: "GET" });
-    return listObjectsResponseSchema.parse(await response.json()).objects;
+    const objects = listObjectsResponseSchema.parse(await response.json()).objects;
+    return Object.assign(objects, {
+      cacheStatus: response.headers.get("x-zo-drive-cluster-cache") === "stale" ? "stale" as const : "remote" as const,
+      cachedAt: response.headers.get("x-zo-drive-cluster-cache-at")
+    });
   }
 
   async getClusterMountAccess(id: string): Promise<{ role: ClusterRole }> {

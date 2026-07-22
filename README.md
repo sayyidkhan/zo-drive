@@ -29,6 +29,7 @@ authentication, or workflow change.
 - Home for recently updated files; My Drive as the default; Starred files and Shared with others for managed links
 - Share links: public or passcode-protected, with one-day, seven-day, thirty-day, or no-expiry TTL; copy and revoke controls
 - Zo Transfer: upload a file or select one already in Drive to create and manage public or passcode-protected expiring links; payment-gated delivery is coming soon
+- Zo Shared Drives: remote folder mounts with a persistent, bounded on-demand LRU cache for opened files and folder listings; cached content is not copied into My Drive or charged to the recipient's quota
 - Account lifecycle design for keeping files or permanently removing everything in [the plan](docs/PLAN.md)
 
 ## Storage layout
@@ -40,6 +41,7 @@ ZO_DRIVE_DATA_ROOT/
   v1/auth/users.json                 # salted password hash; never commit this
   v1/shares/shares.json              # share metadata and hashed passcodes
   v1/databases/api-keys.json         # hashed database-scoped API credentials
+  v1/clusters/cache/                 # private Shared Drive metadata and LRU file cache
   v1/users/{username}/files/
     Notes/hello.txt
     Photos/image.jpg
@@ -109,7 +111,7 @@ folder.
 
 #### GUI versioning
 
-The browser GUI has its own release track, currently `GUI v1.34.0`. GUI changes
+The browser GUI has its own release track, currently `GUI v1.37.0`. GUI changes
 are deployed to Zo Drive directly; browser users receive the current version by
 loading the page. Use `gui-v*` Git tags to trace a deployed GUI release. CLI
 releases are separate and do not change the GUI version.
@@ -376,3 +378,17 @@ Configure these settings in `apps/api/config.json` (start from `apps/api/config.
 Set `trustProxy` to `true` only when your reverse proxy sanitizes and sets `X-Forwarded-For`; it applies the limit per client IP. The config file is Git-ignored. For a nonstandard location, use `ZO_DRIVE_CONFIG_PATH=/absolute/path/to/config.json`. The existing rate-limit environment variables remain fallbacks only when a value is omitted from the JSON config.
 
 Share links are deliberately read-only. Public links can open the file directly; passcode links require the passcode for file content; expired and revoked links return no file. On Zo, serve the web app and API from the same origin so public links such as `https://your-drive.zo.com/?share={id}` work without cross-site cookie constraints.
+
+### Shared Drive cache
+
+Connected Shared Drives remain remote mounts: Zo Drive does not bulk-copy a
+shared folder into a recipient's Drive. It stores the latest remote file tree
+and the bytes of files a recipient has actually opened in a separate persistent
+LRU cache. The cache is used only when the remote source is unavailable; it is
+not visible in My Drive and does not count towards the recipient's Drive quota.
+
+The default content-cache limit is 1 GiB. Set `ZO_DRIVE_CLUSTER_CACHE_BYTES`
+to a positive byte value to choose a different limit. Cache entries are removed
+least-recently-used first and are invalidated after a mounted-folder write,
+rename, delete, or disconnect. Permission failures and missing-file responses
+never fall back to cached content.

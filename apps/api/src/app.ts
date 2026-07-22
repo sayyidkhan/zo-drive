@@ -3,6 +3,7 @@ import type { Context } from "hono";
 import { cors } from "hono/cors";
 import { z } from "zod";
 import { Readable } from "node:stream";
+import { createReadStream } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 
@@ -15,6 +16,7 @@ import { LocalFormStore, type PublishedForm } from "./forms/local-form-store.js"
 import { DatabaseEngineNotInstalledError, DatabaseImportError, DatabaseQueryError, LocalDatabaseStore, isDatabaseEngineId } from "./databases/local-database-store.js";
 import { LocalDatabaseApiKeyStore, type DatabaseApiKeyScope } from "./databases/local-database-api-key-store.js";
 import { LocalFunctionStore, validCron } from "./functions/local-function-store.js";
+import { LocalClusterCache } from "./clusters/local-cluster-cache.js";
 import { LocalClusterStore } from "./clusters/local-cluster-store.js";
 import { LocalDriveStorage, NativeFileVersionConflictError, StorageQuotaConfigurationError, StorageQuotaExceededError, TrashRestoreConflictError, UnsafeDrivePathError, nativeFileTypes, type DriveFileCategory } from "./storage/local-drive-storage.js";
 
@@ -37,6 +39,7 @@ type CreateAppOptions = {
   databaseApiKeys?: LocalDatabaseApiKeyStore;
   functions?: LocalFunctionStore;
   clusters?: LocalClusterStore;
+  clusterCache?: LocalClusterCache;
   maxDatabaseImportBytes?: number;
   trustProxy?: boolean;
   zominAi?: {
@@ -203,7 +206,7 @@ const zominAiChatSchema = z.object({
   tools: z.array(z.unknown()).max(10).optional()
 }).refine((value) => JSON.stringify(value).length <= 1_000_000, "ZominAI request is too large");
 
-export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys, invalidApiKeyRateLimiter = new InvalidApiKeyRateLimiter(), sharing, forms, databases = new LocalDatabaseStore(storage.root), databaseApiKeys = new LocalDatabaseApiKeyStore({ root: storage.root }), functions = new LocalFunctionStore(storage.root), clusters = new LocalClusterStore({ root: storage.root }), maxDatabaseImportBytes = Number.MAX_SAFE_INTEGER, trustProxy = false, zominAi }: CreateAppOptions) {
+export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys, invalidApiKeyRateLimiter = new InvalidApiKeyRateLimiter(), sharing, forms, databases = new LocalDatabaseStore(storage.root), databaseApiKeys = new LocalDatabaseApiKeyStore({ root: storage.root }), functions = new LocalFunctionStore(storage.root), clusters = new LocalClusterStore({ root: storage.root }), clusterCache = new LocalClusterCache({ root: storage.root, maxBytes: 1024 * 1024 * 1024 }), maxDatabaseImportBytes = Number.MAX_SAFE_INTEGER, trustProxy = false, zominAi }: CreateAppOptions) {
   const app = new Hono();
   const resolveAuthenticatedUser = async (request: Request) => {
     const userId = await resolveUserId(request);
@@ -282,6 +285,14 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
       return [...new Set((body.data ?? []).flatMap((item) => typeof item.id === "string" && item.id.trim() ? [item.id] : []))];
     };
 
+    app.get("/zominai/time", async (context) => {
+      if (!(await requireUser(context.req.raw, resolveReadUser))) return unauthorized(context);
+      const now = new Date();
+      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+      context.header("cache-control", "no-store");
+      return context.json({ iso: now.toISOString(), local: now.toLocaleString("en-GB", { dateStyle: "full", timeStyle: "long", timeZone }), timeZone });
+    });
+
     app.get("/zominai/health", async (context) => {
       if (!(await requireUser(context.req.raw, resolveReadUser))) return unauthorized(context);
       const controller = new AbortController();
@@ -347,6 +358,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
               }
             },
             async cancel(reason) {
+              controller.abort();
               cleanup();
               await reader.cancel(reason);
             }
@@ -719,9 +731,22 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     if (!userId) return unauthorized(context);
     const mount = await clusters.findMount({ ownerUserId: userId, id: context.req.param("id") });
     if (!mount) return context.json({ error: { code: "NOT_FOUND", message: "Cluster mount not found" } }, 404);
-    const response = await forwardClusterRequest(mount, "/objects");
-    if (!response.ok) return context.json({ error: { code: "REMOTE_UNAVAILABLE", message: "Could not read this cluster mount" } }, 502);
-    return context.json(await response.json());
+    try {
+      const response = await forwardClusterRequest(mount, "/objects");
+      if (!response.ok) {
+        const cached = response.status >= 500 ? await cachedClusterManifestResponse(clusterCache, userId, mount.id) : null;
+        if (cached) return cached;
+        return context.json({ error: { code: "REMOTE_UNAVAILABLE", message: "Could not read this cluster mount" } }, 502);
+      }
+      const payload = await response.json() as { objects: unknown[] };
+      void clusterCache.putManifest({ ownerUserId: userId, mountId: mount.id, objects: payload.objects }).catch((error) => console.error("Zo Shared Drive manifest cache failed", error));
+      context.header("x-zo-drive-cluster-cache", "remote");
+      return context.json(payload);
+    } catch {
+      const cached = await cachedClusterManifestResponse(clusterCache, userId, mount.id);
+      if (cached) return cached;
+      return context.json({ error: { code: "REMOTE_UNAVAILABLE", message: "Could not read this cluster mount" } }, 502);
+    }
   });
 
   app.get("/clusters/mounts/:id/access", async (context) => {
@@ -738,6 +763,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     const mount = await clusters.findMount({ ownerUserId: userId, id: context.req.param("id") });
     if (!mount) return context.json({ error: { code: "NOT_FOUND", message: "Cluster mount not found" } }, 404);
     const response = await forwardClusterRequest(mount, "/objects", context.req.raw);
+    if (response.ok) void clusterCache.invalidateMount({ ownerUserId: userId, mountId: mount.id }).catch((error) => console.error("Zo Shared Drive cache invalidation failed", error));
     return clusterProxyResponse(response);
   });
 
@@ -746,7 +772,9 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     if (!userId) return unauthorized(context);
     const mount = await clusters.findMount({ ownerUserId: userId, id: context.req.param("id") });
     if (!mount) return context.json({ error: { code: "NOT_FOUND", message: "Cluster mount not found" } }, 404);
-    return clusterProxyResponse(await forwardClusterRequest(mount, "/folders", context.req.raw));
+    const response = await forwardClusterRequest(mount, "/folders", context.req.raw);
+    if (response.ok) void clusterCache.invalidateMount({ ownerUserId: userId, mountId: mount.id }).catch((error) => console.error("Zo Shared Drive cache invalidation failed", error));
+    return clusterProxyResponse(response);
   });
 
   app.get("/clusters/mounts/:id/objects/*", async (context) => {
@@ -756,7 +784,34 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     const mount = await clusters.findMount({ ownerUserId: userId, id });
     if (!mount) return context.json({ error: { code: "NOT_FOUND", message: "Cluster mount not found" } }, 404);
     const key = clusterObjectKeyFromPath(context.req.path, `/clusters/mounts/${id}/objects/`);
-    return clusterProxyResponse(await forwardClusterRequest(mount, `/objects/${encodeURIComponent(key)}`));
+    try {
+      const response = await forwardClusterRequest(mount, `/objects/${encodeURIComponent(key)}`);
+      if (!response.ok || !response.body) {
+        if (response.status >= 500) {
+          const cached = await cachedClusterFileResponse(clusterCache, userId, mount.id, key);
+          if (cached) return cached;
+        }
+        return clusterProxyResponse(response);
+      }
+      const [clientBody, cacheBody] = response.body.tee();
+      const headers = new Headers(response.headers);
+      headers.set("x-zo-drive-cluster-cache", "remote");
+      void clusterCache.putFile({
+        ownerUserId: userId,
+        mountId: mount.id,
+        key,
+        name: key.split("/").at(-1) ?? key,
+        size: positiveHeaderNumber(response.headers.get("content-length")),
+        contentType: response.headers.get("content-type") ?? "application/octet-stream",
+        updatedAt: response.headers.get("last-modified") ?? new Date().toISOString(),
+        body: cacheBody
+      }).catch((error) => console.error("Zo Shared Drive file cache failed", error));
+      return new Response(clientBody, { headers, status: response.status, statusText: response.statusText });
+    } catch {
+      const cached = await cachedClusterFileResponse(clusterCache, userId, mount.id, key);
+      if (cached) return cached;
+      return context.json({ error: { code: "REMOTE_UNAVAILABLE", message: "Could not read this cluster file" } }, 502);
+    }
   });
 
   app.patch("/clusters/mounts/:id/objects/*", async (context) => {
@@ -766,7 +821,9 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     const mount = await clusters.findMount({ ownerUserId: userId, id });
     if (!mount) return context.json({ error: { code: "NOT_FOUND", message: "Cluster mount not found" } }, 404);
     const key = clusterObjectKeyFromPath(context.req.path, `/clusters/mounts/${id}/objects/`);
-    return clusterProxyResponse(await forwardClusterRequest(mount, `/objects/${encodeURIComponent(key)}`, context.req.raw));
+    const response = await forwardClusterRequest(mount, `/objects/${encodeURIComponent(key)}`, context.req.raw);
+    if (response.ok) void clusterCache.invalidateMount({ ownerUserId: userId, mountId: mount.id }).catch((error) => console.error("Zo Shared Drive cache invalidation failed", error));
+    return clusterProxyResponse(response);
   });
 
   app.delete("/clusters/mounts/:id/objects/*", async (context) => {
@@ -776,7 +833,9 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     const mount = await clusters.findMount({ ownerUserId: userId, id });
     if (!mount) return context.json({ error: { code: "NOT_FOUND", message: "Cluster mount not found" } }, 404);
     const key = clusterObjectKeyFromPath(context.req.path, `/clusters/mounts/${id}/objects/`);
-    return clusterProxyResponse(await forwardClusterRequest(mount, `/objects/${encodeURIComponent(key)}`, context.req.raw));
+    const response = await forwardClusterRequest(mount, `/objects/${encodeURIComponent(key)}`, context.req.raw);
+    if (response.ok) void clusterCache.invalidateMount({ ownerUserId: userId, mountId: mount.id }).catch((error) => console.error("Zo Shared Drive cache invalidation failed", error));
+    return clusterProxyResponse(response);
   });
 
   app.delete("/clusters/mounts/:id", async (context) => {
@@ -784,6 +843,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     if (!userId) return unauthorized(context);
     const mount = await clusters.removeMount({ ownerUserId: userId, id: context.req.param("id") });
     if (!mount) return context.json({ error: { code: "NOT_FOUND", message: "Cluster mount not found" } }, 404);
+    void clusterCache.invalidateMount({ ownerUserId: userId, mountId: mount.id }).catch((error) => console.error("Zo Shared Drive cache invalidation failed", error));
     await forwardClusterRequest(mount, "/disconnect", new Request("http://cluster.local", { method: "DELETE" })).catch(() => null);
     return context.body(null, 204);
   });
@@ -1423,6 +1483,37 @@ function clusterObjectKeyFromPath(path: string, prefix: string): string {
 
 function clusterObjectForPeer(folder: string, object: { key: string }) {
   return { ...object, key: clusterRelativeKey(folder, object.key) };
+}
+
+async function cachedClusterManifestResponse(cache: LocalClusterCache, ownerUserId: string, mountId: string): Promise<Response | null> {
+  const cached = await cache.getManifest({ ownerUserId, mountId });
+  if (!cached) return null;
+  return new Response(JSON.stringify({ objects: cached.objects }), {
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "x-zo-drive-cluster-cache": "stale",
+      "x-zo-drive-cluster-cache-at": cached.cachedAt
+    }
+  });
+}
+
+async function cachedClusterFileResponse(cache: LocalClusterCache, ownerUserId: string, mountId: string, key: string): Promise<Response | null> {
+  const cached = await cache.getFile({ ownerUserId, mountId, key });
+  if (!cached) return null;
+  return new Response(Readable.toWeb(createReadStream(cached.filePath)) as ReadableStream, {
+    headers: {
+      "content-disposition": `inline; filename*=UTF-8''${encodeURIComponent(cached.name)}`,
+      "content-length": cached.size.toString(),
+      "content-type": cached.contentType,
+      "last-modified": cached.updatedAt,
+      "x-zo-drive-cluster-cache": "stale"
+    }
+  });
+}
+
+function positiveHeaderNumber(value: string | null): number {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : 0;
 }
 
 async function forwardClusterRequest(mount: { remoteUrl: string; remotePeerId: string; remotePeerKey: string }, path: string, request?: Request): Promise<Response> {

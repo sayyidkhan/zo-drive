@@ -11,6 +11,7 @@ import { SessionService } from "./auth/session.js";
 import { LocalShareStore } from "./sharing/local-share-store.js";
 import { LocalFormStore } from "./forms/local-form-store.js";
 import { LocalFunctionStore } from "./functions/local-function-store.js";
+import { LocalClusterCache } from "./clusters/local-cluster-cache.js";
 import { loadServerConfig } from "./server-config.js";
 import { LocalDriveStorage } from "./storage/local-drive-storage.js";
 
@@ -24,6 +25,7 @@ const shareStore = new LocalShareStore({ root: dataRoot });
 const formStore = new LocalFormStore({ root: dataRoot });
 const functionStore = new LocalFunctionStore(dataRoot);
 const storage = new LocalDriveStorage({ root: dataRoot });
+const clusterCache = new LocalClusterCache({ root: dataRoot, maxBytes: positiveIntegerEnvironmentVariable("ZO_DRIVE_CLUSTER_CACHE_BYTES", 1024 * 1024 * 1024) });
 const maxDatabaseImportBytes = positiveIntegerEnvironmentVariable("ZO_DRIVE_MAX_DATABASE_IMPORT_BYTES", Number.MAX_SAFE_INTEGER);
 const zominAiEndpoint = localHttpEndpoint(process.env.ZO_DRIVE_ZOMINAI_ENDPOINT ?? "http://127.0.0.1:57183");
 const zominAiModel = process.env.ZO_DRIVE_ZOMINAI_MODEL ?? "Bonsai-8B-Q1_0.gguf";
@@ -50,6 +52,7 @@ const app = createApp({
   sharing: shareStore,
   forms: formStore,
   functions: functionStore,
+  clusterCache,
   maxDatabaseImportBytes,
   zominAi: {
     endpoint: zominAiEndpoint,

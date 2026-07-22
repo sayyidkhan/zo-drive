@@ -48,7 +48,7 @@ describe("DriveApp", () => {
       expect(screen.getByRole("heading", { name: "Run private databases beside your files" })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Automate with Zo Functions" })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Ask about your Drive without granting write access" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 1.36.0" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 1.37.0" })).toBeInTheDocument();
       expect(screen.getByText("Product")).toBeInTheDocument();
       expect(screen.getByRole("navigation", { name: "Choose documentation product" })).toBeInTheDocument();
       expect(screen.getByRole("navigation", { name: "Documentation sections" })).toHaveTextContent("Zo Originals");
@@ -58,7 +58,7 @@ describe("DriveApp", () => {
         expect(modeSwitch).toHaveTextContent("CLI");
       }
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI releases version 1.36.0" })).toHaveAttribute("href", expect.stringContaining("?releases=1&mode=gui"));
+      expect(screen.getByRole("link", { name: "GUI releases version 1.37.0" })).toHaveAttribute("href", expect.stringContaining("?releases=1&mode=gui"));
       expect(screen.queryByRole("heading", { name: "GUI changelog" })).not.toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
 
@@ -96,7 +96,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.36.0")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.37.0")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();
@@ -111,9 +111,9 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "Private local AI for your Drive." })).toBeInTheDocument();
-      expect(screen.getByText("ZominAI documentation · v1.6.0")).toBeInTheDocument();
+      expect(screen.getByText("ZominAI documentation · v1.7.0")).toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "ZominAI" })[0]).toHaveAttribute("aria-current", "page");
-      expect(screen.getByRole("heading", { name: "ZominAI version 1.6.0" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "ZominAI version 1.7.0" })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "ZominAI changelog" })).toBeInTheDocument();
 
       cleanup();
@@ -121,7 +121,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "ZominAI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.6.0")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.7.0")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&product=zominai"));
 
       cleanup();
@@ -406,6 +406,7 @@ describe("DriveApp", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send message to ZominAI" }));
     expect(await screen.findByText("Hello from your local Bonsai runtime.")).toBeInTheDocument();
     expect(screen.getByLabelText("ZominAI response metrics")).toHaveTextContent("Completed in");
+    expect(screen.getByLabelText("ZominAI response metrics")).toHaveTextContent("TPS unavailable");
     expect(fetchSpy).toHaveBeenCalledWith("http://localhost:3000/zominai/chat", expect.objectContaining({ method: "POST" }));
     const firstChatRequest = fetchSpy.mock.calls.find(([input]) => String(input).includes("/zominai/chat"));
     expect(JSON.parse(String(firstChatRequest?.[1]?.body))).toMatchObject({ model: "Bonsai-27B-Q4_K_M.gguf" });
@@ -428,6 +429,28 @@ describe("DriveApp", () => {
     expect(storageRequest.tool_choice).toBeUndefined();
     expect(storageRequest.tools).toBeUndefined();
     expect(storageRequest.messages[0]).toEqual(expect.objectContaining({ role: "system", content: expect.stringContaining("get_storage_usage tool") }));
+    fireEvent.click(screen.getByRole("button", { name: "New ZominAI chat" }));
+    fetchSpy.mockReset();
+    fetchSpy
+      .mockResolvedValueOnce(new Response(JSON.stringify({ iso: "2026-07-22T15:30:00.000Z", local: "Wednesday, 22 July 2026 at 15:30:00 UTC", timeZone: "UTC" }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ choices: [{ message: { content: "The Zo Computer time is 15:30 UTC on 22 July 2026." } }] }), { status: 200 }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Message ZominAI" }), { target: { value: "What is the date and time on this machine?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send message to ZominAI" }));
+    expect(await screen.findByText("The Zo Computer time is 15:30 UTC on 22 July 2026.")).toBeInTheDocument();
+    expect(String(fetchSpy.mock.calls[0]?.[0])).toContain("/zominai/time");
+    const timeRequest = JSON.parse(String(fetchSpy.mock.calls[1]?.[1]?.body)) as { messages: Array<{ content: string; role: string }>; tools?: unknown[] };
+    expect(timeRequest.tools).toBeUndefined();
+    expect(timeRequest.messages[0]?.content).toContain("2026-07-22T15:30:00.000Z");
+    fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify({ choices: [{ message: { content: "You asked for the date and time on this machine." } }] }), { status: 200 }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Message ZominAI" }), { target: { value: "What did I ask you about?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send message to ZominAI" }));
+    expect(await screen.findByText("You asked for the date and time on this machine.")).toBeInTheDocument();
+    const followUpRequest = JSON.parse(String(fetchSpy.mock.calls[2]?.[1]?.body)) as { messages: Array<{ content: string; role: string }> };
+    expect(followUpRequest.messages).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: "user", content: "What is the date and time on this machine?" }),
+      expect.objectContaining({ role: "assistant", content: "The Zo Computer time is 15:30 UTC on 22 July 2026." }),
+      expect.objectContaining({ role: "user", content: "What did I ask you about?" })
+    ]));
     fireEvent.click(screen.getByRole("button", { name: "New ZominAI chat" }));
     fetchSpy.mockReset();
     fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify({ choices: [{ message: { content: "Your Zo Drive contains 28 files. That is the Drive count, not every operating-system file." } }] }), { status: 200 }));
@@ -458,6 +481,17 @@ describe("DriveApp", () => {
     expect(await screen.findByText("Streamed response.")).toBeInTheDocument();
     expect(screen.getAllByLabelText("ZominAI response metrics").at(-1)).toHaveTextContent("Completed in");
     expect(screen.getAllByLabelText("ZominAI response metrics").at(-1)).toHaveTextContent("24.0 tok/s");
+    fireEvent.click(screen.getByRole("button", { name: "New ZominAI chat" }));
+    fetchSpy.mockReset();
+    fetchSpy.mockImplementationOnce(async (_input, init) => await new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(new DOMException("Stopped", "AbortError")), { once: true });
+    }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Message ZominAI" }), { target: { value: "Keep thinking until I stop you" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send message to ZominAI" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Stop ZominAI response" }));
+    expect(await screen.findByText("Response stopped.")).toBeInTheDocument();
+    expect(screen.getAllByLabelText("ZominAI response metrics").at(-1)).toHaveTextContent("Stopped after");
+    expect(screen.getByRole("button", { name: "Retry message to ZominAI" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "New ZominAI chat" }));
     fireEvent.click(screen.getByRole("button", { name: "Delete chat New chat" }));
     expect(screen.queryByRole("button", { name: "Delete chat New chat" })).not.toBeInTheDocument();

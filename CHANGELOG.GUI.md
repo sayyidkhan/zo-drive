@@ -2,6 +2,22 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.37.0 - 2026-07-22
+
+### Added
+
+- Added a private, bounded LRU cache for connected Shared Drive folders.
+  Previously opened remote files and the last folder tree remain available when
+  the source Zo is offline, without replicating them into My Drive or using the
+  recipient's Drive quota.
+- Added an offline cached-state indicator in the mounted-folder view.
+- Added authenticated Zo Computer clock answers and stronger follow-up context
+  to ZominAI.
+- Added a **Stop generating** control that cancels browser streaming, gateway
+  forwarding, and local model generation while keeping the turn retryable.
+- Added complete TPS metadata beside elapsed time, including labelled estimates
+  when runtime timings are omitted and an unavailable state for older history.
+
 ## v1.36.0 - 2026-07-22
 
 ### Added
