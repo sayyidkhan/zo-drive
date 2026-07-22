@@ -192,6 +192,7 @@ const zominAiChatSchema = z.object({
       type: z.literal("function")
     })).max(6).optional()
   })).min(1).max(30),
+  stream: z.boolean().optional(),
   tool_choice: z.literal("auto").optional(),
   tools: z.array(z.unknown()).max(10).optional()
 }).refine((value) => JSON.stringify(value).length <= 1_000_000, "ZominAI request is too large");
@@ -291,20 +292,54 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
       const parsed = zominAiChatSchema.safeParse(await context.req.json().catch(() => null));
       if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Enter a valid, bounded ZominAI chat request" } }, 400);
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 90_000);
+      const timeout = setTimeout(() => controller.abort(), 300_000);
+      const abort = () => controller.abort();
+      context.req.raw.signal.addEventListener("abort", abort, { once: true });
+      const cleanup = () => {
+        clearTimeout(timeout);
+        context.req.raw.signal.removeEventListener("abort", abort);
+      };
       try {
         const response = await runtimeFetch(runtimeUrl("/v1/chat/completions"), {
-          body: JSON.stringify({ ...parsed.data, model: zominAi.model, stream: false }),
-          headers: { Accept: "application/json", "Content-Type": "application/json" },
+          body: JSON.stringify({ ...parsed.data, model: zominAi.model, stream: parsed.data.stream ?? false }),
+          headers: { Accept: parsed.data.stream ? "text/event-stream" : "application/json", "Content-Type": "application/json" },
           method: "POST",
           signal: controller.signal
         });
-        if (!response.ok) return context.json({ error: { code: "ZOMINAI_UNAVAILABLE", message: "The private Bonsai runtime is unavailable. Try again shortly." } }, 503);
-        return new Response(await response.arrayBuffer(), { headers: { "content-type": "application/json", "cache-control": "no-store" } });
+        if (!response.ok) {
+          cleanup();
+          return context.json({ error: { code: "ZOMINAI_UNAVAILABLE", message: "The private Bonsai runtime rejected this request. Try a new chat or a shorter message." } }, 502);
+        }
+        if (parsed.data.stream && response.body) {
+          const reader = response.body.getReader();
+          const body = new ReadableStream<Uint8Array>({
+            async pull(streamController) {
+              try {
+                const chunk = await reader.read();
+                if (chunk.done) {
+                  cleanup();
+                  streamController.close();
+                } else {
+                  streamController.enqueue(chunk.value);
+                }
+              } catch (error) {
+                cleanup();
+                streamController.error(error);
+              }
+            },
+            async cancel(reason) {
+              cleanup();
+              await reader.cancel(reason);
+            }
+          });
+          return new Response(body, { headers: { "cache-control": "no-store, no-transform", "content-type": "text/event-stream; charset=utf-8", "x-accel-buffering": "no" } });
+        }
+        const body = await response.arrayBuffer();
+        cleanup();
+        return new Response(body, { headers: { "content-type": "application/json", "cache-control": "no-store" } });
       } catch {
+        cleanup();
         return context.json({ error: { code: "ZOMINAI_UNAVAILABLE", message: "The private Bonsai runtime is unavailable. Try again shortly." } }, 503);
-      } finally {
-        clearTimeout(timeout);
       }
     });
   }

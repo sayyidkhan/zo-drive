@@ -2,6 +2,20 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.30.0 - 2026-07-22
+
+### Added
+
+- Streamed ZominAI responses into the chat as they are generated and added live
+  elapsed time plus a completion time on each reply.
+
+### Fixed
+
+- Preserved the required function-call type in Drive tool follow-ups, preventing
+  the HTTP 400 failure shown after Bonsai selected a read-only tool.
+- Removed redundant tool definitions from storage questions after the current
+  storage data has already been retrieved, reducing local prompt-evaluation time.
+
 ## v1.29.2 - 2026-07-22
 
 ### Fixed

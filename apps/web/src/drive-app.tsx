@@ -265,11 +265,16 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.29.2";
+const GUI_VERSION = "1.30.0";
 const CLI_VERSION = "1.3.0";
-const ZOMINAI_VERSION = "1.2.2";
+const ZOMINAI_VERSION = "1.3.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.30.0",
+    date: "2026-07-22",
+    changes: ["Streamed ZominAI responses into the chat as they are generated, added live and completed elapsed-time feedback, and fixed Drive tool follow-up requests that previously failed with HTTP 400."]
+  },
   {
     version: "v1.29.2",
     date: "2026-07-22",
@@ -749,6 +754,11 @@ const CLI_CHANGELOG = [
 ];
 
 const ZOMINAI_CHANGELOG = [
+  {
+    version: "v1.3.0",
+    date: "2026-07-22",
+    changes: ["Added streamed local responses with live elapsed time and per-response completion time.", "Fixed Drive tool follow-ups by preserving the required function-call type.", "Reduced storage-question latency by omitting redundant tool definitions after storage data is already available."]
+  },
   {
     version: "v1.2.2",
     date: "2026-07-22",
@@ -1294,6 +1304,13 @@ function zominAiTimestamp(value: string): string {
   return Number.isNaN(date.getTime()) ? "Unknown time" : date.toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
 }
 
+function zominAiElapsedLabel(elapsedMs: number): string {
+  if (elapsedMs < 60_000) return `${(elapsedMs / 1_000).toFixed(1)}s`;
+  const minutes = Math.floor(elapsedMs / 60_000);
+  const seconds = Math.floor((elapsedMs % 60_000) / 1_000);
+  return `${minutes}m ${seconds}s`;
+}
+
 function zominAiContextSummary(messages: ZominAiChatMessage[]): string | null {
   const olderMessages = messages.slice(0, -zominAiRecentMessageCount);
   if (olderMessages.length === 0) return null;
@@ -1322,7 +1339,11 @@ function readZominAiChatSessions(): ZominAiChatSession[] {
       if (!value || typeof value !== "object") return [];
       const session = value as Partial<ZominAiChatSession>;
       if (typeof session.id !== "string" || typeof session.title !== "string" || typeof session.createdAt !== "string" || typeof session.updatedAt !== "string" || !Array.isArray(session.messages)) return [];
-      const messages = session.messages.flatMap((message): ZominAiChatMessage[] => message && typeof message === "object" && (message as { role?: unknown }).role !== "system" && ["assistant", "user"].includes((message as { role?: unknown }).role as string) && typeof (message as { content?: unknown }).content === "string" ? [{ role: (message as ZominAiChatMessage).role, content: (message as ZominAiChatMessage).content }] : []);
+      const messages = session.messages.flatMap((message): ZominAiChatMessage[] => {
+        if (!message || typeof message !== "object" || (message as { role?: unknown }).role === "system" || !["assistant", "user"].includes((message as { role?: unknown }).role as string) || typeof (message as { content?: unknown }).content !== "string") return [];
+        const elapsedMs = (message as { elapsedMs?: unknown }).elapsedMs;
+        return [{ role: (message as ZominAiChatMessage).role, content: (message as ZominAiChatMessage).content, ...(typeof elapsedMs === "number" && Number.isFinite(elapsedMs) && elapsedMs >= 0 ? { elapsedMs } : {}) }];
+      });
       const compactedAt = typeof session.compactedAt === "string" ? session.compactedAt : undefined;
       const contextSummary = typeof session.contextSummary === "string" ? session.contextSummary.slice(0, 6_000) : undefined;
       return [{ id: session.id, title: session.title.slice(0, 120), ...(compactedAt ? { compactedAt } : {}), ...(contextSummary ? { contextSummary } : {}), createdAt: session.createdAt, updatedAt: session.updatedAt, messages }];
@@ -1701,6 +1722,8 @@ function ZominAiChatDrawer({ client, connection, isOpen, onClose, onConnectionCh
   const [drawerWidth, setDrawerWidth] = useState(readZominAiDrawerWidth);
   const [resizing, setResizing] = useState(false);
   const [sending, setSending] = useState(false);
+  const [streamingReply, setStreamingReply] = useState("");
+  const [elapsedMs, setElapsedMs] = useState(0);
   const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
   const [titleDraft, setTitleDraft] = useState("");
   const drawerRef = useRef<HTMLElement>(null);
@@ -1805,16 +1828,25 @@ function ZominAiChatDrawer({ client, connection, isOpen, onClose, onConnectionCh
     const updatedAt = new Date().toISOString();
     setSessions((current) => current.map((session) => session.id === activeSession.id ? { ...session, messages: nextMessages, title: session.messages.length === 0 ? zominAiChatTitle(content) : session.title, updatedAt } : session));
     setDraft("");
+    setElapsedMs(0);
+    setStreamingReply("");
     setSending(true);
+    const startedAt = performance.now();
+    const timer = window.setInterval(() => setElapsedMs(performance.now() - startedAt), 100);
     try {
-      const reply = await sendZominAiMessage(settings, zominAiContextMessages(activeSession, nextMessages), createZominAiToolRunner(client), activeSession.contextSummary);
+      const reply = await sendZominAiMessage(settings, zominAiContextMessages(activeSession, nextMessages), createZominAiToolRunner(client), activeSession.contextSummary, setStreamingReply);
+      const responseElapsedMs = performance.now() - startedAt;
       onConnectionChange({ state: "connected", detail: `Bonsai replied from ${settings.endpoint}.` });
-      setSessions((current) => current.map((session) => session.id === activeSession.id ? { ...session, messages: [...nextMessages, { role: "assistant", content: reply }], updatedAt: new Date().toISOString() } : session));
+      setSessions((current) => current.map((session) => session.id === activeSession.id ? { ...session, messages: [...nextMessages, { role: "assistant", content: reply, elapsedMs: responseElapsedMs }], updatedAt: new Date().toISOString() } : session));
     } catch (error) {
       const detail = error instanceof Error ? error.message : "The local runtime could not be reached.";
+      const responseElapsedMs = performance.now() - startedAt;
       onConnectionChange({ state: "disconnected", detail });
-      setSessions((current) => current.map((session) => session.id === activeSession.id ? { ...session, messages: [...nextMessages, { role: "assistant", content: `I could not connect to ZominAI. ${detail}` }], updatedAt: new Date().toISOString() } : session));
+      setSessions((current) => current.map((session) => session.id === activeSession.id ? { ...session, messages: [...nextMessages, { role: "assistant", content: `I could not connect to ZominAI. ${detail}`, elapsedMs: responseElapsedMs }], updatedAt: new Date().toISOString() } : session));
     } finally {
+      window.clearInterval(timer);
+      setElapsedMs(performance.now() - startedAt);
+      setStreamingReply("");
       setSending(false);
     }
   }
@@ -1838,7 +1870,10 @@ function ZominAiChatDrawer({ client, connection, isOpen, onClose, onConnectionCh
           </nav>
         </>}
         <section className="flex min-w-0 flex-1 flex-col">
-          <div aria-label="ZominAI conversation" className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-slate-50/70 p-4" ref={transcriptRef}>{activeSession.messages.length === 0 ? <div className="grid h-full min-h-56 place-items-center text-center"><div className="max-w-60"><img className="mx-auto size-12 rounded-2xl object-cover shadow-sm" src={zominAiButtonUrl} alt="ZominAI Pegasus" /><p className="mt-4 text-sm font-semibold text-slate-900">Ask about your Drive</p><p className="mt-2 text-xs leading-5 text-slate-500">ZominAI can search and read supported Drive files, inspect databases, and run read-only queries. Results stay with this local model.</p></div></div> : activeSession.messages.map((message, index) => <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`} key={`${message.role}-${index}`}><div className={`max-w-[88%] whitespace-pre-wrap rounded-2xl px-3 py-2.5 text-sm leading-6 ${message.role === "user" ? "rounded-br-md bg-cyan-800 text-white" : "rounded-bl-md border border-slate-200 bg-white text-slate-700"}`}>{message.content}</div></div>)}{sending && <div className="flex justify-start"><div className="inline-flex items-center gap-2 rounded-2xl rounded-bl-md border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-500"><LoaderCircle className="animate-spin" size={15} /> Thinking…</div></div>}</div>
+          <div aria-label="ZominAI conversation" className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-slate-50/70 p-4" ref={transcriptRef}>
+            {activeSession.messages.length === 0 ? <div className="grid h-full min-h-56 place-items-center text-center"><div className="max-w-60"><img className="mx-auto size-12 rounded-2xl object-cover shadow-sm" src={zominAiButtonUrl} alt="ZominAI Pegasus" /><p className="mt-4 text-sm font-semibold text-slate-900">Ask about your Drive</p><p className="mt-2 text-xs leading-5 text-slate-500">ZominAI can search and read supported Drive files, inspect databases, and run read-only queries. Results stay with this local model.</p></div></div> : activeSession.messages.map((message, index) => <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`} key={`${message.role}-${index}`}><div className="max-w-[88%]"><div className={`whitespace-pre-wrap rounded-2xl px-3 py-2.5 text-sm leading-6 ${message.role === "user" ? "rounded-br-md bg-cyan-800 text-white" : "rounded-bl-md border border-slate-200 bg-white text-slate-700"}`}>{message.content}</div>{message.role === "assistant" && typeof message.elapsedMs === "number" && <p aria-label="ZominAI response time" className="mt-1 px-1 text-[10px] text-slate-400">Completed in {zominAiElapsedLabel(message.elapsedMs)}</p>}</div></div>)}
+            {sending && <div className="flex justify-start"><div className="max-w-[88%]"><div className={`rounded-2xl rounded-bl-md border border-slate-200 bg-white px-3 py-2.5 text-sm leading-6 ${streamingReply ? "whitespace-pre-wrap text-slate-700" : "inline-flex items-center gap-2 text-slate-500"}`}>{streamingReply || <><LoaderCircle className="animate-spin" size={15} /> Thinking…</>}</div><p aria-live="polite" className="mt-1 px-1 text-[10px] font-medium text-slate-400">{streamingReply ? "Responding" : "Elapsed"} · {zominAiElapsedLabel(elapsedMs)}</p></div></div>}
+          </div>
           <div aria-label="ZominAI context used" className="flex items-center gap-3 border-t border-slate-200 bg-white px-3 py-2">
             <div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-2 text-[11px] text-slate-500"><span className="truncate">Context used · estimated {zominAiTokenLabel(estimatedContextTokens)} / {zominAiTokenLabel(settings.contextTokens)} tokens</span><span className="shrink-0 font-medium text-slate-600">{contextPercent}%</span></div><div aria-hidden="true" className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full ${contextPercent >= 85 ? "bg-amber-500" : "bg-cyan-600"}`} style={{ width: `${Math.max(2, contextPercent)}%` }} /></div>{activeSession.compactedAt && <p className="mt-1 text-[10px] text-slate-400">Compacted {zominAiTimestamp(activeSession.compactedAt)}</p>}</div>
             <button aria-label="Compact ZominAI context" className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 px-2 py-1.5 text-[11px] font-semibold text-slate-600 hover:border-cyan-300 hover:text-cyan-800 disabled:cursor-not-allowed disabled:text-slate-300" disabled={!canCompactContext || sending} onClick={compactContext} title={canCompactContext ? "Keep recent messages active and compact earlier context locally" : "Add more messages before compacting context"} type="button"><Minimize2 size={14} /><span className="hidden sm:inline">Compact</span></button>

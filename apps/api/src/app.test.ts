@@ -59,6 +59,28 @@ describe("Zo Drive API", () => {
     expect(runtimeFetch).toHaveBeenCalledTimes(2);
   });
 
+  it("streams authenticated ZominAI responses without buffering them", async () => {
+    const root = await mkdtemp(join(tmpdir(), "zo-drive-zominai-stream-"));
+    roots.push(root);
+    const events = 'data: {"choices":[{"delta":{"content":"Private"}}]}\n\ndata: {"choices":[{"delta":{"content":" stream"}}]}\n\ndata: [DONE]\n\n';
+    const runtimeFetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      expect(JSON.parse(String(init?.body))).toMatchObject({ model: "Bonsai-8B-Q1_0.gguf", stream: true });
+      expect(init?.headers).toMatchObject({ Accept: "text/event-stream" });
+      return new Response(events, { headers: { "content-type": "text/event-stream" } });
+    });
+    const app = createApp({
+      storage: new LocalDriveStorage({ root }),
+      resolveUserId: (request) => request.headers.get("x-test-user-id"),
+      zominAi: { endpoint: "http://127.0.0.1:57183", fetch: runtimeFetch, model: "Bonsai-8B-Q1_0.gguf" }
+    });
+
+    const response = await app.request("http://localhost/zominai/chat", { method: "POST", headers: { "content-type": "application/json", "x-test-user-id": "alice" }, body: JSON.stringify({ messages: [{ content: "Stream a reply", role: "user" }], stream: true }) });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/event-stream");
+    await expect(response.text()).resolves.toBe(events);
+  });
+
   it("requires an authenticated user for drive operations", async () => {
     const app = await createTestApp();
 

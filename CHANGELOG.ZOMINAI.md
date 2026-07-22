@@ -3,6 +3,21 @@
 All notable changes to ZominAI are recorded here. ZominAI follows its own
 semantic-versioned release track, independent of the Zo Drive GUI and CLI.
 
+## v1.3.0 - 2026-07-22
+
+### Added
+
+- Streamed local model responses through Zo Drive as server-sent events.
+- Added live elapsed time while ZominAI is thinking or responding and recorded
+  completion time on each assistant reply.
+
+### Fixed
+
+- Preserved `type: "function"` when returning read-only Drive tool results to the
+  local model, preventing follow-up requests from failing validation with HTTP 400.
+- Omitted redundant tool definitions from storage questions after storage data is
+  already available, reducing prompt-evaluation work for the local model.
+
 ## v1.2.2 - 2026-07-22
 
 ### Fixed
