@@ -72,9 +72,12 @@ export type DriveTrashItem = {
   name: string;
   size: number;
   contentType: string;
+  kind: "file" | "folder";
   starred: boolean;
   trashedAt: string;
   expiresAt: string;
+  folderStarredKeys?: string[];
+  folderContentTypes?: Record<string, string>;
 };
 
 type StorageCategory = "photos" | "videos" | "documents" | "audio" | "archives" | "other" | "trash" | "databases" | "functions" | "zo-originals";
@@ -418,6 +421,7 @@ export class LocalDriveStorage {
       name: file.name,
       size: file.size,
       contentType: file.contentType,
+      kind: "file",
       starred: file.starred,
       trashedAt,
       expiresAt: new Date(Date.now() + TRASH_RETENTION_MS).toISOString()
@@ -432,12 +436,54 @@ export class LocalDriveStorage {
     return item;
   }
 
+  async trashFolder({ userId, key }: StorageTarget): Promise<DriveTrashItem> {
+    return this.withWriteLock(userId, async () => {
+      await this.purgeExpiredTrashForUser(userId);
+      const normalizedKey = this.normalizeKey(key, { allowEmpty: false });
+      const source = this.resolveFolderPath(userId, normalizedKey);
+      if (!(await stat(source)).isDirectory()) throw Object.assign(new Error("Folder not found"), { code: "ENOENT" });
+      const [starredKeys, storedContentTypes, items] = await Promise.all([
+        this.readStarredKeys(userId),
+        this.readContentTypes(userId),
+        this.readTrashItems(userId)
+      ]);
+      const folderStarredKeys = [...starredKeys].filter((candidate) => this.isWithinFolder(candidate, normalizedKey));
+      const folderContentTypes = Object.fromEntries([...storedContentTypes].filter(([candidate]) => this.isWithinFolder(candidate, normalizedKey)));
+      const trashedAt = new Date().toISOString();
+      const item: DriveTrashItem = {
+        id: randomUUID(),
+        originalKey: normalizedKey,
+        name: basename(normalizedKey),
+        size: await this.folderSize(source),
+        contentType: "inode/directory",
+        kind: "folder",
+        starred: false,
+        trashedAt,
+        expiresAt: new Date(Date.now() + TRASH_RETENTION_MS).toISOString(),
+        folderStarredKeys: folderStarredKeys.map((candidate) => candidate.slice(normalizedKey.length + 1)),
+        folderContentTypes: Object.fromEntries(Object.entries(folderContentTypes).map(([candidate, contentType]) => [candidate.slice(normalizedKey.length + 1), contentType]))
+      };
+
+      await mkdir(this.userTrashRoot(userId), { recursive: true });
+      await rename(source, this.trashFilePath(userId, item.id));
+      for (const candidate of folderStarredKeys) starredKeys.delete(candidate);
+      for (const candidate of Object.keys(folderContentTypes)) storedContentTypes.delete(candidate);
+      await Promise.all([
+        this.writeStarredKeys(userId, starredKeys),
+        this.writeContentTypes(userId, storedContentTypes),
+        this.writeTrashItems(userId, [...items, item])
+      ]);
+      await this.removeEmptyParents(dirname(source), this.userFilesRoot(userId));
+      return item;
+    });
+  }
+
   async listTrash({ userId }: Pick<StorageTarget, "userId">): Promise<DriveTrashItem[]> {
     await this.purgeExpiredTrashForUser(userId);
     return (await this.readTrashItems(userId)).sort((left, right) => right.trashedAt.localeCompare(left.trashedAt));
   }
 
-  async restoreTrash({ userId, id }: Pick<StorageTarget, "userId"> & { id: string }): Promise<DriveFile> {
+  async restoreTrash({ userId, id }: Pick<StorageTarget, "userId"> & { id: string }): Promise<DriveFile | DriveFolder> {
     await this.purgeExpiredTrashForUser(userId);
     const item = await this.findTrashItem(userId, id);
     const target = this.resolveFilePath(userId, item.originalKey);
@@ -455,27 +501,32 @@ export class LocalDriveStorage {
       this.readContentTypes(userId),
       this.readTrashItems(userId)
     ]);
-    if (item.starred) starredKeys.add(item.originalKey);
-    storedContentTypes.set(item.originalKey, item.contentType);
+    if (item.kind === "folder") {
+      for (const key of item.folderStarredKeys ?? []) starredKeys.add(`${item.originalKey}/${key}`);
+      for (const [key, contentType] of Object.entries(item.folderContentTypes ?? {})) storedContentTypes.set(`${item.originalKey}/${key}`, contentType);
+    } else {
+      if (item.starred) starredKeys.add(item.originalKey);
+      storedContentTypes.set(item.originalKey, item.contentType);
+    }
     await Promise.all([
       this.writeStarredKeys(userId, starredKeys),
       this.writeContentTypes(userId, storedContentTypes),
       this.writeTrashItems(userId, items.filter((candidate) => candidate.id !== item.id))
     ]);
-    return this.describe(target, item.originalKey, item.starred, item.contentType);
+    return item.kind === "folder" ? this.describeFolder(target, item.originalKey) : this.describe(target, item.originalKey, item.starred, item.contentType);
   }
 
   async permanentlyDeleteTrash({ userId, id }: Pick<StorageTarget, "userId"> & { id: string }): Promise<void> {
     await this.purgeExpiredTrashForUser(userId);
     const item = await this.findTrashItem(userId, id);
-    await rm(this.trashFilePath(userId, item.id), { force: true });
+    await rm(this.trashFilePath(userId, item.id), { force: true, recursive: true });
     const items = await this.readTrashItems(userId);
     await this.writeTrashItems(userId, items.filter((candidate) => candidate.id !== item.id));
   }
 
   async emptyTrash({ userId }: Pick<StorageTarget, "userId">): Promise<void> {
     const items = await this.listTrash({ userId });
-    await Promise.all(items.map((item) => rm(this.trashFilePath(userId, item.id), { force: true })));
+    await Promise.all(items.map((item) => rm(this.trashFilePath(userId, item.id), { force: true, recursive: true })));
     await this.writeTrashItems(userId, []);
   }
 
@@ -516,6 +567,32 @@ export class LocalDriveStorage {
     const target = this.resolveFolderPath(userId, key);
     await mkdir(target, { recursive: true });
     return this.describeFolder(target, this.normalizeKey(key, { allowEmpty: false }));
+  }
+
+  async renameFolder({ userId, key, name }: RenameDriveFile): Promise<DriveFolder> {
+    return this.withWriteLock(userId, async () => {
+      const normalizedKey = this.normalizeKey(key, { allowEmpty: false });
+      const normalizedName = this.normalizeEntryName(name, "Folder");
+      const parent = dirname(normalizedKey);
+      const nextKey = parent === "." ? normalizedName : `${parent}/${normalizedName}`;
+      if (nextKey === normalizedKey) return this.describeFolder(this.resolveFolderPath(userId, normalizedKey), normalizedKey);
+
+      const source = this.resolveFolderPath(userId, normalizedKey);
+      const target = this.resolveFolderPath(userId, nextKey);
+      if (!(await stat(source)).isDirectory()) throw Object.assign(new Error("Folder not found"), { code: "ENOENT" });
+      try {
+        await stat(target);
+        throw Object.assign(new Error("A folder or file with this name already exists"), { code: "EEXIST" });
+      } catch (error: unknown) {
+        if (!isNotFound(error)) throw error;
+      }
+
+      const [starredKeys, storedContentTypes] = await Promise.all([this.readStarredKeys(userId), this.readContentTypes(userId)]);
+      await rename(source, target);
+      this.rewriteFolderMetadata(starredKeys, storedContentTypes, normalizedKey, nextKey);
+      await Promise.all([this.writeStarredKeys(userId, starredKeys), this.writeContentTypes(userId, storedContentTypes)]);
+      return this.describeFolder(target, nextKey);
+    });
   }
 
   async listFolders({ userId, prefix = "" }: ListDriveFolders): Promise<DriveFolder[]> {
@@ -729,7 +806,7 @@ export class LocalDriveStorage {
     try {
       const parsed = JSON.parse(await readFile(join(this.userMetadataRoot(userId), "trash.json"), "utf8")) as { items?: unknown };
       if (!Array.isArray(parsed.items)) return [];
-      return parsed.items.filter(isDriveTrashItem);
+      return parsed.items.filter(isDriveTrashItem).map((item) => ({ ...item, kind: item.kind ?? "file" }));
     } catch (error: unknown) {
       if (isNotFound(error)) return [];
       throw error;
@@ -754,7 +831,7 @@ export class LocalDriveStorage {
     const items = await this.readTrashItems(userId);
     const expired = items.filter((item) => Date.parse(item.expiresAt) <= now);
     if (expired.length === 0) return;
-    await Promise.all(expired.map((item) => rm(this.trashFilePath(userId, item.id), { force: true })));
+    await Promise.all(expired.map((item) => rm(this.trashFilePath(userId, item.id), { force: true, recursive: true })));
     await this.writeTrashItems(userId, items.filter((item) => !expired.some((candidate) => candidate.id === item.id)));
   }
 
@@ -830,6 +907,41 @@ export class LocalDriveStorage {
       throw new UnsafeDrivePathError("User ID contains unsafe characters");
     }
     return userId;
+  }
+
+  private normalizeEntryName(value: string, label: string): string {
+    const name = value.trim();
+    if (!name || name.includes("/") || name.includes("\\") || name === "." || name === "..") {
+      throw new UnsafeDrivePathError(`${label} names cannot contain path separators`);
+    }
+    return name;
+  }
+
+  private isWithinFolder(key: string, folder: string): boolean {
+    return key.startsWith(`${folder}/`);
+  }
+
+  private rewriteFolderMetadata(starredKeys: Set<string>, storedContentTypes: StoredContentTypes, fromKey: string, toKey: string): void {
+    for (const key of [...starredKeys]) {
+      if (!this.isWithinFolder(key, fromKey)) continue;
+      starredKeys.delete(key);
+      starredKeys.add(`${toKey}${key.slice(fromKey.length)}`);
+    }
+    for (const [key, contentType] of [...storedContentTypes]) {
+      if (!this.isWithinFolder(key, fromKey)) continue;
+      storedContentTypes.delete(key);
+      storedContentTypes.set(`${toKey}${key.slice(fromKey.length)}`, contentType);
+    }
+  }
+
+  private async folderSize(folderPath: string): Promise<number> {
+    const entries = await readdir(folderPath, { withFileTypes: true });
+    const sizes = await Promise.all(entries.map(async (entry) => {
+      const entryPath = join(folderPath, entry.name);
+      if (entry.isDirectory()) return this.folderSize(entryPath);
+      return entry.isFile() ? (await stat(entryPath)).size : 0;
+    }));
+    return sizes.reduce((total, size) => total + size, 0);
   }
 
   private normalizeKey(key: string, { allowEmpty }: { allowEmpty: boolean }): string {
@@ -1103,6 +1215,7 @@ function isDriveTrashItem(value: unknown): value is DriveTrashItem {
     typeof item.name === "string" && item.name === basename(item.originalKey) &&
     typeof item.size === "number" && Number.isSafeInteger(item.size) && item.size >= 0 &&
     typeof item.contentType === "string" && normalizeContentType(item.contentType) &&
+    (item.kind === undefined || item.kind === "file" || item.kind === "folder") &&
     typeof item.starred === "boolean" &&
     typeof item.trashedAt === "string" && Number.isFinite(Date.parse(item.trashedAt)) &&
     typeof item.expiresAt === "string" && Number.isFinite(Date.parse(item.expiresAt))

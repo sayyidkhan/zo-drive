@@ -59,6 +59,9 @@ const listQuerySchema = z.object({
 const createFolderSchema = z.object({
   path: z.string().min(1).max(1_024)
 });
+const renameFolderSchema = z.object({
+  name: z.string().trim().min(1).max(1_024)
+});
 const createNativeFileSchema = z.object({
   name: z.string().trim().min(1).max(1_024),
   path: z.string().max(1_024).optional(),
@@ -1094,6 +1097,32 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     return context.json(await storage.createFolder({ userId, key: parsed.data.path }), 201);
   });
 
+  app.patch("/folders/*", async (context) => {
+    const userId = await requireUser(context.req.raw, resolveActiveUser);
+    if (!userId) return unauthorized(context);
+    const parsed = renameFolderSchema.safeParse(await context.req.json().catch(() => null));
+    if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Enter a valid folder name" } }, 400);
+    const key = folderKeyFromPath(context.req.path);
+    const files = await storage.list({ userId, prefix: key });
+    const folder = await storage.renameFolder({ userId, key, name: parsed.data.name });
+    await Promise.all(files.map(async (file) => {
+      const nextKey = `${folder.key}${file.key.slice(key.length)}`;
+      await sharing?.renameKey({ ownerUserId: userId, fromKey: file.key, toKey: nextKey });
+      await forms?.renameKey({ ownerUserId: userId, fromKey: file.key, toKey: nextKey });
+    }));
+    return context.json(folder);
+  });
+
+  app.delete("/folders/*", async (context) => {
+    const userId = await requireUser(context.req.raw, resolveActiveUser);
+    if (!userId) return unauthorized(context);
+    const key = folderKeyFromPath(context.req.path);
+    const files = await storage.list({ userId, prefix: key });
+    await storage.trashFolder({ userId, key });
+    await Promise.all(files.map((file) => forms?.removeByKey({ ownerUserId: userId, key: file.key })));
+    return context.body(null, 204);
+  });
+
   app.post("/native-files", async (context) => {
     const userId = await requireUser(context.req.raw, resolveActiveUser);
     if (!userId) return unauthorized(context);
@@ -1147,7 +1176,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
   app.get("/trash", async (context) => {
     const userId = await requireUser(context.req.raw, resolveActiveUser);
     if (!userId) return unauthorized(context);
-    return context.json({ items: await storage.listTrash({ userId }) });
+    return context.json({ items: (await storage.listTrash({ userId })).map(({ folderContentTypes: _folderContentTypes, folderStarredKeys: _folderStarredKeys, ...item }) => item) });
   });
 
   app.put("/trash/:id/restore", async (context) => {
@@ -1445,6 +1474,11 @@ function pasteRevision(content: unknown): string {
 
 function objectKeyFromPath(path: string): string {
   const encodedKey = path.replace(/^\/objects\//, "");
+  return decodeURIComponent(encodedKey);
+}
+
+function folderKeyFromPath(path: string): string {
+  const encodedKey = path.replace(/^\/folders\//, "");
   return decodeURIComponent(encodedKey);
 }
 

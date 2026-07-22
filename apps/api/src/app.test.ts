@@ -633,6 +633,25 @@ describe("Zo Drive API", () => {
     await expect(rootFolders.json()).resolves.toMatchObject({ folders: [{ key: "Projects", name: "Projects" }] });
   });
 
+  it("renames and moves folders with their contents to Trash", async () => {
+    const app = await createTestApp();
+    const headers = { "content-type": "application/json", "x-test-user-id": "alice" };
+    expect((await app.request("http://localhost/folders", { method: "POST", headers, body: JSON.stringify({ path: "Projects" }) })).status).toBe(201);
+    expect((await app.request("http://localhost/objects", { method: "POST", headers: { "content-type": "text/plain", "x-test-user-id": "alice", "x-zo-drive-file-name": "plan.txt", "x-zo-drive-path": "Projects" }, body: "plan" })).status).toBe(201);
+
+    const renamed = await app.request("http://localhost/folders/Projects", { method: "PATCH", headers, body: JSON.stringify({ name: "Work" }) });
+    expect(renamed.status).toBe(200);
+    await expect(renamed.json()).resolves.toMatchObject({ key: "Work", name: "Work" });
+    await expect((await app.request("http://localhost/objects", { headers: { "x-test-user-id": "alice" } })).json()).resolves.toMatchObject({ objects: [{ key: "Work/plan.txt" }] });
+
+    expect((await app.request("http://localhost/folders/Work", { method: "DELETE", headers: { "x-test-user-id": "alice" } })).status).toBe(204);
+    const trash = await app.request("http://localhost/trash", { headers: { "x-test-user-id": "alice" } });
+    const { items } = await trash.json() as { items: Array<{ id: string; kind: string; name: string }> };
+    expect(items).toEqual([expect.objectContaining({ kind: "folder", name: "Work" })]);
+    expect((await app.request(`http://localhost/trash/${items[0]!.id}/restore`, { method: "PUT", headers: { "x-test-user-id": "alice" } })).status).toBe(200);
+    await expect((await app.request("http://localhost/objects", { headers: { "x-test-user-id": "alice" } })).json()).resolves.toMatchObject({ objects: [{ key: "Work/plan.txt" }] });
+  });
+
   it("creates Zo-native files only for the authenticated owner", async () => {
     const app = await createTestApp();
 

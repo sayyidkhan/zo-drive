@@ -224,6 +224,19 @@ export class ZoDriveClient {
     return driveFolderSchema.parse(await response.json());
   }
 
+  async renameFolder(key: string, name: string): Promise<DriveFolder> {
+    const response = await this.request(`/folders/${encodeDriveKey(key)}`, {
+      body: JSON.stringify({ name }),
+      headers: { "content-type": "application/json" },
+      method: "PATCH"
+    });
+    return driveFolderSchema.parse(await response.json());
+  }
+
+  async deleteFolder(key: string): Promise<void> {
+    await this.request(`/folders/${encodeDriveKey(key)}`, { method: "DELETE" });
+  }
+
   async createNativeFile({ name, path, type }: { name: string; path?: string; type: NativeFileType }): Promise<DriveObject> {
     const response = await this.request("/native-files", {
       body: JSON.stringify({ name, path, type }),
@@ -287,9 +300,9 @@ export class ZoDriveClient {
     return listTrashResponseSchema.parse(await response.json()).items;
   }
 
-  async restoreTrash(id: string): Promise<DriveObject> {
+  async restoreTrash(id: string): Promise<DriveObject | DriveFolder> {
     const response = await this.request(`/trash/${encodeURIComponent(id)}/restore`, { method: "PUT" });
-    return driveObjectSchema.parse(await response.json());
+    return driveObjectSchema.or(driveFolderSchema).parse(await response.json());
   }
 
   async permanentlyDeleteTrash(id: string): Promise<void> {

@@ -32,6 +32,7 @@ export const driveTrashItemSchema = z.object({
   name: z.string(),
   size: z.number().int().nonnegative(),
   contentType: z.string(),
+  kind: z.enum(["file", "folder"]).default("file"),
   starred: z.boolean(),
   trashedAt: z.string(),
   expiresAt: z.string()

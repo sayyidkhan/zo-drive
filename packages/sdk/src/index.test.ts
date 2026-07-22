@@ -118,12 +118,18 @@ describe("ZoDriveClient", () => {
   it("creates and lists empty folders through the API", async () => {
     const fetcher = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ key: "Projects", name: "Projects", updatedAt: "2026-01-01T00:00:00.000Z" }), { status: 201 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ folders: [{ key: "Projects", name: "Projects", updatedAt: "2026-01-01T00:00:00.000Z" }] }), { status: 200 }));
+      .mockResolvedValueOnce(new Response(JSON.stringify({ folders: [{ key: "Projects", name: "Projects", updatedAt: "2026-01-01T00:00:00.000Z" }] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ key: "Work", name: "Work", updatedAt: "2026-01-01T00:00:00.000Z" }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
     const client = new ZoDriveClient({ baseUrl: "https://drive.example", fetcher });
 
     await expect(client.createFolder("Projects")).resolves.toMatchObject({ key: "Projects" });
     await expect(client.listFolders()).resolves.toMatchObject([{ key: "Projects" }]);
+    await expect(client.renameFolder("Projects", "Work")).resolves.toMatchObject({ key: "Work" });
+    await expect(client.deleteFolder("Work")).resolves.toBeUndefined();
     expect(fetcher).toHaveBeenNthCalledWith(1, "https://drive.example/folders", expect.objectContaining({ method: "POST" }));
+    expect(fetcher).toHaveBeenNthCalledWith(3, "https://drive.example/folders/Projects", expect.objectContaining({ method: "PATCH" }));
+    expect(fetcher).toHaveBeenNthCalledWith(4, "https://drive.example/folders/Work", expect.objectContaining({ method: "DELETE" }));
   });
 
   it("creates Zo-native files through the API", async () => {

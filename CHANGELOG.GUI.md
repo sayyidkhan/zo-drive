@@ -2,6 +2,14 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.35.0 - 2026-07-22
+
+### Added
+
+- Added folder rename and Trash controls. Renaming preserves nested files,
+  favourites, native file types, and shared-file links; deleted folders remain
+  recoverable from Trash for 30 days.
+
 ## v1.34.0 - 2026-07-22
 
 ### Added

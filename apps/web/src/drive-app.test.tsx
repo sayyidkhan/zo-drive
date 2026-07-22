@@ -48,7 +48,7 @@ describe("DriveApp", () => {
       expect(screen.getByRole("heading", { name: "Run private databases beside your files" })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Automate with Zo Functions" })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Ask about your Drive without granting write access" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 1.34.0" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 1.35.0" })).toBeInTheDocument();
       expect(screen.getByText("Product")).toBeInTheDocument();
       expect(screen.getByRole("navigation", { name: "Choose documentation product" })).toBeInTheDocument();
       expect(screen.getByRole("navigation", { name: "Documentation sections" })).toHaveTextContent("Zo Originals");
@@ -58,7 +58,7 @@ describe("DriveApp", () => {
         expect(modeSwitch).toHaveTextContent("CLI");
       }
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI releases version 1.34.0" })).toHaveAttribute("href", expect.stringContaining("?releases=1&mode=gui"));
+      expect(screen.getByRole("link", { name: "GUI releases version 1.35.0" })).toHaveAttribute("href", expect.stringContaining("?releases=1&mode=gui"));
       expect(screen.queryByRole("heading", { name: "GUI changelog" })).not.toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
 
@@ -96,7 +96,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.34.0")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.35.0")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();
@@ -249,6 +249,8 @@ describe("DriveApp", () => {
       listStarred: vi.fn().mockResolvedValue([{ key: "photo.jpg", name: "photo.jpg", size: 10, contentType: "image/jpeg", updatedAt: "2026-01-01T00:00:00.000Z", starred: true }]),
       listTrash: vi.fn().mockResolvedValue([{ id: "trash-123", originalKey: "Archive/report.pdf", name: "report.pdf", size: 25, contentType: "application/pdf", starred: false, trashedAt: "2026-01-01T00:00:00.000Z", expiresAt: "2026-01-31T00:00:00.000Z" }]),
       createFolder: vi.fn(),
+      renameFolder: vi.fn().mockResolvedValue({ key: "Ideas", name: "Ideas", updatedAt: "2026-01-01T00:00:00.000Z" }),
+      deleteFolder: vi.fn(),
       createNativeFile: vi.fn().mockResolvedValue({ key: "Strategy", name: "Strategy", size: 1, contentType: "application/vnd.zo.document+json", nativeType: "document", updatedAt: "2026-01-01T00:00:00.000Z", starred: false }),
       saveNativeFile: vi.fn().mockResolvedValue({ key: "Strategy", name: "Strategy", size: 1, contentType: "application/vnd.zo.document+json", nativeType: "document", updatedAt: "2026-01-01T00:00:00.000Z", starred: false }),
       setQuota: vi.fn().mockResolvedValue({ fileCount: 2, usedBytes: 15, quotaBytes: 200 * 1024 * 1024 * 1024, quotaAvailableBytes: 200 * 1024 * 1024 * 1024 - 15, minQuotaBytes: 1024 * 1024 * 1024, maxQuotaBytes: Math.floor(512 * 1024 * 1024 * 1024 * 0.8), totalBytes: 512 * 1024 * 1024 * 1024, availableBytes: 512 * 1024 * 1024 * 1024 - 200, systemUsedBytes: 200, categories: [{ id: "photos", bytes: 10, fileCount: 1 }, { id: "documents", bytes: 5, fileCount: 1 }, { id: "videos", bytes: 0, fileCount: 0 }, { id: "audio", bytes: 0, fileCount: 0 }, { id: "archives", bytes: 0, fileCount: 0 }, { id: "other", bytes: 0, fileCount: 0 }, { id: "trash", bytes: 0, fileCount: 0 }] }),
@@ -746,6 +748,17 @@ describe("DriveApp", () => {
     fireEvent.change(screen.getByLabelText("Folder name"), { target: { value: "Ideas" } });
     fireEvent.click(screen.getByRole("button", { name: "Create folder" }));
     await waitFor(() => expect(client.createFolder).toHaveBeenCalledWith("Ideas"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Rename folder Notes" }));
+    expect(await screen.findByRole("dialog", { name: "Rename folder" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("New folder name"), { target: { value: "Plans" } });
+    fireEvent.click(screen.getByRole("button", { name: "Rename folder" }));
+    await waitFor(() => expect(client.renameFolder).toHaveBeenCalledWith("Notes", "Plans"));
+
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    fireEvent.click(screen.getByRole("button", { name: "Move folder Notes to Trash" }));
+    await waitFor(() => expect(client.deleteFolder).toHaveBeenCalledWith("Notes"));
+    confirm.mockRestore();
 
     fireEvent.click(screen.getByRole("button", { name: "New" }));
     expect(screen.getByAltText("Document illustration")).toBeInTheDocument();

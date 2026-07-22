@@ -71,7 +71,7 @@ import { create } from "zustand";
 import { ZoDriveClient } from "@zo-drive/sdk";
 import type { AccountAccess, AccountMember, AccountRole, ApiKeyScope, AuthStatus, ClusterInvitation, ClusterMount, ClusterRole, DatabaseApiKey, DatabaseApiKeyScope, DatabaseEngine, DatabaseEngineId, DatabaseExecuteResult, DatabaseImportSettings, DatabaseRows, DriveApiKey, DriveDatabase, DriveFolder, DriveFunction, DriveFunctionRun, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, FunctionRuntime, FunctionVisibility, NativeFileType, PublicShare, PublishedForm, ShareAccess, StorageUsage } from "@zo-drive/types";
 
-type DriveClient = Pick<ZoDriveClient, "createApiKey" | "createFolder" | "createNativeFile" | "createShare" | "delete" | "download" | "emptyTrash" | "getUsage" | "list" | "listApiKeys" | "listFolders" | "listFormResponses" | "listShares" | "listStarred" | "listTrash" | "permanentlyDeleteTrash" | "publishForm" | "rename" | "restoreTrash" | "revokeApiKey" | "revokeShare" | "saveNativeFile" | "setQuota" | "star" | "unstar" | "updateSharePasscode" | "upload"> & Partial<Pick<ZoDriveClient, "createClusterFolder" | "createClusterInvitation" | "createClusterMount" | "deleteClusterInvitation" | "deleteClusterMount" | "deleteClusterObject" | "deleteClusterPeer" | "downloadClusterObject" | "getClusterMountAccess" | "listClusterInvitations" | "listClusterMounts" | "listClusterObjects" | "listClusterPeers" | "renameClusterObject" | "updateClusterPeerRole" | "uploadClusterObject" | "createDatabase" | "createDatabaseApiKey" | "deleteDatabase" | "executeDatabase" | "exportDatabase" | "getDatabaseImportSettings" | "importDatabase" | "installDatabaseEngine" | "listDatabaseApiKeys" | "listDatabaseEngines" | "listDatabases" | "listDatabaseRows" | "listDatabaseTables" | "queryDatabase" | "revokeDatabaseApiKey" | "setDatabaseImportLimit" | "updateDatabaseEngine" | "createFunction" | "deleteFunction" | "listFunctions" | "listFunctionRuns" | "runFunction" | "updateFunction">>;
+type DriveClient = Pick<ZoDriveClient, "createApiKey" | "createFolder" | "createNativeFile" | "createShare" | "delete" | "download" | "emptyTrash" | "getUsage" | "list" | "listApiKeys" | "listFolders" | "listFormResponses" | "listShares" | "listStarred" | "listTrash" | "permanentlyDeleteTrash" | "publishForm" | "rename" | "restoreTrash" | "revokeApiKey" | "revokeShare" | "saveNativeFile" | "setQuota" | "star" | "unstar" | "updateSharePasscode" | "upload"> & Partial<Pick<ZoDriveClient, "createClusterFolder" | "createClusterInvitation" | "createClusterMount" | "deleteClusterInvitation" | "deleteClusterMount" | "deleteClusterObject" | "deleteClusterPeer" | "downloadClusterObject" | "getClusterMountAccess" | "listClusterInvitations" | "listClusterMounts" | "listClusterObjects" | "listClusterPeers" | "renameClusterObject" | "updateClusterPeerRole" | "uploadClusterObject" | "createDatabase" | "createDatabaseApiKey" | "deleteDatabase" | "executeDatabase" | "exportDatabase" | "getDatabaseImportSettings" | "importDatabase" | "installDatabaseEngine" | "listDatabaseApiKeys" | "listDatabaseEngines" | "listDatabases" | "listDatabaseRows" | "listDatabaseTables" | "queryDatabase" | "revokeDatabaseApiKey" | "setDatabaseImportLimit" | "updateDatabaseEngine" | "createFunction" | "deleteFunction" | "listFunctions" | "listFunctionRuns" | "runFunction" | "updateFunction" | "deleteFolder" | "renameFolder">>;
 type AuthClient = Pick<ZoDriveClient, "changePassword" | "deleteAccount" | "getAuthStatus" | "login" | "logout" | "registerInitialUser" | "updateProfile">;
 type UserAccessClient = Pick<ZoDriveClient, "createAccountMember" | "deleteAccountMember" | "listAccountMembers" | "updateAccountMember">;
 type SharedClient = Pick<ZoDriveClient, "downloadShared" | "getPublicShare" | "openSharedPaste" | "saveSharedPaste">;
@@ -278,11 +278,16 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.34.0";
+const GUI_VERSION = "1.35.0";
 const CLI_VERSION = "1.3.0";
 const ZOMINAI_VERSION = "1.6.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.35.0",
+    date: "2026-07-22",
+    changes: ["Added folder rename and Trash controls that preserve nested files, Drive metadata, and shared-file links."]
+  },
   {
     version: "v1.34.0",
     date: "2026-07-22",
@@ -2142,6 +2147,8 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [folderDialogOpen, setFolderDialogOpen] = useState(false);
   const [folderName, setFolderName] = useState("");
+  const [folderToRename, setFolderToRename] = useState<DriveFolder | null>(null);
+  const [folderRenameName, setFolderRenameName] = useState("");
   const [nativeFileType, setNativeFileType] = useState<NativeFileType | null>(null);
   const [nativeFileName, setNativeFileName] = useState("");
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
@@ -2332,6 +2339,31 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
       toast.success("Folder created");
     } catch {
       toast.error("Could not create the folder");
+    }
+  }
+
+  async function renameFolder() {
+    if (!client.renameFolder || !folderToRename || !folderRenameName.trim()) return;
+    try {
+      await client.renameFolder(folderToRename.key, folderRenameName.trim());
+      await refresh();
+      setFolderToRename(null);
+      setFolderRenameName("");
+      toast.success("Folder renamed");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not rename the folder");
+    }
+  }
+
+  async function deleteFolder(folder: DriveFolder) {
+    if (!client.deleteFolder) return;
+    if (!window.confirm(`Move “${folder.name}” and everything inside it to Trash?`)) return;
+    try {
+      await client.deleteFolder(folder.key);
+      await refresh();
+      toast.success("Folder moved to Trash");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not delete the folder");
     }
   }
 
@@ -2622,7 +2654,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
           ) : section === "shared" ? (
             <div className="space-y-6"><ClusterIncomingEntries files={clusterSharedFiles} mounts={clusterMountsQuery.data ?? []} onOpen={() => setSection("cluster-databases")} /><SharedLinks shares={sharesQuery.data ?? []} onCopy={(share) => void copyShareLink(share.id)} onChangePasscode={setPasscodeShare} onPreview={(share) => void openPreview({ key: share.key, name: share.name, size: share.size, contentType: share.contentType, updatedAt: share.createdAt, starred: false })} onRevoke={(id) => client.revokeShare(id).then(() => sharesQuery.refetch())} /></div>
           ) : section === "trash" ? trashItems.length === 0 ? (
-            <EmptyState title="Trash is empty" description="Files you move here stay for 30 days before they are permanently deleted." action="Go to My Drive" onAction={() => setSection("my-drive")} />
+            <EmptyState title="Trash is empty" description="Files and folders you move here stay for 30 days before they are permanently deleted." action="Go to My Drive" onAction={() => setSection("my-drive")} />
           ) : (
             <TrashEntries items={trashItems} onRestore={(id) => void restoreTrashItem(id)} onPermanentlyDelete={(item) => void permanentlyDeleteTrashItem(item)} />
           ) : (section === "my-drive" ? folders.length === 0 && files.length === 0 : section === "home" ? displayedFiles.length === 0 && clusterSharedFiles.length === 0 : displayedFiles.length === 0) ? (
@@ -2635,6 +2667,8 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
               folders={section === "my-drive" ? folders : []}
               viewMode={viewMode}
               onOpenFolder={(folder) => setCurrentPath(folder.key)}
+              onRenameFolder={client.renameFolder ? (folder) => { setFolderToRename(folder); setFolderRenameName(folder.name); } : undefined}
+              onDeleteFolder={client.deleteFolder ? (folder) => void deleteFolder(folder) : undefined}
               onPreview={openPreview}
               onDelete={(key) => deleteMutation.mutate(key)}
               onToggleStar={(file) => starMutation.mutate({ key: file.key, starred: file.starred })}
@@ -2648,6 +2682,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
       {nativeEditor && <NativeEditor key={nativeEditor.object.key} content={nativeEditor.content} fileName={nativeEditor.object.name} onClose={() => setNativeEditor(null)} onListResponses={(id) => client.listFormResponses(id)} onPublish={publishNativeForm} onRename={renameNativeFile} onSave={saveNativeFile} onShare={(settings) => { setShareSettings(settings ?? null); setShareFile(nativeEditor.object); }} />}
       {advancedSearchOpen && <AdvancedSearchDialog filters={advancedFilters} itemName={search} onCancel={() => setAdvancedSearchOpen(false)} onFiltersChange={setAdvancedFilters} onItemNameChange={setSearch} onReset={resetAdvancedSearch} onSearch={applyAdvancedSearch} />}
       {folderDialogOpen && <FolderDialog folderName={folderName} onCancel={() => { setFolderDialogOpen(false); setFolderName(""); }} onCreate={() => void createFolder()} onNameChange={setFolderName} />}
+      {folderToRename && <FolderRenameDialog folder={folderToRename} name={folderRenameName} onCancel={() => { setFolderToRename(null); setFolderRenameName(""); }} onNameChange={setFolderRenameName} onRename={() => void renameFolder()} />}
       {nativeFileType && <NativeFileDialog type={nativeFileType} name={nativeFileName} onCancel={() => { setNativeFileType(null); setNativeFileName(""); }} onCreate={() => void createNativeFile()} onNameChange={setNativeFileName} />}
       {shareFile && <ShareDialog client={client} file={shareFile} initialSettings={shareSettings ?? undefined} onClose={() => { setShareFile(null); setShareSettings(null); }} />}
       {passcodeShare && <ChangePasscodeDialog client={client} share={passcodeShare} onClose={() => setPasscodeShare(null)} onUpdated={() => void sharesQuery.refetch()} />}
@@ -4460,11 +4495,13 @@ function FolderNavigation({ currentPath, onNavigate }: { currentPath: string; on
   );
 }
 
-function DriveEntries({ files, folders, viewMode, onOpenFolder, onPreview, onDelete, onToggleStar, onShare }: {
+function DriveEntries({ files, folders, viewMode, onOpenFolder, onRenameFolder, onDeleteFolder, onPreview, onDelete, onToggleStar, onShare }: {
   files: DriveObject[];
   folders: DriveFolder[];
   viewMode: ViewMode;
   onOpenFolder: (folder: DriveFolder) => void;
+  onRenameFolder?: (folder: DriveFolder) => void;
+  onDeleteFolder?: (folder: DriveFolder) => void;
   onPreview: (file: DriveObject) => void;
   onDelete: (key: string) => void;
   onToggleStar: (file: DriveObject) => void;
@@ -4474,10 +4511,16 @@ function DriveEntries({ files, folders, viewMode, onOpenFolder, onPreview, onDel
   return (
     <div data-testid="drive-entries" className={isGrid ? "grid w-full min-w-0 max-w-full gap-3 sm:grid-cols-2 xl:grid-cols-3" : "w-full min-w-0 max-w-full overflow-hidden rounded-xl border border-slate-200 bg-white"}>
       {folders.map((folder) => (
-        <button key={folder.key} className={isGrid ? "flex min-w-0 items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 text-left hover:border-blue-300 hover:shadow-sm" : "flex w-full min-w-0 max-w-full items-center gap-3 border-b border-slate-100 px-4 py-3 text-left hover:bg-slate-50"} onClick={() => onOpenFolder(folder)}>
-          <span className="rounded-lg bg-blue-50 p-2 text-blue-600"><Folder size={20} fill="currentColor" /></span>
-          <span className="min-w-0 flex-1 truncate text-sm font-medium">{folder.name}</span>
-        </button>
+        <article key={folder.key} className={isGrid ? "group flex min-w-0 items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 hover:border-blue-300 hover:shadow-sm" : "group flex w-full min-w-0 max-w-full items-center gap-3 border-b border-slate-100 px-4 py-3 text-left hover:bg-slate-50"}>
+          <button className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => onOpenFolder(folder)}>
+            <span className="rounded-lg bg-blue-50 p-2 text-blue-600"><Folder size={20} fill="currentColor" /></span>
+            <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-800">{folder.name}</span>
+          </button>
+          {onRenameFolder && onDeleteFolder && <div className="flex shrink-0 items-center gap-1">
+            <button aria-label={`Rename folder ${folder.name}`} className="rounded-md p-2 text-slate-400 transition hover:bg-blue-50 hover:text-blue-600" onClick={() => onRenameFolder(folder)} title="Rename folder"><Pencil size={17} /></button>
+            <button aria-label={`Move folder ${folder.name} to Trash`} className="rounded-md p-2 text-slate-400 transition hover:bg-red-50 hover:text-red-600" onClick={() => onDeleteFolder(folder)} title="Move folder to Trash"><Trash2 size={17} /></button>
+          </div>}
+        </article>
       ))}
       {files.map((file) => (
         <article key={file.key} className={isGrid ? "group relative flex min-w-0 items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 hover:border-blue-300 hover:shadow-sm" : "group flex w-full min-w-0 max-w-full items-center gap-3 border-b border-slate-100 px-4 py-3 last:border-b-0 hover:bg-slate-50"}>
@@ -4554,7 +4597,7 @@ function TrashEntries({ items, onRestore, onPermanentlyDelete }: { items: DriveT
       <div className="hidden grid-cols-[minmax(0,1fr)_10rem_10rem_7rem] gap-4 border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400 md:grid"><span>Name</span><span>Date trashed</span><span>Original location</span><span className="text-right">Actions</span></div>
       {items.map((item) => (
         <article key={item.id} className="group grid gap-3 border-b border-slate-100 px-4 py-3 last:border-b-0 md:grid-cols-[minmax(0,1fr)_10rem_10rem_7rem] md:items-center md:gap-4 hover:bg-slate-50">
-          <div className="flex min-w-0 items-center gap-3"><span className="rounded-lg bg-slate-100 p-2 text-slate-500">{fileIcon(item.contentType)}</span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-slate-800">{item.name}</span><span className="block text-xs text-slate-400">{formatBytes(item.size)} · {formatTrashExpiry(item.expiresAt)}</span></span></div>
+          <div className="flex min-w-0 items-center gap-3"><span className="rounded-lg bg-slate-100 p-2 text-slate-500">{item.kind === "folder" ? <Folder size={18} fill="currentColor" /> : fileIcon(item.contentType)}</span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-slate-800">{item.name}</span><span className="block text-xs text-slate-400">{item.kind === "folder" ? "Folder · " : ""}{formatBytes(item.size)} · {formatTrashExpiry(item.expiresAt)}</span></span></div>
           <span className="text-xs text-slate-500">{new Date(item.trashedAt).toLocaleDateString()}</span>
           <span className="truncate text-xs text-slate-500" title={item.originalKey}>{item.originalKey.includes("/") ? item.originalKey.slice(0, item.originalKey.lastIndexOf("/")) : "My Drive"}</span>
           <div className="flex shrink-0 items-center justify-end gap-1"><button aria-label={`Restore ${item.name}`} title="Restore to original location" className="rounded-md p-2 text-slate-400 transition hover:bg-blue-50 hover:text-blue-600" onClick={() => onRestore(item.id)}><RotateCcw size={17} /></button><button aria-label={`Permanently delete ${item.name}`} title="Permanently delete" className="rounded-md p-2 text-slate-400 transition hover:bg-red-50 hover:text-red-600" onClick={() => onPermanentlyDelete(item)}><Trash2 size={17} /></button></div>
@@ -4570,6 +4613,10 @@ function EmptyState({ title, description, action, onAction }: { title: string; d
 
 function FolderDialog({ folderName, onCancel, onCreate, onNameChange }: { folderName: string; onCancel: () => void; onCreate: () => void; onNameChange: (name: string) => void }) {
   return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/30 p-4" role="dialog" aria-modal="true" aria-label="Create folder"><form className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl" onSubmit={(event) => { event.preventDefault(); onCreate(); }}><h2 className="text-lg font-semibold text-slate-900">Create folder</h2><p className="mt-1 text-sm text-slate-500">Choose a name for the new folder.</p><input aria-label="Folder name" autoFocus className="mt-5 w-full rounded-lg border border-slate-300 px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" maxLength={128} placeholder="e.g. Projects" value={folderName} onChange={(event) => onNameChange(event.target.value)} required /><div className="mt-5 flex justify-end gap-2"><button className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100" type="button" onClick={onCancel}>Cancel</button><button className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-300" type="submit" disabled={!folderName.trim()}>Create folder</button></div></form></div>;
+}
+
+function FolderRenameDialog({ folder, name, onCancel, onNameChange, onRename }: { folder: DriveFolder; name: string; onCancel: () => void; onNameChange: (name: string) => void; onRename: () => void }) {
+  return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/30 p-4" role="dialog" aria-modal="true" aria-label="Rename folder"><form className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl" onSubmit={(event) => { event.preventDefault(); onRename(); }}><h2 className="text-lg font-semibold text-slate-900">Rename folder</h2><p className="mt-1 text-sm text-slate-500">Choose a new name for {folder.name}.</p><input aria-label="New folder name" autoFocus className="mt-5 w-full rounded-lg border border-slate-300 px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" maxLength={128} value={name} onChange={(event) => onNameChange(event.target.value)} required /><div className="mt-5 flex justify-end gap-2"><button className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100" type="button" onClick={onCancel}>Cancel</button><button className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-300" type="submit" disabled={!name.trim()}>Rename folder</button></div></form></div>;
 }
 
 function NativeFileDialog({ type, name, onCancel, onCreate, onNameChange }: { type: NativeFileType; name: string; onCancel: () => void; onCreate: () => void; onNameChange: (name: string) => void }) {

@@ -270,4 +270,19 @@ describe("LocalDriveStorage", () => {
     await expect(storage.listFolders({ userId: "user_123", prefix: "Projects" })).resolves.toMatchObject([{ key: "Projects/2026", name: "2026" }]);
     await expect(storage.getUsage({ userId: "user_123" })).resolves.toMatchObject({ fileCount: 0, usedBytes: 0, categories: expect.arrayContaining([{ id: "photos", bytes: 0, fileCount: 0 }]) });
   });
+
+  it("renames and restores folders with their nested file metadata", async () => {
+    const storage = await createStorage();
+    await storage.write({ userId: "user_123", key: "Projects/2026/plan.zo", content: Buffer.from("plan"), contentType: "application/vnd.zo.document+json" });
+    await storage.setStarred({ userId: "user_123", key: "Projects/2026/plan.zo", starred: true });
+
+    await expect(storage.renameFolder({ userId: "user_123", key: "Projects", name: "Work" })).resolves.toMatchObject({ key: "Work", name: "Work" });
+    await expect(storage.listStarred({ userId: "user_123" })).resolves.toMatchObject([{ key: "Work/2026/plan.zo", nativeType: "document" }]);
+
+    const trashed = await storage.trashFolder({ userId: "user_123", key: "Work" });
+    expect(trashed).toMatchObject({ kind: "folder", name: "Work", size: 4 });
+    await expect(storage.listFolders({ userId: "user_123" })).resolves.toEqual([]);
+    await storage.restoreTrash({ userId: "user_123", id: trashed.id });
+    await expect(storage.listStarred({ userId: "user_123" })).resolves.toMatchObject([{ key: "Work/2026/plan.zo", nativeType: "document" }]);
+  });
 });
