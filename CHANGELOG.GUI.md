@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.28.0 - 2026-07-22
+
+### Added
+
+- Added Zo's built-in Light, Dark, and System theme choices alongside the
+  existing Zo Drive and Zo Computer appearances.
+
 ## v1.27.0 - 2026-07-22
 
 ### Added
