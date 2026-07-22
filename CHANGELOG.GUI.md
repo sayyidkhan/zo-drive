@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.26.1 - 2026-07-22
+
+### Fixed
+
+- Let read-only account members use explicitly read-only database queries and
+  runtime requests without granting them write access.
+
 ## v1.26.0 - 2026-07-22
 
 ### Added

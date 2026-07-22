@@ -273,11 +273,16 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.26.0";
+const GUI_VERSION = "1.26.1";
 const CLI_VERSION = "1.3.0";
 const ZOMINAI_VERSION = "1.1.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.26.1",
+    date: "2026-07-22",
+    changes: ["Allowed read-only account members to use explicitly read-only database queries and runtime requests."]
+  },
   {
     version: "v1.26.0",
     date: "2026-07-22",
