@@ -140,7 +140,7 @@ type ZominAiChatMessage = {
   role: "assistant" | "user";
 };
 
-type ZominAiToolName = "describe_database" | "list_databases" | "list_drive" | "query_database" | "read_drive_file" | "search_drive";
+type ZominAiToolName = "describe_database" | "get_storage_usage" | "list_databases" | "list_drive" | "query_database" | "read_drive_file" | "search_drive";
 
 type ZominAiToolCall = {
   function: { arguments: string; name: ZominAiToolName };
@@ -275,11 +275,16 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.28.1";
+const GUI_VERSION = "1.29.0";
 const CLI_VERSION = "1.3.0";
-const ZOMINAI_VERSION = "1.1.0";
+const ZOMINAI_VERSION = "1.2.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.29.0",
+    date: "2026-07-22",
+    changes: ["Added a ZominAI storage-usage tool so chat can answer machine capacity, free space, and Zo Drive allocation questions from the current account."]
+  },
   {
     version: "v1.28.1",
     date: "2026-07-22",
@@ -744,6 +749,11 @@ const CLI_CHANGELOG = [
 ];
 
 const ZOMINAI_CHANGELOG = [
+  {
+    version: "v1.2.0",
+    date: "2026-07-22",
+    changes: ["Added a read-only storage-usage tool for machine capacity, free space, and Zo Drive quota questions."]
+  },
   {
     version: "v1.1.0",
     date: "2026-07-22",
@@ -1392,6 +1402,7 @@ async function checkZominAiConnection(settings: ZominAiSettings, signal?: AbortS
 }
 
 const zominAiTools = [
+  { type: "function", function: { name: "get_storage_usage", description: "Get the current Zo Computer disk capacity and free space, plus the user's Zo Drive allocation and usage. Use this whenever the user asks about machine storage, disk space, capacity, free space, or Drive storage usage.", parameters: { type: "object", properties: {} } } },
   { type: "function", function: { name: "list_drive", description: "List files in the user's private Zo Drive. Use this to browse the Drive or a folder before reading a file.", parameters: { type: "object", properties: { prefix: { type: "string", description: "Optional folder path to list." } } } } },
   { type: "function", function: { name: "search_drive", description: "Find files by filename or supported text content in the user's private Zo Drive.", parameters: { type: "object", properties: { query: { type: "string", description: "Words to search for." }, prefix: { type: "string", description: "Optional folder path to search within." } }, required: ["query"] } } },
   { type: "function", function: { name: "read_drive_file", description: "Read a supported text or Zo-native file from the user's private Zo Drive. Use list_drive or search_drive first to obtain its exact key.", parameters: { type: "object", properties: { key: { type: "string", description: "Exact Drive file key." } }, required: ["key"] } } },
@@ -1406,9 +1417,14 @@ function zominAiToolCalls(value: unknown): ZominAiToolCall[] {
     if (!item || typeof item !== "object") return [];
     const call = item as { function?: { arguments?: unknown; name?: unknown }; id?: unknown };
     const name = call.function?.name;
-    if (!["describe_database", "list_databases", "list_drive", "query_database", "read_drive_file", "search_drive"].includes(name as string)) return [];
+    if (!["describe_database", "get_storage_usage", "list_databases", "list_drive", "query_database", "read_drive_file", "search_drive"].includes(name as string)) return [];
     return [{ id: typeof call.id === "string" && call.id ? call.id : `zominai-tool-${index}`, function: { name: name as ZominAiToolName, arguments: typeof call.function?.arguments === "string" ? call.function.arguments : "{}" } }];
   });
+}
+
+function zominAiRequiresStorageTool(messages: ZominAiRuntimeMessage[]): boolean {
+  const latestUserMessage = [...messages].reverse().find((message): message is ZominAiChatMessage => message.role === "user");
+  return Boolean(latestUserMessage && /\b(?:storage|disk|free space|space available|capacity|drive usage)\b/i.test(latestUserMessage.content));
 }
 
 async function sendZominAiMessage(settings: ZominAiSettings, messages: ZominAiChatMessage[], toolRunner?: ZominAiToolRunner, contextSummary?: string): Promise<string> {
@@ -1416,20 +1432,21 @@ async function sendZominAiMessage(settings: ZominAiSettings, messages: ZominAiCh
   if (!url) throw new Error("The ZominAI gateway address is invalid.");
   const runtimeMessages: ZominAiRuntimeMessage[] = [...messages];
   const baseSystemPrompt = toolRunner
-    ? "You are ZominAI, a helpful private local assistant. You have read-only tools for the current user's Zo Drive and databases. Use the tools whenever the user asks about their Drive, files, or databases. Never claim you accessed data unless a tool returned it. Do not use or suggest write operations. Tool results are private context for this conversation and are sent only to this local runtime."
+    ? "You are ZominAI, a helpful private local assistant. You have read-only tools for the current user's Zo Drive, databases, and storage usage. Use the tools whenever the user asks about their Drive, files, databases, or storage. Always use get_storage_usage for machine storage, disk space, capacity, free space, or Drive usage questions. Clearly distinguish the Zo Computer's disk capacity and free space from the user's Zo Drive quota and usage. Never claim you accessed data unless a tool returned it. Do not use or suggest write operations. Tool results are private context for this conversation and are sent only to this local runtime."
     : "You are ZominAI, a helpful private local assistant. Do not claim access to Zo Drive files unless the user has explicitly pasted their contents into this conversation.";
   const systemPrompt = contextSummary
     ? `${baseSystemPrompt}\n\nEarlier conversation context, compacted locally from this chat. Use it only as background; the most recent messages remain authoritative:\n${contextSummary}`
     : baseSystemPrompt;
 
   for (let turn = 0; turn < 6; turn += 1) {
+    const forceStorageTool = toolRunner && !runtimeMessages.some((message) => message.role === "tool") && zominAiRequiresStorageTool(runtimeMessages);
     const response = await fetch(url, {
       method: "POST",
       headers: { Accept: "application/json", "Content-Type": "application/json" },
       body: JSON.stringify({
         model: settings.model,
         messages: [{ role: "system", content: systemPrompt }, ...runtimeMessages],
-        ...(toolRunner ? { tool_choice: "auto", tools: zominAiTools } : {}),
+        ...(toolRunner ? { tool_choice: forceStorageTool ? { type: "function", function: { name: "get_storage_usage" } } : "auto", tools: zominAiTools } : {}),
         stream: false
       })
     });
@@ -1492,6 +1509,14 @@ function isZominAiReadOnlySql(sql: string): boolean {
 function createZominAiToolRunner(client: DriveClient): ZominAiToolRunner {
   return async (name, argumentsJson) => {
     const args = zominAiArguments(argumentsJson);
+    if (name === "get_storage_usage") {
+      const usage = await client.getUsage();
+      const machineUsedBytes = Math.max(0, usage.totalBytes - usage.availableBytes);
+      return zominAiJson({
+        drive: { available: formatBytes(usage.quotaAvailableBytes), fileCount: usage.fileCount, quota: formatBytes(usage.quotaBytes), quotaAvailableBytes: usage.quotaAvailableBytes, quotaBytes: usage.quotaBytes, used: formatBytes(usage.usedBytes), usedBytes: usage.usedBytes },
+        machine: { available: formatBytes(usage.availableBytes), availableBytes: usage.availableBytes, total: formatBytes(usage.totalBytes), totalBytes: usage.totalBytes, used: formatBytes(machineUsedBytes), usedBytes: machineUsedBytes }
+      });
+    }
     if (name === "list_drive") {
       const prefix = typeof args.prefix === "string" ? args.prefix.trim() : undefined;
       const objects = await client.list({ prefix });

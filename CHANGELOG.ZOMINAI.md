@@ -3,6 +3,13 @@
 All notable changes to ZominAI are recorded here. ZominAI follows its own
 semantic-versioned release track, independent of the Zo Drive GUI and CLI.
 
+## v1.2.0 - 2026-07-22
+
+### Added
+
+- Added a read-only storage-usage tool for machine capacity, free space, and
+  Zo Drive quota questions.
+
 ## v1.1.0 - 2026-07-22
 
 ### Changed

@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.29.0 - 2026-07-22
+
+### Added
+
+- Added a ZominAI storage-usage tool so chat can answer machine capacity, free
+  space, and Zo Drive allocation questions from the current account.
+
 ## v1.28.1 - 2026-07-22
 
 ### Fixed
