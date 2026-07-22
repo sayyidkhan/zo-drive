@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.36.0 - 2026-07-22
+
+### Added
+
+- Added the current Zo Drive URL and a one-click copy action to each newly
+  generated shared-folder pairing-key delivery panel.
+
 ## v1.35.0 - 2026-07-22
 
 ### Added

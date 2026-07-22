@@ -278,11 +278,16 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.35.0";
+const GUI_VERSION = "1.36.0";
 const CLI_VERSION = "1.3.0";
 const ZOMINAI_VERSION = "1.6.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.36.0",
+    date: "2026-07-22",
+    changes: ["Added the current Zo Drive URL and a copy action to the shared-folder pairing-key delivery panel."]
+  },
   {
     version: "v1.35.0",
     date: "2026-07-22",
@@ -3270,6 +3275,13 @@ function ClusterDatabases({ client, search }: { client: DriveClient; search: str
                         Send each key with your Zo Drive URL. They expire in 15
                         minutes and grant access only to the named folder.
                       </p>
+                    </div>
+                    <div className="rounded-lg border border-cyan-200 bg-white p-3">
+                      <p className="text-xs font-bold uppercase tracking-wide text-cyan-800">Zo Drive URL</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <code className="min-w-0 flex-1 break-all rounded-md bg-slate-50 px-2.5 py-2 text-xs text-slate-700">{driveHomeUrl()}</code>
+                        <button aria-label="Copy current Zo Drive URL" className="rounded-md border border-cyan-200 px-3 py-2 text-xs font-semibold text-cyan-800 hover:border-cyan-300 hover:bg-cyan-50" onClick={() => void copyText(driveHomeUrl(), "Zo Drive URL copied")} type="button">Copy URL</button>
+                      </div>
                     </div>
                     {createdInvites.map((invite) => (
                       <div
