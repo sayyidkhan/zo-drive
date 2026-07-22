@@ -4,6 +4,14 @@ All notable changes to the `zo-drive` command-line tool are recorded here.
 
 ## Unreleased
 
+## v1.2.2 - 2026-07-22
+
+### Changed
+
+- Expanded the CLI guide with file operations, dry runs, health and capacity
+  checks, script automation, and the boundary with GUI-managed product
+  workspaces.
+
 ## v1.2.1 - 2026-07-21
 
 ### Changed

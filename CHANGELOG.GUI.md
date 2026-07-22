@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.24.3 - 2026-07-22
+
+### Changed
+
+- Expanded the GUI guide to cover file organisation, Zo Paste, Zo Transfer, Zo
+  Shared Drives, Zo Databases, Zo Functions, and ZominAI.
+
 ## v1.24.2 - 2026-07-22
 
 ### Changed
