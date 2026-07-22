@@ -48,7 +48,7 @@ describe("DriveApp", () => {
       expect(screen.getByRole("heading", { name: "Run private databases beside your files" })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Automate with Zo Functions" })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Ask about your Drive without granting write access" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 1.24.6" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "GUI version 1.25.0" })).toBeInTheDocument();
       expect(screen.getByText("Product")).toBeInTheDocument();
       expect(screen.getByRole("navigation", { name: "Choose documentation product" })).toBeInTheDocument();
       expect(screen.getByRole("navigation", { name: "Documentation sections" })).toHaveTextContent("Zo Originals");
@@ -58,7 +58,7 @@ describe("DriveApp", () => {
         expect(modeSwitch).toHaveTextContent("CLI");
       }
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI releases version 1.24.6" })).toHaveAttribute("href", expect.stringContaining("?releases=1&mode=gui"));
+      expect(screen.getByRole("link", { name: "GUI releases version 1.25.0" })).toHaveAttribute("href", expect.stringContaining("?releases=1&mode=gui"));
       expect(screen.queryByRole("heading", { name: "GUI changelog" })).not.toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
 
@@ -96,7 +96,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.24.6")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.25.0")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();
@@ -111,9 +111,9 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "Private local AI for your Drive." })).toBeInTheDocument();
-      expect(screen.getByText("ZominAI documentation · v1.0.1")).toBeInTheDocument();
+      expect(screen.getByText("ZominAI documentation · v1.1.0")).toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "ZominAI" })[0]).toHaveAttribute("aria-current", "page");
-      expect(screen.getByRole("heading", { name: "ZominAI version 1.0.1" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "ZominAI version 1.1.0" })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "ZominAI changelog" })).toBeInTheDocument();
 
       cleanup();
@@ -121,7 +121,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "ZominAI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.0.1")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.1.0")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&product=zominai"));
 
       cleanup();
@@ -329,13 +329,10 @@ describe("DriveApp", () => {
     fireEvent.click(screen.getByRole("button", { name: "Expand navigation" }));
     expect(screen.getByRole("button", { name: "New" })).toBeInTheDocument();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      if (String(input).includes("/zominai/status")) {
-        return new Response(JSON.stringify({ state: "ready", downloadedBytes: 1, expectedBytes: 1, progress: 1, detail: "Ready", updatedAt: "2026-07-21T00:00:00.000Z" }), { status: 200 });
+      if (String(input).includes("/zominai/health")) {
+        return new Response(JSON.stringify({ model: "Bonsai-8B-Q1_0.gguf", status: "ready" }), { status: 200 });
       }
-      if (String(input).includes("/v1/models")) {
-        return new Response(JSON.stringify({ data: [{ id: "prism-ml/Bonsai-27B-gguf" }] }), { status: 200 });
-      }
-      if (String(input).includes("/v1/chat/completions")) {
+      if (String(input).includes("/zominai/chat")) {
         return new Response(JSON.stringify({ choices: [{ message: { content: "Hello from your local Bonsai runtime." } }] }), { status: 200 });
       }
       throw new Error("Unavailable local service");
@@ -361,7 +358,7 @@ describe("DriveApp", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Message ZominAI" }), { target: { value: "Hello ZominAI" } });
     fireEvent.click(screen.getByRole("button", { name: "Send message to ZominAI" }));
     expect(await screen.findByText("Hello from your local Bonsai runtime.")).toBeInTheDocument();
-    expect(fetchSpy).toHaveBeenCalledWith("http://127.0.0.1:57183/v1/chat/completions", expect.objectContaining({ method: "POST" }));
+    expect(fetchSpy).toHaveBeenCalledWith("http://localhost:3000/zominai/chat", expect.objectContaining({ method: "POST" }));
     expect(window.localStorage.getItem("zo-drive:zominai:chats:v1")).toContain("Hello ZominAI");
     fireEvent.click(screen.getByRole("button", { name: "Rename chat Hello ZominAI" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Chat title" }), { target: { value: "Runtime check" } });
@@ -390,7 +387,7 @@ describe("DriveApp", () => {
     expect(screen.queryByRole("complementary", { name: "ZominAI chat" })).not.toBeInTheDocument();
     fetchSpy.mockResolvedValue(new Response(JSON.stringify({ state: "downloading", downloadedBytes: 1, expectedBytes: 2, progress: 0.5, detail: "Downloading", updatedAt: "2026-07-21T00:00:00.000Z" }), { status: 200 }));
     fireEvent.click(screen.getByRole("button", { name: "ZominAI" }));
-    expect(await screen.findByRole("heading", { name: "Install Bonsai where you use it." })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Install Bonsai 8B once for every device." })).toBeInTheDocument();
     fetchSpy.mockRestore();
     fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
     expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
@@ -410,17 +407,17 @@ describe("DriveApp", () => {
     expect(screen.getByRole("button", { name: "ZominAI menu: ZominAI settings" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "ZominAI menu: Uninstall ZominAI" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "ZominAI menu: Install ZominAI" }));
-    expect(screen.getByRole("group", { name: "ZominAI platform" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Zo Computer platform" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "macOS" }));
     expect(screen.getByRole("button", { name: "macOS" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByText(/The model is cached locally at/)).toHaveTextContent("models--prism-ml--Bonsai-27B-gguf");
+    expect(screen.getByText(/Bonsai 8B is cached at/)).toHaveTextContent("models--prism-ml--Bonsai-8B-gguf");
     fireEvent.click(screen.getByRole("button", { name: "Windows" }));
-    expect(screen.getByText("Windows setup")).toBeInTheDocument();
+    expect(screen.getByText("Windows Zo Computer setup")).toBeInTheDocument();
     expect(screen.getByText((_, element) => element?.tagName === "CODE" && element.textContent?.includes("winget install llama.cpp") === true)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Linux" }));
-    expect(screen.getByText("Linux setup")).toBeInTheDocument();
-    expect(screen.getByText(/CPU-only Linux is not a supported experience/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Open Bonsai download" })).toHaveAttribute("href", "https://huggingface.co/prism-ml/Bonsai-27B-gguf");
+    expect(screen.getByText("Linux Zo Computer setup")).toBeInTheDocument();
+    expect(screen.getByText(/CPU-only operation is allowed for Bonsai 8B/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open Bonsai 8B download" })).toHaveAttribute("href", "https://huggingface.co/prism-ml/Bonsai-8B-gguf");
     expect(screen.getByRole("link", { name: /PrismML overview/ })).toHaveAttribute("href", "https://prismml.com/");
     expect(screen.getByRole("link", { name: /Bonsai model & licence/ })).toHaveAttribute("href", "https://huggingface.co/prism-ml/Bonsai-27B-gguf");
     expect(screen.getByRole("link", { name: /Runtime installation docs/ })).toHaveAttribute("href", "https://github.com/ggml-org/llama.cpp/blob/master/docs/install.md");

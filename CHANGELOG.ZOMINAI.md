@@ -3,6 +3,15 @@
 All notable changes to ZominAI are recorded here. ZominAI follows its own
 semantic-versioned release track, independent of the Zo Drive GUI and CLI.
 
+## v1.1.0 - 2026-07-22
+
+### Changed
+
+- Made the 1-bit Bonsai 8B runtime on the Zo Computer the default for all
+  signed-in web and mobile clients.
+- Replaced browser-local inference routing with an authenticated Zo Drive
+  gateway that keeps the model port private.
+
 ## v1.0.1 - 2026-07-22
 
 ### Changed

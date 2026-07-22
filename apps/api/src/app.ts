@@ -39,6 +39,11 @@ type CreateAppOptions = {
   clusters?: LocalClusterStore;
   maxDatabaseImportBytes?: number;
   trustProxy?: boolean;
+  zominAi?: {
+    endpoint: string;
+    fetch?: typeof fetch;
+    model: string;
+  };
 };
 
 const listQuerySchema = z.object({
@@ -168,8 +173,22 @@ const clusterRoleSchema = z.enum(["viewer", "editor"]);
 const clusterInvitationSchema = z.object({ folder: z.string().trim().min(1).max(1_024), role: clusterRoleSchema.default("editor"), recipient: z.string().trim().min(1).max(120).nullable().optional() });
 const clusterMountSchema = z.object({ remoteUrl: z.string().url().max(2_048), inviteToken: z.string().min(20).max(256) });
 const clusterPeerUpdateSchema = z.object({ role: clusterRoleSchema });
+const zominAiChatSchema = z.object({
+  messages: z.array(z.object({
+    content: z.string().max(100_000).nullable().optional(),
+    role: z.enum(["assistant", "system", "tool", "user"]),
+    tool_call_id: z.string().max(128).optional(),
+    tool_calls: z.array(z.object({
+      function: z.object({ arguments: z.string().max(20_000), name: z.string().max(80) }),
+      id: z.string().max(128),
+      type: z.literal("function")
+    })).max(6).optional()
+  })).min(1).max(30),
+  tool_choice: z.literal("auto").optional(),
+  tools: z.array(z.unknown()).max(10).optional()
+}).refine((value) => JSON.stringify(value).length <= 1_000_000, "ZominAI request is too large");
 
-export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys, invalidApiKeyRateLimiter = new InvalidApiKeyRateLimiter(), sharing, forms, databases = new LocalDatabaseStore(storage.root), databaseApiKeys = new LocalDatabaseApiKeyStore({ root: storage.root }), functions = new LocalFunctionStore(storage.root), clusters = new LocalClusterStore({ root: storage.root }), maxDatabaseImportBytes = Number.MAX_SAFE_INTEGER, trustProxy = false }: CreateAppOptions) {
+export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys, invalidApiKeyRateLimiter = new InvalidApiKeyRateLimiter(), sharing, forms, databases = new LocalDatabaseStore(storage.root), databaseApiKeys = new LocalDatabaseApiKeyStore({ root: storage.root }), functions = new LocalFunctionStore(storage.root), clusters = new LocalClusterStore({ root: storage.root }), maxDatabaseImportBytes = Number.MAX_SAFE_INTEGER, trustProxy = false, zominAi }: CreateAppOptions) {
   const app = new Hono();
   const resolveActiveUser: UserResolver = async (request) => {
     const userId = await resolveUserId(request);
@@ -183,6 +202,8 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     app.use("/folders", cors(corsOptions));
     app.use("/native-files", cors(corsOptions));
     app.use("/native-files/*", cors(corsOptions));
+    app.use("/zominai", cors(corsOptions));
+    app.use("/zominai/*", cors(corsOptions));
     app.use("/usage", cors(corsOptions));
     app.use("/usage/*", cors(corsOptions));
     app.use("/stars", cors(corsOptions));
@@ -224,6 +245,51 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
   });
 
   app.get("/health", (context) => context.json({ status: "ok" }));
+
+  if (zominAi) {
+    const runtime = new URL(zominAi.endpoint);
+    const runtimeFetch = zominAi.fetch ?? fetch;
+    const runtimeUrl = (path: string) => new URL(path, runtime).toString();
+
+    app.get("/zominai/health", async (context) => {
+      if (!(await requireUser(context.req.raw, resolveActiveUser))) return unauthorized(context);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 4_000);
+      try {
+        const response = await runtimeFetch(runtimeUrl("/v1/models"), { headers: { Accept: "application/json" }, signal: controller.signal });
+        if (!response.ok) return context.json({ model: zominAi.model, status: "unavailable" }, 503);
+        const body = await response.json() as { data?: Array<{ id?: unknown }> };
+        const ready = (body.data ?? []).some((item) => item.id === zominAi.model || (typeof item.id === "string" && /bonsai-8b/i.test(item.id)));
+        return context.json({ model: zominAi.model, status: ready ? "ready" : "unavailable" }, ready ? 200 : 503);
+      } catch {
+        return context.json({ model: zominAi.model, status: "unavailable" }, 503);
+      } finally {
+        clearTimeout(timeout);
+      }
+    });
+
+    app.post("/zominai/chat", async (context) => {
+      if (!(await requireUser(context.req.raw, resolveActiveUser))) return unauthorized(context);
+      const parsed = zominAiChatSchema.safeParse(await context.req.json().catch(() => null));
+      if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Enter a valid, bounded ZominAI chat request" } }, 400);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 90_000);
+      try {
+        const response = await runtimeFetch(runtimeUrl("/v1/chat/completions"), {
+          body: JSON.stringify({ ...parsed.data, model: zominAi.model, stream: false }),
+          headers: { Accept: "application/json", "Content-Type": "application/json" },
+          method: "POST",
+          signal: controller.signal
+        });
+        if (!response.ok) return context.json({ error: { code: "ZOMINAI_UNAVAILABLE", message: "The private Bonsai runtime is unavailable. Try again shortly." } }, 503);
+        return new Response(await response.arrayBuffer(), { headers: { "content-type": "application/json", "cache-control": "no-store" } });
+      } catch {
+        return context.json({ error: { code: "ZOMINAI_UNAVAILABLE", message: "The private Bonsai runtime is unavailable. Try again shortly." } }, 503);
+      } finally {
+        clearTimeout(timeout);
+      }
+    });
+  }
 
   if (auth) {
     app.get("/auth/status", async (context) => {

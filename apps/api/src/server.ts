@@ -25,6 +25,8 @@ const formStore = new LocalFormStore({ root: dataRoot });
 const functionStore = new LocalFunctionStore(dataRoot);
 const storage = new LocalDriveStorage({ root: dataRoot });
 const maxDatabaseImportBytes = positiveIntegerEnvironmentVariable("ZO_DRIVE_MAX_DATABASE_IMPORT_BYTES", Number.MAX_SAFE_INTEGER);
+const zominAiEndpoint = localHttpEndpoint(process.env.ZO_DRIVE_ZOMINAI_ENDPOINT ?? "http://127.0.0.1:57183");
+const zominAiModel = process.env.ZO_DRIVE_ZOMINAI_MODEL ?? "Bonsai-8B-Q1_0.gguf";
 const webRoot = process.env.ZO_DRIVE_WEB_ROOT ?? resolve(dirname(fileURLToPath(import.meta.url)), "../../web/dist");
 const apiRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const config = await loadServerConfig(process.env.ZO_DRIVE_CONFIG_PATH ?? resolve(apiRoot, "config.json"));
@@ -48,7 +50,11 @@ const app = createApp({
   sharing: shareStore,
   forms: formStore,
   functions: functionStore,
-  maxDatabaseImportBytes
+  maxDatabaseImportBytes,
+  zominAi: {
+    endpoint: zominAiEndpoint,
+    model: zominAiModel
+  }
 });
 
 async function purgeExpiredTrash() {
@@ -145,6 +151,14 @@ function positiveIntegerEnvironmentVariable(name: string, fallback: number): num
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed) || parsed < 1) throw new Error(`${name} must be a positive integer`);
   return parsed;
+}
+
+function localHttpEndpoint(value: string): string {
+  const url = new URL(value);
+  if (!['http:', 'https:'].includes(url.protocol) || !['127.0.0.1', '::1', 'localhost'].includes(url.hostname)) {
+    throw new Error("ZO_DRIVE_ZOMINAI_ENDPOINT must use a loopback HTTP(S) address");
+  }
+  return url.toString();
 }
 
 function developmentSessionSecret(): string {
