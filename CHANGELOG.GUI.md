@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.24.6 - 2026-07-22
+
+### Changed
+
+- Moved Zo Drive release history out of the documentation flow into a dedicated
+  Releases route, while keeping legacy changelog links working.
+
 ## v1.24.5 - 2026-07-22
 
 ### Changed

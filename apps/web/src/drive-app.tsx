@@ -272,11 +272,16 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.24.5";
+const GUI_VERSION = "1.24.6";
 const CLI_VERSION = "1.3.0";
 const ZOMINAI_VERSION = "1.0.1";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.24.6",
+    date: "2026-07-22",
+    changes: ["Moved release history out of the documentation flow into a dedicated Releases route while preserving old changelog links."]
+  },
   {
     version: "v1.24.5",
     date: "2026-07-22",
@@ -728,6 +733,7 @@ export function DriveApp({ client, authClient }: { client?: DriveClient; authCli
   const shareId = query.get("share");
   const formId = query.get("form");
   const isDocs = query.get("docs") === "1";
+  const isReleases = query.get("releases") === "1";
   const isLogin = query.get("login") === "1";
   // Supplying a client is only used by the embedded test harness. The hosted
   // app defaults to the public landing page until the user chooses Zo Drive.
@@ -735,7 +741,7 @@ export function DriveApp({ client, authClient }: { client?: DriveClient; authCli
 
   return (
     <QueryClientProvider client={queryClient}>
-      {formId ? <PublicFormPage client={defaultClient} formId={formId} /> : shareId ? <SharedFilePage client={defaultClient} shareId={shareId} /> : isDocs ? <DocsPage mode={query.get("mode") === "cli" ? "cli" : "gui"} page={query.get("page") === "changelog" ? "changelog" : "docs"} product={query.get("product") === "zominai" || query.get("mode") === "zominai" ? "zominai" : "drive"} /> : isLogin ? <DriveGate client={driveClient} authClient={sessionClient} /> : isDrive ? <DriveGate client={driveClient} authClient={sessionClient} fallback={query.get("app") === "1" ? <LandingPage /> : undefined} /> : <LandingPage />}
+      {formId ? <PublicFormPage client={defaultClient} formId={formId} /> : shareId ? <SharedFilePage client={defaultClient} shareId={shareId} /> : isDocs || isReleases ? <DocsPage mode={query.get("mode") === "cli" ? "cli" : "gui"} page={isReleases || query.get("page") === "changelog" ? "changelog" : "docs"} product={query.get("product") === "zominai" || query.get("mode") === "zominai" ? "zominai" : "drive"} /> : isLogin ? <DriveGate client={driveClient} authClient={sessionClient} /> : isDrive ? <DriveGate client={driveClient} authClient={sessionClient} fallback={query.get("app") === "1" ? <LandingPage /> : undefined} /> : <LandingPage />}
       <Toaster position="bottom-right" richColors />
     </QueryClientProvider>
   );
@@ -753,8 +759,8 @@ function DriveMark({ compact = false }: { compact?: boolean }) {
 
 function DocsProductSwitch({ activeProduct, page = "docs" }: { activeProduct: "drive" | "zominai"; page?: "docs" | "changelog" }) {
   return <nav aria-label="Choose documentation product" className="inline-flex items-center rounded-lg border border-slate-200 bg-white p-0.5 shadow-sm">
-    <a aria-current={activeProduct === "drive" ? "page" : undefined} className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm font-semibold transition ${activeProduct === "drive" ? "bg-slate-950 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"}`} href={docsUrl("gui", page)}><HardDrive size={16} /> Zo Drive</a>
-    <a aria-current={activeProduct === "zominai" ? "page" : undefined} className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm font-semibold transition ${activeProduct === "zominai" ? "bg-cyan-950 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"}`} href={zominAiDocsUrl(page)}><Cpu size={16} /> ZominAI</a>
+    <a aria-current={activeProduct === "drive" ? "page" : undefined} className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm font-semibold transition ${activeProduct === "drive" ? "bg-slate-950 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"}`} href={page === "changelog" ? releasesUrl("gui") : docsUrl("gui")}><HardDrive size={16} /> Zo Drive</a>
+    <a aria-current={activeProduct === "zominai" ? "page" : undefined} className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm font-semibold transition ${activeProduct === "zominai" ? "bg-cyan-950 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"}`} href={page === "changelog" ? zominAiReleasesUrl() : zominAiDocsUrl()}><Cpu size={16} /> ZominAI</a>
   </nav>;
 }
 
@@ -821,7 +827,7 @@ function LandingPage() {
 
 function DocsPage({ mode, page, product }: { mode: "gui" | "cli"; page: "docs" | "changelog"; product: "drive" | "zominai" }) {
   if (product === "zominai") return page === "changelog" ? <ZominAiDocsChangelogPage /> : <ZominAiDocsPage />;
-  return page === "changelog" ? <DocsChangelogPage mode={mode} /> : <><DocsProductBar /><DocsChangelogLink mode={mode} /><DocsGuidesPage mode={mode} /></>;
+  return page === "changelog" ? <DocsChangelogPage mode={mode} /> : <><DocsProductBar /><DocsChangelogLink mode={mode} /><style>{`#changelog, a[href="#changelog"] { display: none; }`}</style><DocsGuidesPage mode={mode} /></>;
 }
 
 function DocsProductBar() {
@@ -835,7 +841,7 @@ function ZominAiDocsModeSwitch({ page = "docs" }: { page?: "docs" | "changelog" 
 function DocsChangelogLink({ mode }: { mode: "gui" | "cli" }) {
   const version = mode === "gui" ? GUI_VERSION : CLI_VERSION;
   const label = mode === "gui" ? "GUI" : "CLI";
-  return <a aria-label={`${label} changelog version ${version}`} className="fixed right-5 top-[4.75rem] z-30 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 sm:right-8" href={docsUrl(mode, "changelog")}><ScrollText size={16} /> Changelog <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-bold text-slate-600">v{version}</span></a>;
+  return <a aria-label={`${label} releases version ${version}`} className="fixed right-5 top-[4.75rem] z-30 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 sm:right-8" href={releasesUrl(mode)}><ScrollText size={16} /> Releases <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-bold text-slate-600">v{version}</span></a>;
 }
 
 function DocsGuidesPage({ mode }: { mode: "gui" | "cli" }) {
@@ -4971,8 +4977,16 @@ function docsUrl(mode: "gui" | "cli" = "gui", page: "docs" | "changelog" = "docs
   return `${driveHomeUrl()}?docs=1&mode=${mode}${page === "changelog" ? "&page=changelog" : ""}`;
 }
 
+function releasesUrl(mode: "gui" | "cli" = "gui"): string {
+  return `${driveHomeUrl()}?releases=1&mode=${mode}`;
+}
+
 function zominAiDocsUrl(page: "docs" | "changelog" = "docs"): string {
   return `${driveHomeUrl()}?docs=1&product=zominai${page === "changelog" ? "&page=changelog" : ""}`;
+}
+
+function zominAiReleasesUrl(): string {
+  return `${driveHomeUrl()}?releases=1&product=zominai`;
 }
 
 function shareLink(id: string): string {
