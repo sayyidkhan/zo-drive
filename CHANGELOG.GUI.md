@@ -2,6 +2,20 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.23.3 - 2026-07-22
+
+### Changed
+
+- Added a clear ZominAI pronunciation cue and credited Google Gemini as the
+  inspiration for its local-AI workspace.
+- Reorganised Zo Functions into dedicated Editor, Function runs, and Logs
+  tabs, so source editing, test execution, and invocation detail stay separate.
+
+### Fixed
+
+- Made desktop ZominAI resizing track the pointer smoothly and refined the chat
+  boundary to a single, app-consistent divider.
+
 ## v1.23.2 - 2026-07-22
 
 ### Changed

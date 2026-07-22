@@ -42,9 +42,9 @@ describe("DriveApp", () => {
 
       expect(screen.getByRole("heading", { name: "Manage files in your private Drive." })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Share files on your terms" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 1.23.1" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 1.23.3" })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI changelog version 1.23.1" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
+      expect(screen.getByRole("link", { name: "GUI changelog version 1.23.3" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui&page=changelog"));
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
       expect(screen.getByText((_, element) => element?.tagName === "H3" && element.textContent === "GUI v1.17.0")).toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
@@ -79,7 +79,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.23.1")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.23.3")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();
@@ -295,8 +295,8 @@ describe("DriveApp", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "ZominAI" }));
     const zominAiDrawer = await screen.findByRole("complementary", { name: "ZominAI chat" });
-    expect(zominAiDrawer).toHaveClass("md:relative", "md:w-[var(--zominai-drawer-width)]", "md:border-l-2", "md:border-slate-300", "duration-500");
-    expect(screen.getByRole("button", { name: "Resize ZominAI chat" })).toHaveClass("w-4", "cursor-col-resize");
+    expect(zominAiDrawer).toHaveClass("md:relative", "md:w-[var(--zominai-drawer-width)]", "md:border-l", "md:border-slate-200", "duration-500");
+    expect(screen.getByRole("button", { name: "Resize ZominAI chat" })).toHaveClass("w-5", "cursor-col-resize", "group");
     expect(screen.getAllByAltText("ZominAI Pegasus")).toHaveLength(2);
     expect(screen.getByRole("button", { name: "New ZominAI chat" })).toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "ZominAI chat history" })).not.toBeInTheDocument();
@@ -337,6 +337,8 @@ describe("DriveApp", () => {
     expect(screen.getByRole("button", { name: "ZominAI settings" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "ZominAI settings" }));
     expect((await screen.findAllByRole("heading", { name: "ZominAI settings" })).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByRole("heading", { name: /ZominAI Pronounced ZOH-min A\.I\./ })).toBeInTheDocument();
+    expect(screen.getByText("Inspired by Google Gemini.")).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "ZominAI resources" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /PrismML overview/ })).toHaveAttribute("href", "https://prismml.com/");
     expect(screen.getByRole("link", { name: /Bonsai model & licence/ })).toHaveAttribute("href", "https://huggingface.co/prism-ml/Bonsai-27B-gguf");
@@ -403,6 +405,12 @@ describe("DriveApp", () => {
     fireEvent.click(screen.getByRole("button", { name: "Zo Functions" }));
     expect(await screen.findByRole("heading", { name: "Zo Functions" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Run small jobs without another service." })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Editor" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByRole("heading", { name: "Invocation timeline" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Function runs" }));
+    expect(await screen.findByRole("heading", { name: "Test run" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Recent runs" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Logs" }));
     expect(await screen.findByRole("heading", { name: "Invocation timeline" })).toBeInTheDocument();
     const invocation = await screen.findByRole("button", { name: /Run now from Zo Drive/ });
     expect(invocation).toHaveTextContent("Took 143 ms");
@@ -410,6 +418,7 @@ describe("DriveApp", () => {
     fireEvent.click(invocation);
     expect(screen.getByText("Function output")).toBeInTheDocument();
     expect(screen.getAllByText((_, element) => element?.tagName === "CODE" && element.textContent?.includes('"greeting": "Hello, Zo"') === true).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("tab", { name: "Editor" }));
     fireEvent.click(screen.getByRole("button", { name: /Public endpoint/ }));
     expect(screen.getByText("/public/functions/fn-11111111-1111-4111-8111-111111111111/invoke", { exact: false })).toBeInTheDocument();
     expect(screen.getByText("Save changes to activate this endpoint publicly.")).toBeInTheDocument();
