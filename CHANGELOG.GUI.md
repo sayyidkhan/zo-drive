@@ -2,6 +2,12 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.23.6 - 2026-07-22
+
+### Changed
+
+- Moved Function Editor save and delete controls to a right-aligned footer.
+
 ## v1.23.5 - 2026-07-22
 
 ### Changed
