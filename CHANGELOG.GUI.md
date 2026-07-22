@@ -2,6 +2,14 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.28.1 - 2026-07-22
+
+### Fixed
+
+- Kept the ZominAI chat transcript and composer aligned to the full drawer
+  height, preventing the empty chat view from leaving unused space below the
+  composer.
+
 ## v1.28.0 - 2026-07-22
 
 ### Added

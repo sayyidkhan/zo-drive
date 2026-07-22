@@ -275,11 +275,16 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.28.0";
+const GUI_VERSION = "1.28.1";
 const CLI_VERSION = "1.3.0";
 const ZOMINAI_VERSION = "1.1.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.28.1",
+    date: "2026-07-22",
+    changes: ["Kept the ZominAI chat transcript and composer aligned to the full drawer height, preventing empty chats from leaving unused space below the composer."]
+  },
   {
     version: "v1.28.0",
     date: "2026-07-22",
@@ -1759,7 +1764,7 @@ function ZominAiChatDrawer({ client, connection, isOpen, onClose, onConnectionCh
         <button aria-controls="zominai-chat-history" aria-expanded={historyOpen} aria-label="Toggle ZominAI chat history" className={`rounded-lg p-2 transition ${historyOpen ? "bg-cyan-50 text-cyan-800" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`} onClick={() => setHistoryOpen((open) => !open)} title="Chat history"><History size={18} /></button>
         <button aria-label="Close ZominAI chat" className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900" onClick={onClose}><X size={19} /></button>
       </header>
-      <div className="relative min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1 flex-col">
         {historyOpen && <>
           <button aria-label="Close ZominAI chat history" className="absolute inset-0 z-10 bg-slate-950/10 backdrop-blur-[1px]" onClick={() => setHistoryOpen(false)} type="button" />
           <nav aria-label="ZominAI chat history" className="absolute inset-y-0 left-0 z-20 flex w-[min(20rem,calc(100%-2rem))] flex-col border-r border-slate-200 bg-slate-50 p-3 shadow-2xl shadow-slate-950/15" id="zominai-chat-history">
