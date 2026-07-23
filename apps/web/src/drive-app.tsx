@@ -291,11 +291,16 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.41.2";
+const GUI_VERSION = "1.41.3";
 const CLI_VERSION = "1.3.0";
 const ZOMINAI_VERSION = "1.9.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.41.3",
+    date: "2026-07-23",
+    changes: ["Simplified each Zo Drive comparison-row price to US$0 so the itemised cost remains clear on every screen width."]
+  },
   {
     version: "v1.41.2",
     date: "2026-07-23",
@@ -1182,7 +1187,7 @@ function ZoDriveComparisonCta() {
     ["Google Workspace", "US$14/user / month"],
     ["ChatGPT Plus", "US$20 / month"]
   ];
-  const zoFeatures = [["Zo Paste", "US$0 / feature"], ["Zo Transfer", "US$0 / feature"], ["Zo Functions", "US$0 / feature"], ["Zo Databases", "US$0 / feature"], ["Zo Shared Drives", "US$0 / feature"], ["ZominAI", "US$0 / feature"]];
+  const zoFeatures = [["Zo Paste", "US$0"], ["Zo Transfer", "US$0"], ["Zo Functions", "US$0"], ["Zo Databases", "US$0"], ["Zo Shared Drives", "US$0"], ["ZominAI", "US$0"]];
 
   return <section className="order-[55] bg-slate-950 py-20 text-white sm:py-24"><div className="mx-auto max-w-7xl px-5 sm:px-8"><div className="max-w-3xl"><p className="text-sm font-bold uppercase tracking-[0.15em] text-cyan-300">Why Zo Drive</p><h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-5xl">Six subscriptions become one private suite.</h2><p className="mt-5 text-base leading-7 text-slate-300">Keep the workflows. Remove the repeated accounts, scattered data and avoidable monthly SaaS spend.</p></div><div className="mt-10 grid gap-5 lg:grid-cols-2"><article aria-label="Fragmented SaaS subscriptions" className="rounded-2xl border border-white/10 bg-white/5 p-5 sm:p-7"><p className="text-xs font-bold uppercase tracking-[0.15em] text-orange-300">Before / fragmented SaaS</p><h3 className="mt-2 text-2xl font-semibold">Six vendors</h3><ul className="mt-6 divide-y divide-white/10">{regularSaas.map(([name, cost]) => <li className="flex items-center justify-between gap-4 py-3.5" key={name}><span className="font-semibold text-slate-100">{name}</span><span className="text-right text-sm text-slate-400">{cost}</span></li>)}</ul><div className="mt-6 rounded-xl bg-black/50 px-4 py-4"><p className="text-xs font-bold uppercase tracking-[0.15em] text-slate-400">Published starting prices</p><p className="mt-2 text-3xl font-semibold tracking-tight text-white">US$104+ <span className="text-lg font-medium text-slate-400">/ month</span></p><p className="mt-2 text-sm leading-6 text-slate-400">Before Pastebin Pro and additional usage charges.</p></div></article><article aria-label="Zo Drive private suite" className="rounded-2xl border border-cyan-300/30 bg-cyan-300/[0.08] p-5 shadow-2xl shadow-cyan-400/5 sm:p-7"><p className="text-xs font-bold uppercase tracking-[0.15em] text-cyan-200">After / Zo Drive</p><h3 className="mt-2 text-2xl font-semibold text-cyan-50">One private system</h3><ul className="mt-6 divide-y divide-cyan-200/15">{zoFeatures.map(([name, cost]) => <li className="flex items-center justify-between gap-4 py-3.5" key={name}><span className="font-semibold text-cyan-50">{name}</span><span className="shrink-0 text-sm font-semibold text-cyan-200">{cost}</span></li>)}</ul><div className="mt-6 rounded-xl bg-cyan-950/70 px-4 py-4"><p className="text-xs font-bold uppercase tracking-[0.15em] text-cyan-100/70">Additional SaaS cost</p><p className="mt-2 text-3xl font-semibold tracking-tight text-cyan-50">US$0 <span className="text-lg font-medium text-cyan-100/70">extra / feature</span></p><p className="mt-2 text-sm leading-6 text-cyan-100/70">Included with Zo Drive on your Zo Computer.</p></div></article></div><div className="mt-8 flex flex-wrap items-center gap-4"><a className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200" href={loginUrl()}><HardDrive size={17} /> Use Zo Drive <ArrowUpRight size={16} /></a><p className="text-xs leading-5 text-slate-400">Each comparison above is explained in the matching product section.</p></div></div></section>;
 }

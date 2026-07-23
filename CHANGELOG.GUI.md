@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.41.3 - 2026-07-23
+
+### Fixed
+
+- Simplified each Zo Drive comparison-row price to US$0 so the itemised cost
+  remains clear on every screen width.
+
 ## v1.41.2 - 2026-07-23
 
 ### Changed
