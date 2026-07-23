@@ -71,6 +71,7 @@ import { create } from "zustand";
 
 import { ZoDriveClient } from "@zo-drive/sdk";
 import type { AccountAccess, AccountMember, AccountRole, ApiKeyScope, AuthStatus, ClusterInvitation, ClusterMount, ClusterRole, DatabaseApiKey, DatabaseApiKeyScope, DatabaseEngine, DatabaseEngineId, DatabaseExecuteResult, DatabaseImportSettings, DatabaseRows, DriveApiKey, DriveDatabase, DriveFolder, DriveFunction, DriveFunctionRun, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, FunctionRuntime, FunctionVisibility, NativeFileType, PublicShare, PublishedForm, ShareAccess, StorageUsage } from "@zo-drive/types";
+import { LandingPageThree } from "./landing-page-three.js";
 import { LandingPageTwo } from "./landing-page-two.js";
 
 type DriveClient = Pick<ZoDriveClient, "createApiKey" | "createFolder" | "createNativeFile" | "createShare" | "delete" | "download" | "emptyTrash" | "getUsage" | "list" | "listApiKeys" | "listFolders" | "listFormResponses" | "listShares" | "listStarred" | "listTrash" | "permanentlyDeleteTrash" | "publishForm" | "rename" | "restoreTrash" | "revokeApiKey" | "revokeShare" | "saveNativeFile" | "setQuota" | "star" | "unstar" | "updateSharePasscode" | "upload"> & Partial<Pick<ZoDriveClient, "createClusterFolder" | "createClusterInvitation" | "createClusterMount" | "deleteClusterInvitation" | "deleteClusterMount" | "deleteClusterObject" | "deleteClusterPeer" | "downloadClusterObject" | "getClusterMountAccess" | "listClusterInvitations" | "listClusterMounts" | "listClusterObjects" | "listClusterPeers" | "renameClusterObject" | "updateClusterPeerRole" | "uploadClusterObject" | "createDatabase" | "createDatabaseApiKey" | "deleteDatabase" | "executeDatabase" | "exportDatabase" | "getDatabaseImportSettings" | "importDatabase" | "installDatabaseEngine" | "listDatabaseApiKeys" | "listDatabaseEngines" | "listDatabases" | "listDatabaseRows" | "listDatabaseTables" | "queryDatabase" | "revokeDatabaseApiKey" | "setDatabaseImportLimit" | "updateDatabaseEngine" | "createFunction" | "deleteFunction" | "listFunctions" | "listFunctionRuns" | "runFunction" | "updateFunction" | "deleteFolder" | "renameFolder">>;
@@ -290,11 +291,16 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.41.0";
+const GUI_VERSION = "1.41.1";
 const CLI_VERSION = "1.3.0";
 const ZOMINAI_VERSION = "1.9.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.41.1",
+    date: "2026-07-23",
+    changes: ["Replaced the landing-page SaaS comparison with the six-subscription versus one-private-suite story, including the US$104+ published-price comparison."]
+  },
   {
     version: "v1.41.0",
     date: "2026-07-23",
@@ -954,13 +960,14 @@ export function DriveApp({ client, authClient }: { client?: DriveClient; authCli
   const isReleases = query.get("releases") === "1";
   const isLogin = query.get("login") === "1";
   const isLandingPageTwo = window.location.pathname === "/landing-page-2" || window.location.pathname === `${appBasePath}/landing-page-2`;
+  const isLandingPageThree = window.location.pathname === "/landing-page-3" || window.location.pathname === `${appBasePath}/landing-page-3`;
   // Supplying a client is only used by the embedded test harness. The hosted
   // app defaults to the public landing page until the user chooses Zo Drive.
   const isDrive = query.get("app") === "1" || Boolean(client || authClient);
 
   return (
     <QueryClientProvider client={queryClient}>
-      {formId ? <PublicFormPage client={defaultClient} formId={formId} /> : shareId ? <SharedFilePage client={defaultClient} shareId={shareId} /> : isLandingPageTwo ? <LandingPageTwo currentLandingUrl={landingUrl()} docsUrl={docsUrl()} driveUrl={driveAppUrl()} loginUrl={loginUrl()} logoCloudUrl={driveCloudLogoUrl} logoPegasusUrl={drivePegasusLogoUrl} /> : isDocs || isReleases ? <DocsPage mode={query.get("mode") === "cli" ? "cli" : "gui"} page={isReleases || query.get("page") === "changelog" ? "changelog" : "docs"} product={query.get("product") === "zominai" || query.get("mode") === "zominai" ? "zominai" : "drive"} /> : isLogin ? <DriveGate client={driveClient} authClient={sessionClient} /> : isDrive ? <DriveGate client={driveClient} authClient={sessionClient} fallback={query.get("app") === "1" ? <LandingPage /> : undefined} /> : <LandingPage />}
+      {formId ? <PublicFormPage client={defaultClient} formId={formId} /> : shareId ? <SharedFilePage client={defaultClient} shareId={shareId} /> : isLandingPageTwo ? <LandingPageTwo currentLandingUrl={landingUrl()} docsUrl={docsUrl()} driveUrl={driveAppUrl()} loginUrl={loginUrl()} logoCloudUrl={driveCloudLogoUrl} logoPegasusUrl={drivePegasusLogoUrl} /> : isLandingPageThree ? <LandingPageThree currentLandingUrl={landingUrl()} docsUrl={docsUrl()} driveUrl={driveAppUrl()} loginUrl={loginUrl()} logoCloudUrl={driveCloudLogoUrl} logoPegasusUrl={drivePegasusLogoUrl} /> : isDocs || isReleases ? <DocsPage mode={query.get("mode") === "cli" ? "cli" : "gui"} page={isReleases || query.get("page") === "changelog" ? "changelog" : "docs"} product={query.get("product") === "zominai" || query.get("mode") === "zominai" ? "zominai" : "drive"} /> : isLogin ? <DriveGate client={driveClient} authClient={sessionClient} /> : isDrive ? <DriveGate client={driveClient} authClient={sessionClient} fallback={query.get("app") === "1" ? <LandingPage /> : undefined} /> : <LandingPage />}
       <Toaster position="bottom-right" richColors />
     </QueryClientProvider>
   );
@@ -1164,22 +1171,15 @@ function FeatureCostComparison({ product }: { product: string }) {
 function ZoDriveComparisonCta() {
   const regularSaas = [
     ["Pastebin Pro", "Pastes"],
-    ["WeTransfer Ultimate", "File delivery"],
+    ["WeTransfer Ultimate", "Transfers"],
     ["Vercel Pro", "Functions"],
     ["Supabase Pro", "Databases"],
     ["Google Workspace", "Shared drives"],
-    ["ChatGPT Plus", "AI workspace"]
+    ["ChatGPT Plus", "AI"]
   ];
-  const zoFeatures = [
-    ["Zo Paste", "Private pastes and controlled sharing"],
-    ["Zo Transfer", "Delivery links with expiry and revocation"],
-    ["Zo Functions", "Code and scheduled automations"],
-    ["Zo Databases", "Private persistent data runtimes"],
-    ["Zo Shared Drives", "Live folders without needless copies"],
-    ["ZominAI", "Private AI against your Drive"]
-  ];
+  const zoFeatures = ["Zo Paste", "Zo Transfer", "Zo Functions", "Zo Databases", "Zo Shared Drives", "ZominAI"];
 
-  return <section className="order-[55] bg-slate-950 py-20 text-white sm:py-24"><div className="mx-auto max-w-7xl px-5 sm:px-8"><div className="max-w-3xl"><p className="text-sm font-bold uppercase tracking-[0.15em] text-cyan-300">Why Zo Drive</p><h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-5xl">One fragmented SaaS stack. One Zo Drive.</h2><p className="mt-5 text-base leading-7 text-slate-300">The usual setup spreads the work across separate vendors, subscriptions, dashboards, and clouds. Zo Drive brings all six workflows together on the Zo machine you control.</p></div><div className="mt-10 grid gap-5 lg:grid-cols-2"><article aria-label="Regular SaaS stack" className="rounded-2xl border border-white/10 bg-white/5 p-5 sm:p-7"><p className="text-xs font-bold uppercase tracking-[0.15em] text-slate-400">Column A</p><h3 className="mt-2 text-2xl font-semibold">Regular SaaS stack</h3><p className="mt-2 text-sm leading-6 text-slate-400">Separate accounts, bills, and data silos.</p><ul className="mt-6 divide-y divide-white/10">{regularSaas.map(([name, workflow]) => <li className="flex items-center justify-between gap-4 py-3.5" key={name}><span className="font-semibold text-slate-100">{name}</span><span className="text-right text-sm text-slate-400">{workflow}</span></li>)}</ul><p className="mt-6 rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm font-medium text-slate-300">Six vendors. Multiple subscriptions. Your data spread across their clouds.</p></article><article aria-label="Zo Drive product stack" className="rounded-2xl border border-cyan-300/30 bg-cyan-300/[0.08] p-5 shadow-2xl shadow-cyan-400/5 sm:p-7"><p className="text-xs font-bold uppercase tracking-[0.15em] text-cyan-200">Column B</p><h3 className="mt-2 text-2xl font-semibold text-cyan-50">All Zo features</h3><p className="mt-2 text-sm leading-6 text-cyan-100/70">One Zo machine. One private drive. Six native products.</p><ul className="mt-6 divide-y divide-cyan-200/15">{zoFeatures.map(([name, workflow]) => <li className="flex items-center justify-between gap-4 py-3.5" key={name}><span className="font-semibold text-cyan-50">{name}</span><span className="text-right text-sm text-cyan-100/70">{workflow}</span></li>)}</ul><p className="mt-6 rounded-xl border border-cyan-200/20 bg-cyan-300/10 px-4 py-3 text-sm font-semibold text-cyan-50">One private drive. US$0 extra per feature.</p></article></div><div className="mt-8 flex flex-wrap items-center gap-4"><a className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200" href={loginUrl()}><HardDrive size={17} /> Use Zo Drive <ArrowUpRight size={16} /></a><p className="text-xs leading-5 text-slate-400">Each comparison above is explained in the matching product section.</p></div></div></section>;
+  return <section className="order-[55] bg-slate-950 py-20 text-white sm:py-24"><div className="mx-auto max-w-7xl px-5 sm:px-8"><div className="max-w-3xl"><p className="text-sm font-bold uppercase tracking-[0.15em] text-cyan-300">Why Zo Drive</p><h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-5xl">Six subscriptions become one private suite.</h2><p className="mt-5 text-base leading-7 text-slate-300">Keep the workflows. Remove the repeated accounts, scattered data and avoidable monthly SaaS spend.</p></div><div className="mt-10 grid gap-5 lg:grid-cols-2"><article aria-label="Fragmented SaaS subscriptions" className="rounded-2xl border border-white/10 bg-white/5 p-5 sm:p-7"><p className="text-xs font-bold uppercase tracking-[0.15em] text-orange-300">Before / fragmented SaaS</p><h3 className="mt-2 text-2xl font-semibold">Six vendors</h3><ul className="mt-6 divide-y divide-white/10">{regularSaas.map(([name, workflow]) => <li className="flex items-center justify-between gap-4 py-3.5" key={name}><span className="font-semibold text-slate-100">{name}</span><span className="text-right text-sm text-slate-400">{workflow}</span></li>)}</ul><div className="mt-6 rounded-xl bg-black/50 px-4 py-4"><p className="text-xs font-bold uppercase tracking-[0.15em] text-slate-400">Published starting prices</p><p className="mt-2 text-3xl font-semibold tracking-tight text-white">US$104+ <span className="text-lg font-medium text-slate-400">/ month</span></p><p className="mt-2 text-sm leading-6 text-slate-400">Before Pastebin Pro and additional usage charges.</p></div></article><article aria-label="Zo Drive private suite" className="rounded-2xl border border-cyan-300/30 bg-cyan-300/[0.08] p-5 shadow-2xl shadow-cyan-400/5 sm:p-7"><p className="text-xs font-bold uppercase tracking-[0.15em] text-cyan-200">After / Zo Drive</p><h3 className="mt-2 text-2xl font-semibold text-cyan-50">One private system</h3><ul className="mt-6 divide-y divide-cyan-200/15">{zoFeatures.map((name) => <li className="flex items-center justify-between gap-4 py-3.5" key={name}><span className="font-semibold text-cyan-50">{name}</span><Check aria-label={`${name} included`} size={18} className="shrink-0 text-cyan-200" /></li>)}</ul><div className="mt-6 rounded-xl bg-cyan-950/70 px-4 py-4"><p className="text-xs font-bold uppercase tracking-[0.15em] text-cyan-100/70">Additional SaaS cost</p><p className="mt-2 text-3xl font-semibold tracking-tight text-cyan-50">US$0 <span className="text-lg font-medium text-cyan-100/70">extra / feature</span></p><p className="mt-2 text-sm leading-6 text-cyan-100/70">Included with Zo Drive on your Zo Computer.</p></div></article></div><div className="mt-8 flex flex-wrap items-center gap-4"><a className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200" href={loginUrl()}><HardDrive size={17} /> Use Zo Drive <ArrowUpRight size={16} /></a><p className="text-xs leading-5 text-slate-400">Each comparison above is explained in the matching product section.</p></div></div></section>;
 }
 
 function DocsPage({ mode, page, product }: { mode: "gui" | "cli"; page: "docs" | "changelog"; product: "drive" | "zominai" }) {

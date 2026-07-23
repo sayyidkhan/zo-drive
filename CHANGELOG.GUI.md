@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.41.1 - 2026-07-23
+
+### Changed
+
+- Replaced the landing-page SaaS comparison with the six-subscription versus
+  one-private-suite story, including the US$104+ published-price comparison.
+
 ## v1.41.0 - 2026-07-23
 
 ### Added
