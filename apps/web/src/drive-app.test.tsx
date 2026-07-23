@@ -52,6 +52,19 @@ describe("DriveApp", () => {
     expect(screen.getByLabelText("Zo Drive product stack")).toHaveTextContent("Zo Transfer");
   });
 
+  it("serves the Neumorphic landing concept at landing-page-2", () => {
+    window.history.pushState({}, "", "/landing-page-2");
+    render(<DriveApp />);
+
+    expect(screen.getByRole("heading", { name: "Your cloud has a home." })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Six controls. One console." })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Six bills become one private system." })).toBeInTheDocument();
+    expect(screen.getByLabelText("Regular SaaS products")).toHaveTextContent("WeTransfer Ultimate");
+    expect(screen.getByLabelText("Zo Drive product suite")).toHaveTextContent("ZominAI");
+    expect(screen.getByRole("link", { name: "Open Drive" })).toHaveAttribute("href", expect.stringContaining("?login=1"));
+    expect(screen.getByRole("link", { name: "Open Zo Paste" })).toHaveAttribute("href", expect.stringContaining("section=pastes"));
+  });
+
   it("documents separate GUI and CLI workflows", () => {
     const originalPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
     try {
@@ -66,7 +79,7 @@ describe("DriveApp", () => {
       expect(screen.getByRole("heading", { name: "Run private databases beside your files" })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Automate with Zo Functions" })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Ask about your Drive without granting write access" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 1.40.1" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 1.41.0" })).toBeInTheDocument();
       expect(screen.getByText("Product")).toBeInTheDocument();
       expect(screen.getByRole("navigation", { name: "Choose documentation product" })).toBeInTheDocument();
       expect(screen.getByRole("navigation", { name: "Documentation sections" })).toHaveTextContent("Zo Originals");
@@ -76,7 +89,7 @@ describe("DriveApp", () => {
         expect(modeSwitch).toHaveTextContent("CLI");
       }
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI releases version 1.40.1" })).toHaveAttribute("href", expect.stringContaining("?releases=1&mode=gui"));
+      expect(screen.getByRole("link", { name: "GUI releases version 1.41.0" })).toHaveAttribute("href", expect.stringContaining("?releases=1&mode=gui"));
       expect(screen.queryByRole("heading", { name: "GUI changelog" })).not.toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
 
@@ -114,7 +127,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.40.1")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.41.0")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();

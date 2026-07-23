@@ -71,6 +71,7 @@ import { create } from "zustand";
 
 import { ZoDriveClient } from "@zo-drive/sdk";
 import type { AccountAccess, AccountMember, AccountRole, ApiKeyScope, AuthStatus, ClusterInvitation, ClusterMount, ClusterRole, DatabaseApiKey, DatabaseApiKeyScope, DatabaseEngine, DatabaseEngineId, DatabaseExecuteResult, DatabaseImportSettings, DatabaseRows, DriveApiKey, DriveDatabase, DriveFolder, DriveFunction, DriveFunctionRun, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, FunctionRuntime, FunctionVisibility, NativeFileType, PublicShare, PublishedForm, ShareAccess, StorageUsage } from "@zo-drive/types";
+import { LandingPageTwo } from "./landing-page-two.js";
 
 type DriveClient = Pick<ZoDriveClient, "createApiKey" | "createFolder" | "createNativeFile" | "createShare" | "delete" | "download" | "emptyTrash" | "getUsage" | "list" | "listApiKeys" | "listFolders" | "listFormResponses" | "listShares" | "listStarred" | "listTrash" | "permanentlyDeleteTrash" | "publishForm" | "rename" | "restoreTrash" | "revokeApiKey" | "revokeShare" | "saveNativeFile" | "setQuota" | "star" | "unstar" | "updateSharePasscode" | "upload"> & Partial<Pick<ZoDriveClient, "createClusterFolder" | "createClusterInvitation" | "createClusterMount" | "deleteClusterInvitation" | "deleteClusterMount" | "deleteClusterObject" | "deleteClusterPeer" | "downloadClusterObject" | "getClusterMountAccess" | "listClusterInvitations" | "listClusterMounts" | "listClusterObjects" | "listClusterPeers" | "renameClusterObject" | "updateClusterPeerRole" | "uploadClusterObject" | "createDatabase" | "createDatabaseApiKey" | "deleteDatabase" | "executeDatabase" | "exportDatabase" | "getDatabaseImportSettings" | "importDatabase" | "installDatabaseEngine" | "listDatabaseApiKeys" | "listDatabaseEngines" | "listDatabases" | "listDatabaseRows" | "listDatabaseTables" | "queryDatabase" | "revokeDatabaseApiKey" | "setDatabaseImportLimit" | "updateDatabaseEngine" | "createFunction" | "deleteFunction" | "listFunctions" | "listFunctionRuns" | "runFunction" | "updateFunction" | "deleteFolder" | "renameFolder">>;
 type AuthClient = Pick<ZoDriveClient, "changePassword" | "deleteAccount" | "getAuthStatus" | "login" | "logout" | "registerInitialUser" | "updateProfile">;
@@ -289,11 +290,16 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.40.1";
+const GUI_VERSION = "1.41.0";
 const CLI_VERSION = "1.3.0";
 const ZOMINAI_VERSION = "1.9.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.41.0",
+    date: "2026-07-23",
+    changes: ["Added a separate Neumorphic landing-page concept at /landing-page-2 for testing the six-product Zo Drive story without replacing the current landing page."]
+  },
   {
     version: "v1.40.1",
     date: "2026-07-23",
@@ -947,13 +953,14 @@ export function DriveApp({ client, authClient }: { client?: DriveClient; authCli
   const isDocs = query.get("docs") === "1";
   const isReleases = query.get("releases") === "1";
   const isLogin = query.get("login") === "1";
+  const isLandingPageTwo = window.location.pathname === "/landing-page-2" || window.location.pathname === `${appBasePath}/landing-page-2`;
   // Supplying a client is only used by the embedded test harness. The hosted
   // app defaults to the public landing page until the user chooses Zo Drive.
   const isDrive = query.get("app") === "1" || Boolean(client || authClient);
 
   return (
     <QueryClientProvider client={queryClient}>
-      {formId ? <PublicFormPage client={defaultClient} formId={formId} /> : shareId ? <SharedFilePage client={defaultClient} shareId={shareId} /> : isDocs || isReleases ? <DocsPage mode={query.get("mode") === "cli" ? "cli" : "gui"} page={isReleases || query.get("page") === "changelog" ? "changelog" : "docs"} product={query.get("product") === "zominai" || query.get("mode") === "zominai" ? "zominai" : "drive"} /> : isLogin ? <DriveGate client={driveClient} authClient={sessionClient} /> : isDrive ? <DriveGate client={driveClient} authClient={sessionClient} fallback={query.get("app") === "1" ? <LandingPage /> : undefined} /> : <LandingPage />}
+      {formId ? <PublicFormPage client={defaultClient} formId={formId} /> : shareId ? <SharedFilePage client={defaultClient} shareId={shareId} /> : isLandingPageTwo ? <LandingPageTwo currentLandingUrl={landingUrl()} docsUrl={docsUrl()} driveUrl={driveAppUrl()} loginUrl={loginUrl()} logoCloudUrl={driveCloudLogoUrl} logoPegasusUrl={drivePegasusLogoUrl} /> : isDocs || isReleases ? <DocsPage mode={query.get("mode") === "cli" ? "cli" : "gui"} page={isReleases || query.get("page") === "changelog" ? "changelog" : "docs"} product={query.get("product") === "zominai" || query.get("mode") === "zominai" ? "zominai" : "drive"} /> : isLogin ? <DriveGate client={driveClient} authClient={sessionClient} /> : isDrive ? <DriveGate client={driveClient} authClient={sessionClient} fallback={query.get("app") === "1" ? <LandingPage /> : undefined} /> : <LandingPage />}
       <Toaster position="bottom-right" richColors />
     </QueryClientProvider>
   );

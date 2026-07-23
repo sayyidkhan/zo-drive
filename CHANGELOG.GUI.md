@@ -2,6 +2,14 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.41.0 - 2026-07-23
+
+### Added
+
+- Added a separate Neumorphic landing-page concept at `/landing-page-2` for
+  testing the six-product Zo Drive story without replacing the current landing
+  page.
+
 ## v1.40.1 - 2026-07-23
 
 ### Changed
