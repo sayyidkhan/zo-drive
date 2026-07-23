@@ -2,6 +2,12 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.42.12 - 2026-07-23
+
+### Changed
+
+- Removed the redundant call to action beneath the landing-page SaaS comparison.
+
 ## v1.42.11 - 2026-07-23
 
 ### Changed
