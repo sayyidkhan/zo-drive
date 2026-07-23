@@ -27,26 +27,17 @@ describe("DriveApp", () => {
     expect(screen.getByRole("link", { name: "Sign in to Zo Drive" })).toHaveAttribute("href", expect.stringContaining("?login=1"));
     expect(screen.getByRole("link", { name: "Read the docs" })).toHaveAttribute("href", expect.stringContaining("?docs=1"));
     expect(screen.getByText("Zo Drive SaaS Killer Features")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Every capability earns its place beside your data." })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Explore Zo Paste" })).toHaveAttribute("href", expect.stringContaining("section=pastes"));
-    expect(screen.getByRole("link", { name: "Explore Zo Transfer" })).toHaveAttribute("href", expect.stringContaining("section=transfer"));
-    expect(screen.getByRole("link", { name: "Explore Zo Shared Drives" })).toHaveAttribute("href", expect.stringContaining("section=cluster-databases"));
-    expect(screen.getByRole("link", { name: "Explore Zo Databases" })).toHaveAttribute("href", expect.stringContaining("section=databases"));
-    expect(screen.getByRole("link", { name: "Explore Zo Functions" })).toHaveAttribute("href", expect.stringContaining("section=functions"));
-    expect(screen.getByRole("link", { name: "Explore ZominAI" })).toHaveAttribute("href", expect.stringContaining("section=zominai"));
-    expect(screen.getByRole("link", { name: "Open Zo Functions" })).toHaveAttribute("href", expect.stringContaining("section=functions"));
-    expect(screen.getByRole("link", { name: "Open Zo Databases" })).toHaveAttribute("href", expect.stringContaining("section=databases"));
-    expect(screen.getByRole("link", { name: "Open Zo Shared Drives" })).toHaveAttribute("href", expect.stringContaining("section=cluster-databases"));
-    expect(screen.getByRole("link", { name: "Open ZominAI" })).toHaveAttribute("href", expect.stringContaining("section=zominai"));
-    expect(screen.getByRole("link", { name: "Open Zo Functions" })).not.toHaveClass("col-span-2");
-    expect(screen.getByRole("link", { name: "Open Zo Databases" })).not.toHaveClass("col-span-2");
-    expect(screen.getAllByRole("tab", { name: "GUI version" })).toHaveLength(6);
-    expect(screen.getAllByRole("tab", { name: "Cost comparison" })).toHaveLength(6);
-    expect(screen.getByRole("tab", { name: "CLI boundary" })).toBeInTheDocument();
-    fireEvent.click(screen.getAllByRole("tab", { name: "Cost comparison" })[0]!);
+    expect(screen.getByRole("heading", { name: "Six focused products. One calm system." })).toBeInTheDocument();
+    expect(screen.getByLabelText("Zo Drive product suite")).toHaveTextContent("Zo Shared Drives");
+    expect(within(screen.getByLabelText("Zo Drive product suite")).getByRole("link", { name: "Open Zo Databases" })).toHaveAttribute("href", expect.stringContaining("section=databases"));
+    expect(screen.getAllByRole("tab", { name: "GUI version" })).toHaveLength(1);
+    expect(screen.getAllByRole("tab", { name: "Cost comparison" })).toHaveLength(1);
+    fireEvent.click(screen.getByLabelText("Select Zo Paste"));
+    fireEvent.click(screen.getByRole("tab", { name: "Cost comparison" }));
     expect(screen.getByText("Existing SaaS")).toBeInTheDocument();
     expect(screen.getByLabelText("Zo Paste monthly cost saving")).toHaveTextContent("Avoid another subscription");
-    fireEvent.click(screen.getAllByRole("tab", { name: "Cost comparison" })[1]!);
+    fireEvent.click(screen.getByLabelText("Select Zo Transfer"));
+    fireEvent.click(screen.getByRole("tab", { name: "Cost comparison" }));
     expect(screen.getByLabelText("Zo Transfer monthly cost saving")).toHaveTextContent("Save US$25/month");
     expect(within(screen.getByLabelText("Zo Transfer feature views")).getByText("WeTransfer Ultimate")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Six subscriptions become one private suite." })).toBeInTheDocument();
@@ -102,7 +93,7 @@ describe("DriveApp", () => {
       expect(screen.getByRole("heading", { name: "Run private databases beside your files" })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Automate with Zo Functions" })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Ask about your Drive without granting write access" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 1.41.6" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 1.42.0" })).toBeInTheDocument();
       expect(screen.getByText("Product")).toBeInTheDocument();
       expect(screen.getByRole("navigation", { name: "Choose documentation product" })).toBeInTheDocument();
       expect(screen.getByRole("navigation", { name: "Documentation sections" })).toHaveTextContent("Zo Originals");
@@ -112,7 +103,7 @@ describe("DriveApp", () => {
         expect(modeSwitch).toHaveTextContent("CLI");
       }
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI releases version 1.41.6" })).toHaveAttribute("href", expect.stringContaining("?releases=1&mode=gui"));
+      expect(screen.getByRole("link", { name: "GUI releases version 1.42.0" })).toHaveAttribute("href", expect.stringContaining("?releases=1&mode=gui"));
       expect(screen.queryByRole("heading", { name: "GUI changelog" })).not.toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
 
@@ -150,7 +141,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.41.6")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.42.0")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();

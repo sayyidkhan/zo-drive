@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.42.0 - 2026-07-23
+
+### Changed
+
+- Rebuilt the six-product landing experience as one compact selectable suite
+  while retaining each product's GUI, CLI, and cost comparison views.
+
 ## v1.41.6 - 2026-07-23
 
 ### Changed

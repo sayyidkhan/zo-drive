@@ -292,11 +292,16 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.41.6";
+const GUI_VERSION = "1.42.0";
 const CLI_VERSION = "1.3.0";
 const ZOMINAI_VERSION = "1.9.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.42.0",
+    date: "2026-07-23",
+    changes: ["Rebuilt the six-product landing experience as one compact selectable suite while retaining each product's GUI, CLI, and cost comparison views."]
+  },
   {
     version: "v1.41.6",
     date: "2026-07-23",
@@ -1093,6 +1098,8 @@ function OwnershipAdvantage() {
 }
 
 function KillerFeatureStories() {
+  return <ProductSuite />;
+
   const features = [
     { eyebrow: "Zo Functions", title: "Automations that live beside your data.", body: "Write a JavaScript or Python handler beside your data, run it manually or on a UTC schedule, and expose it only when you deliberately choose to.", benefits: ["Private or deliberate public endpoints", "UTC cron schedules and visible run history"], href: `${driveAppUrl()}&section=functions`, cta: "Explore Zo Functions", icon: <Terminal size={20} />, file: "weekly-report.js", command: "zo-drive function create --name weekly-report --source-file ./weekly-report.js", lines: ["Private JavaScript function created", "Schedule: 0 9 * * 1 UTC", "Ready to run or invoke"], accent: "cyan" },
     { eyebrow: "Zo Paste", title: "Share notes and code with control.", body: "Create a private text paste, then share exactly that note or snippet without exposing the rest of your Drive.", benefits: ["View-only or editable links", "Passcode, expiry, and revocation"], href: `${driveAppUrl()}&section=pastes`, cta: "Explore Zo Paste", icon: <Code2 size={20} />, file: "launch-notes.md", command: "zo-drive paste create launch-notes.md --editable", lines: ["Creating private paste…", "Link access: editable", "Passcode protection enabled"], accent: "cyan" },
@@ -1142,6 +1149,22 @@ function KillerFeatureStories() {
       </div>
     </div>
   </section>;
+}
+
+function ProductSuite() {
+  const products = [
+    { name: "Zo Paste", verb: "Publish", title: "Share notes and code with control.", body: "Create a private text paste, then share exactly that note or snippet without exposing the rest of your Drive.", href: `${driveAppUrl()}&section=pastes`, cta: "Open Zo Paste", icon: <Code2 size={20} />, file: "launch-notes.md", command: "zo-drive paste create launch-notes.md --editable", lines: ["Creating private paste…", "Link access: editable", "Passcode protection enabled"], tone: "cyan" },
+    { name: "Zo Transfer", verb: "Deliver", title: "Deliver files without opening a folder.", body: "Send a purpose-built delivery link with passcodes, expiry and revocation controls.", href: `${driveAppUrl()}&section=transfer`, cta: "Open Zo Transfer", icon: <Send size={20} />, file: "launch-brief.pdf", command: "zo-drive transfer create launch-brief.pdf --expires 7d", lines: ["Preparing delivery link…", "Access: passcode protected", "Expires in 7 days"], tone: "blue" },
+    { name: "Zo Functions", verb: "Automate", title: "Automations that live beside your data.", body: "Write JavaScript or Python handlers beside your files, then run them manually or on a schedule.", href: `${driveAppUrl()}&section=functions`, cta: "Open Zo Functions", icon: <Terminal size={20} />, file: "weekly-report.js", command: "zo-drive function create --name weekly-report --source-file ./weekly-report.js", lines: ["Private JavaScript function created", "Schedule: 0 9 * * 1 UTC", "Ready to run or invoke"], tone: "cyan" },
+    { name: "Zo Databases", verb: "Build", title: "Persistent data without another cloud account.", body: "Install supported database runtimes, create private instances and issue scoped credentials from one workspace.", href: `${driveAppUrl()}&section=databases&databaseView=catalog`, cta: "Open Zo Databases", icon: <Database size={20} />, file: "product.sqlite", command: "zo-drive database create product --engine sqlite", lines: ["SQLite runtime ready", "Private database created", "Scoped access key issued"], tone: "emerald" },
+    { name: "Zo Shared Drives", verb: "Collaborate", title: "Collaborate without making copies.", body: "Share selected folders as live remote mounts while the source stays under your control.", href: `${driveAppUrl()}&section=cluster-databases`, cta: "Open Zo Shared Drives", icon: <Network size={20} />, file: "Research / shared", command: "zo-drive shared invite Research --role editor", lines: ["Pairing key created", "Role: Read & write", "Source folder stays live"], tone: "cyan" },
+    { name: "ZominAI", verb: "Understand", title: "Ask your Drive. Keep the write boundary.", body: "Use a local model to understand Drive context and supported databases without granting write access.", href: `${driveAppUrl()}&section=zominai`, cta: "Open ZominAI", icon: <Cpu size={20} />, file: "ZominAI · local", command: "What changed in Product/Launch?", lines: ["Searching Product/Launch…", "Reading 4 supported files", "Ready with a sourced answer"], tone: "amber" }
+  ];
+  const [selectedIndex, setSelectedIndex] = useState(3);
+  const selected = products[selectedIndex]!;
+  const tone = selected.tone === "emerald" ? "from-emerald-950 to-[#103a35]" : selected.tone === "amber" ? "from-amber-950 to-[#49331d]" : selected.tone === "blue" ? "from-blue-950 to-[#1b3f71]" : "from-cyan-950 to-[#123c47]";
+
+  return <section aria-label="Zo Drive product suite" className="order-20 bg-[#101410] py-20 text-white sm:py-24" id="killer-features"><div className="mx-auto max-w-7xl px-5 sm:px-8"><div className="grid gap-8 border-b border-white/10 pb-12 lg:grid-cols-[1.2fr_.8fr] lg:items-end"><div><p className="text-sm font-bold uppercase tracking-[0.15em] text-emerald-200">The Zo Drive suite</p><h2 className="mt-4 text-5xl font-semibold leading-[.92] tracking-[-0.065em] sm:text-7xl">Six focused products.<span className="block font-serif font-normal italic text-emerald-200">One calm system.</span></h2></div><p className="max-w-xl text-base leading-7 text-white/65">Move from publishing to delivery, automation, data, collaboration and AI without moving your work between vendors.</p></div><div className="mt-12 grid gap-8 lg:grid-cols-[.8fr_1.2fr]"><div className="divide-y divide-white/10 border-y border-white/10">{products.map((product, index) => <button aria-pressed={selectedIndex === index} aria-label={`Select ${product.name}`} className={`flex w-full items-center gap-4 px-0 py-5 text-left transition ${selectedIndex === index ? "text-emerald-200" : "text-white/65 hover:text-white"}`} key={product.name} onClick={() => setSelectedIndex(index)} type="button"><span className="w-6 font-mono text-xs font-semibold">{String(index + 1).padStart(2, "0")}</span><span className="flex-1 text-lg font-semibold">{product.name}</span><span className="text-xs font-bold uppercase tracking-[.13em]">{product.verb}</span></button>)}</div><article className={`overflow-hidden rounded-[2rem] bg-gradient-to-br ${tone} p-6 shadow-2xl shadow-black/20 sm:p-9`}><div className="flex items-start justify-between gap-5"><span className="grid size-14 place-items-center rounded-2xl bg-white/10 text-emerald-200">{selected.icon}</span><span className="rounded-full border border-white/15 px-3 py-1 text-xs font-bold uppercase tracking-[.14em] text-white/70">{selected.verb}</span></div><p className="mt-10 text-sm font-bold uppercase tracking-[.15em] text-emerald-200">{selected.name}</p><h3 className="mt-4 max-w-2xl text-4xl font-semibold leading-[.98] tracking-[-.05em] sm:text-5xl">{selected.title}</h3><p className="mt-5 max-w-2xl text-base leading-7 text-white/70">{selected.body}</p><div className="mt-8"><FeatureShowcase command={selected.command} file={selected.file} lines={selected.lines} product={selected.name} /></div><a className="mt-7 inline-flex items-center gap-2 text-sm font-bold uppercase tracking-[.13em] text-emerald-200 hover:text-white" href={selected.href}>{selected.cta} <ArrowUpRight size={16} /></a></article></div></div></section>;
 }
 
 type FeatureSurfaceTab = "gui" | "cli" | "cost";
