@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.42.11 - 2026-07-23
+
+### Changed
+
+- Redesigned the landing GUI and CLI comparison as one unified, balanced
+  two-column workspace.
+
 ## v1.42.10 - 2026-07-23
 
 ### Changed
