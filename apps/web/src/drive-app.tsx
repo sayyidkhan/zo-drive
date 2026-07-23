@@ -1067,8 +1067,6 @@ function LandingPage() {
       </section>
     </div>
 
-    <ZoDriveClosingCta />
-
     <section className="mx-auto grid max-w-7xl gap-8 px-5 py-20 sm:px-8 lg:grid-cols-[1fr_.9fr] lg:items-center"><div><p className="text-sm font-bold uppercase tracking-[0.15em] text-blue-600">Bring your own workflow</p><h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">Your storage, accessible your way.</h2><p className="mt-4 max-w-xl text-base leading-7 text-slate-600">The browser experience is built for everyday file work. The bundled command-line tool and TypeScript SDK let your own machines send files directly into the same private Drive.</p><a className="mt-6 inline-flex items-center gap-2 text-sm font-bold text-blue-700 hover:text-blue-900" href={docsUrl()}>See upload guides <ArrowUpRight size={16} /></a></div><div className="rounded-2xl bg-slate-950 p-5 shadow-xl shadow-slate-900/15 sm:p-7"><div className="flex items-center gap-2 text-xs font-semibold text-slate-400"><Terminal size={16} /> Terminal</div><pre className="mt-5 overflow-x-auto text-sm leading-7 text-slate-200"><code><span className="text-cyan-300">zo-drive</span> upload ./launch-plan.pdf <span className="text-amber-300">--path</span> Product/Launch{`\n\n`}<span className="text-slate-500"># Uploaded Product/Launch/launch-plan.pdf</span></code></pre></div></section>
 
     <section className="border-y border-slate-200 bg-white py-20 sm:py-24"><div className="mx-auto max-w-7xl px-5 sm:px-8"><div className="max-w-2xl"><p className="text-sm font-bold uppercase tracking-[0.15em] text-blue-600">The Zo Drive edge</p><h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">A decentralised cloud, not another rented file bucket.</h2><p className="mt-4 text-base leading-7 text-slate-600">Keep the convenience of cloud storage while keeping the storage itself on the machine you control.</p></div><div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{features.map((feature) => <article className="rounded-2xl border border-slate-200 bg-[#f9fbfc] p-6" key={feature.title}><span className="grid size-10 place-items-center rounded-xl bg-blue-100 text-blue-700">{feature.icon}</span><h3 className="mt-5 font-semibold text-slate-950">{feature.title}</h3><p className="mt-2 text-sm leading-6 text-slate-600">{feature.copy}</p></article>)}</div></div></section>
@@ -1078,6 +1076,7 @@ function LandingPage() {
     <KillerFeatureStories />
     <ZoDriveComparisonCta />
     <OwnershipAdvantage />
+    <ZoDriveClosingCta />
 
     <footer className="border-t border-slate-200 bg-white"><div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-7 text-sm text-slate-500 sm:px-8"><DriveMark compact /><span>Your decentralised cloud on Zo.</span><a className="font-semibold text-slate-600 hover:text-blue-700" href={docsUrl()}>Documentation</a></div></footer>
   </main>;
