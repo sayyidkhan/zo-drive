@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.41.2 - 2026-07-23
+
+### Changed
+
+- Added itemised monthly SaaS prices beside each six-product comparison row and
+  showed US$0 for every matching Zo Drive feature.
+
 ## v1.41.1 - 2026-07-23
 
 ### Changed
