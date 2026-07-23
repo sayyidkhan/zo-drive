@@ -292,11 +292,16 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.42.9";
+const GUI_VERSION = "1.42.10";
 const CLI_VERSION = "1.3.0";
 const ZOMINAI_VERSION = "1.9.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.42.10",
+    date: "2026-07-23",
+    changes: ["Updated the landing hero to Own the cloud. Keep the leverage. with ownership-focused supporting copy."],
+  },
   {
     version: "v1.42.9",
     date: "2026-07-23",
@@ -1091,8 +1096,8 @@ function LandingPage() {
       <section className="mx-auto grid max-w-7xl items-center gap-12 px-5 pb-20 pt-16 sm:px-8 lg:grid-cols-[1.05fr_.95fr] lg:pb-32 lg:pt-24">
         <div>
           <span className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white/75 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.14em] text-sky-800"><Cloud size={14} /> Decentralised cloud, on your Zo</span>
-          <h1 className="mt-6 max-w-3xl text-5xl font-semibold leading-[1.02] tracking-[-0.05em] text-slate-950 sm:text-6xl lg:text-7xl">Your cloud should live with you.</h1>
-          <p className="mt-6 max-w-xl text-lg leading-8 text-slate-600">Zo Drive is decentralised cloud storage for the files you own: a private workspace running on your Zo machine, with folders, native tools and sharing under your control.</p>
+          <h1 className="mt-6 max-w-3xl text-5xl font-semibold leading-[1.02] tracking-[-0.05em] text-slate-950 sm:text-6xl lg:text-7xl">Own the <span className="font-serif font-normal italic text-emerald-950">cloud.</span><br />Keep the <span className="text-orange-500">leverage.</span></h1>
+          <p className="mt-6 max-w-xl text-lg leading-8 text-slate-600">Keep your files, products and workflows on the Zo Computer you control, with the custody and portability to build, share and automate on your own terms.</p>
           <div className="mt-8 flex flex-wrap gap-3">
             <a className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:bg-blue-700" href={loginUrl()}><HardDrive size={18} /> Sign in to Zo Drive</a>
             <a className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50" href={docsUrl()}>Read the docs <ArrowUpRight size={17} /></a>

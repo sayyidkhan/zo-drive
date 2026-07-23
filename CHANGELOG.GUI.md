@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.42.10 - 2026-07-23
+
+### Changed
+
+- Updated the landing hero to “Own the cloud. Keep the leverage.” with
+  ownership-focused supporting copy.
+
 ## v1.42.9 - 2026-07-23
 
 ### Changed
