@@ -2,6 +2,12 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.42.5 - 2026-07-23
+
+### Changed
+
+- Moved the ownership advantage panel directly below the landing-page hero.
+
 ## v1.42.4 - 2026-07-23
 
 ### Fixed
