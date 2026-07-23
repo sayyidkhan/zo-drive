@@ -292,11 +292,16 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.42.3";
+const GUI_VERSION = "1.42.4";
 const CLI_VERSION = "1.3.0";
 const ZOMINAI_VERSION = "1.9.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.42.4",
+    date: "2026-07-23",
+    changes: ["Restored the dark six-product showcase and its Zo Functions GUI while keeping the redundant standalone preview hidden."]
+  },
   {
     version: "v1.42.3",
     date: "2026-07-23",
@@ -1045,7 +1050,7 @@ function DriveModeSwitch({ guiHref = docsUrl("gui"), mode, page = "docs" }: { gu
 
 function LandingPage() {
   useEffect(() => {
-    const standaloneFunctions = document.querySelector<HTMLElement>("main > section:nth-of-type(3)");
+    const standaloneFunctions = Array.from(document.querySelectorAll<HTMLElement>("main > section")).find((section) => section.querySelector("h2")?.textContent?.includes("Automations that live beside your data."));
     standaloneFunctions?.classList.add("hidden");
     return () => standaloneFunctions?.classList.remove("hidden");
   }, []);

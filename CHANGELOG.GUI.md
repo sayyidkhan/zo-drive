@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.42.4 - 2026-07-23
+
+### Fixed
+
+- Restored the dark six-product showcase and its Zo Functions GUI while
+  keeping the redundant standalone preview hidden.
+
 ## v1.42.3 - 2026-07-23
 
 ### Changed
