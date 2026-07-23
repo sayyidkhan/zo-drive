@@ -2,6 +2,12 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.42.7 - 2026-07-23
+
+### Changed
+
+- Simplified the landing hero access label to GUI & CLI Access.
+
 ## v1.42.6 - 2026-07-23
 
 ### Fixed

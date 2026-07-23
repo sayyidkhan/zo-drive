@@ -292,11 +292,16 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.42.6";
+const GUI_VERSION = "1.42.7";
 const CLI_VERSION = "1.3.0";
 const ZOMINAI_VERSION = "1.9.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.42.7",
+    date: "2026-07-23",
+    changes: ["Simplified the landing hero access label to GUI & CLI Access."],
+  },
   {
     version: "v1.42.6",
     date: "2026-07-23",
@@ -1082,7 +1087,7 @@ function LandingPage() {
             <a className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:bg-blue-700" href={loginUrl()}><HardDrive size={18} /> Sign in to Zo Drive</a>
             <a className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50" href={docsUrl()}>Read the docs <ArrowUpRight size={17} /></a>
           </div>
-          <div className="mt-10 flex flex-wrap gap-x-6 gap-y-3 text-sm font-medium text-slate-600"><span className="inline-flex items-center gap-2"><Check size={16} className="text-blue-600" /> Data stays on your Zo</span><span className="inline-flex items-center gap-2"><Check size={16} className="text-blue-600" /> Folder-preserving uploads</span><span className="inline-flex items-center gap-2"><Check size={16} className="text-blue-600" /> GUI, CLI and SDK access</span></div>
+          <div className="mt-10 flex flex-wrap gap-x-6 gap-y-3 text-sm font-medium text-slate-600"><span className="inline-flex items-center gap-2"><Check size={16} className="text-blue-600" /> Data stays on your Zo</span><span className="inline-flex items-center gap-2"><Check size={16} className="text-blue-600" /> Folder-preserving uploads</span><span className="inline-flex items-center gap-2"><Check size={16} className="text-blue-600" /> GUI &amp; CLI Access</span></div>
         </div>
 
         <div className="relative mx-auto w-full max-w-xl">
