@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.42.6 - 2026-07-23
+
+### Fixed
+
+- Restored the timed Zo Functions product tabs and added product-specific GUI
+  previews for all six suite products.
+
 ## v1.42.5 - 2026-07-23
 
 ### Changed

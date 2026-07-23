@@ -43,6 +43,19 @@ describe("DriveApp", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Cost comparison" }));
     expect(screen.getByLabelText("Zo Transfer monthly cost saving")).toHaveTextContent("Save US$25/month");
     expect(within(screen.getByLabelText("Zo Transfer feature views")).getByText("WeTransfer Ultimate")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Select Zo Paste"));
+    expect(screen.getByText("launch-notes.md")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Select Zo Transfer"));
+    expect(screen.getByText("launch-brief.pdf")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Select Zo Functions"));
+    expect(within(screen.getByLabelText("Zo Functions feature views")).getByText("Every Monday, 09:00 UTC")).toBeInTheDocument();
+    expect(screen.getByLabelText("Next feature view in 5 seconds")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Select Zo Databases"));
+    expect(screen.getByText("product.sqlite")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Select Zo Shared Drives"));
+    expect(screen.getByText("Amira")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Select ZominAI"));
+    expect(screen.getByText("Read-only Drive tools")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Six subscriptions become one private suite." })).toBeInTheDocument();
     expect(screen.getByLabelText("Fragmented SaaS subscriptions")).toHaveTextContent("US$104+");
     expect(screen.getByLabelText("Fragmented SaaS subscriptions")).toHaveTextContent("US$25 / month");
@@ -96,7 +109,7 @@ describe("DriveApp", () => {
       expect(screen.getByRole("heading", { name: "Run private databases beside your files" })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Automate with Zo Functions" })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Ask about your Drive without granting write access" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 1.42.5" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 1.42.6" })).toBeInTheDocument();
       expect(screen.getByText("Product")).toBeInTheDocument();
       expect(screen.getByRole("navigation", { name: "Choose documentation product" })).toBeInTheDocument();
       expect(screen.getByRole("navigation", { name: "Documentation sections" })).toHaveTextContent("Zo Originals");
@@ -106,7 +119,7 @@ describe("DriveApp", () => {
         expect(modeSwitch).toHaveTextContent("CLI");
       }
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI releases version 1.42.5" })).toHaveAttribute("href", expect.stringContaining("?releases=1&mode=gui"));
+      expect(screen.getByRole("link", { name: "GUI releases version 1.42.6" })).toHaveAttribute("href", expect.stringContaining("?releases=1&mode=gui"));
       expect(screen.queryByRole("heading", { name: "GUI changelog" })).not.toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
 
@@ -144,7 +157,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.42.5")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.42.6")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();
