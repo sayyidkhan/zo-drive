@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.42.15 - 2026-07-23
+
+### Added
+
+- Added a landing-page section explaining remote local-machine access to Zo
+  Drive through the CLI.
+
 ## v1.42.14 - 2026-07-23
 
 ### Changed
