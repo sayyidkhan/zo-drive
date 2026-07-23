@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.39.1 - 2026-07-23
+
+### Changed
+
+- Enlarged the ZominAI Pegasus in the empty chat state so the product identity
+  is more prominent when a new conversation opens.
+
 ## v1.39.0 - 2026-07-23
 
 ### Added

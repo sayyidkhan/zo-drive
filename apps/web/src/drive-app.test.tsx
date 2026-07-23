@@ -55,7 +55,7 @@ describe("DriveApp", () => {
       expect(screen.getByRole("heading", { name: "Run private databases beside your files" })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Automate with Zo Functions" })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Ask about your Drive without granting write access" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 1.39.0" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 1.39.1" })).toBeInTheDocument();
       expect(screen.getByText("Product")).toBeInTheDocument();
       expect(screen.getByRole("navigation", { name: "Choose documentation product" })).toBeInTheDocument();
       expect(screen.getByRole("navigation", { name: "Documentation sections" })).toHaveTextContent("Zo Originals");
@@ -65,7 +65,7 @@ describe("DriveApp", () => {
         expect(modeSwitch).toHaveTextContent("CLI");
       }
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI releases version 1.39.0" })).toHaveAttribute("href", expect.stringContaining("?releases=1&mode=gui"));
+      expect(screen.getByRole("link", { name: "GUI releases version 1.39.1" })).toHaveAttribute("href", expect.stringContaining("?releases=1&mode=gui"));
       expect(screen.queryByRole("heading", { name: "GUI changelog" })).not.toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
 
@@ -103,7 +103,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.39.0")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.39.1")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();
@@ -401,6 +401,7 @@ describe("DriveApp", () => {
     await act(async () => finishFirstWarmup());
     expect(await screen.findByLabelText("ZominAI ready")).toBeInTheDocument();
     expect(screen.getAllByAltText("ZominAI Pegasus")).toHaveLength(2);
+    expect(within(screen.getByLabelText("ZominAI conversation")).getByAltText("ZominAI Pegasus")).toHaveClass("size-20", "rounded-3xl");
     expect(fetchSpy).toHaveBeenCalledWith("http://localhost:3000/zominai/warmup", expect.objectContaining({ body: JSON.stringify({ model: "Bonsai-8B-Q1_0.gguf" }), method: "POST" }));
     const modelSelector = screen.getByRole("combobox", { name: "ZominAI model" });
     expect(modelSelector).toHaveValue("Bonsai-8B-Q1_0.gguf");
