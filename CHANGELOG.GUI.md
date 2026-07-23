@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.42.13 - 2026-07-23
+
+### Changed
+
+- Simplified the landing-page My Drive preview with compact folders and
+  built-in tool shortcuts.
+
 ## v1.42.12 - 2026-07-23
 
 ### Changed
