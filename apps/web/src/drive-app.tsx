@@ -292,11 +292,16 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.42.2";
+const GUI_VERSION = "1.42.3";
 const CLI_VERSION = "1.3.0";
 const ZOMINAI_VERSION = "1.9.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.42.3",
+    date: "2026-07-23",
+    changes: ["Moved the four Zo Drive edge messages into the numbered ownership panel, keeping every icon and adding a fourth card."]
+  },
   {
     version: "v1.42.2",
     date: "2026-07-23",
@@ -1096,12 +1101,13 @@ function LandingPage() {
 
 function OwnershipAdvantage() {
   const benefits = [
-    { number: "01", icon: <HardDrive size={21} />, title: "Keep the source", body: "Your files and product data remain on the Zo Computer you control." },
-    { number: "02", icon: <Share2 size={21} />, title: "Open with intent", body: "Share one paste, one transfer or one folder without opening the entire estate." },
-    { number: "03", icon: <Network size={21} />, title: "Compound the stack", body: "Every new workflow starts beside your existing files, functions and databases." }
+    { number: "01", icon: <HardDrive size={21} />, title: "Storage you control", body: "Your Drive data lives on your Zo machine, not inside a conventional centralised file silo." },
+    { number: "02", icon: <MonitorUp size={21} />, title: "Your machine, every workflow", body: "Use the browser, command line or TypeScript SDK to work with the same private storage." },
+    { number: "03", icon: <LockKeyhole size={21} />, title: "Private by default", body: "Your workspace stays private until you deliberately create a share link." },
+    { number: "04", icon: <Send size={21} />, title: "Share on your terms", body: "Use Zo Transfer for public or passcode-protected links with expiry controls." }
   ];
 
-  return <section aria-label="The ownership advantage" className="bg-[#fcfaf6] py-20 sm:py-28"><div className="mx-auto max-w-7xl px-5 sm:px-8"><div className="grid gap-8 lg:grid-cols-[.38fr_1fr] lg:items-end"><p className="text-sm font-bold uppercase tracking-[0.15em] text-orange-500">The ownership advantage</p><h2 className="max-w-5xl text-4xl font-semibold leading-[0.98] tracking-[-0.06em] text-[#121512] sm:text-6xl lg:text-7xl">A cloud should increase your <span className="font-serif font-normal italic text-emerald-950">agency,</span> not your dependency.</h2></div><div className="mt-12 grid overflow-hidden rounded-[1.7rem] border border-[#ebe7df] bg-[#f4f1eb] sm:grid-cols-3">{benefits.map((benefit) => <article className="min-h-64 border-b border-[#e4dfd6] p-6 last:border-b-0 sm:min-h-72 sm:border-b-0 sm:border-r sm:p-9 sm:last:border-r-0" key={benefit.number}><div className="flex items-start justify-between gap-4"><p className="font-serif text-4xl italic text-orange-500">{benefit.number}</p><span className="grid size-11 place-items-center rounded-2xl bg-blue-100 text-blue-700">{benefit.icon}</span></div><h3 className="mt-12 text-xl font-semibold tracking-tight text-[#202220]">{benefit.title}</h3><p className="mt-4 max-w-sm text-sm leading-6 text-stone-600">{benefit.body}</p></article>)}</div></div></section>;
+  return <section aria-label="The ownership advantage" className="bg-[#fcfaf6] py-20 sm:py-28"><div className="mx-auto max-w-7xl px-5 sm:px-8"><div className="grid gap-8 lg:grid-cols-[.38fr_1fr] lg:items-end"><p className="text-sm font-bold uppercase tracking-[0.15em] text-orange-500">The ownership advantage</p><h2 className="max-w-5xl text-4xl font-semibold leading-[0.98] tracking-[-0.06em] text-[#121512] sm:text-6xl lg:text-7xl">A cloud should increase your <span className="font-serif font-normal italic text-emerald-950">agency,</span> not your dependency.</h2></div><div className="mt-12 grid overflow-hidden rounded-[1.7rem] border border-[#ebe7df] bg-[#f4f1eb] sm:grid-cols-2 lg:grid-cols-4">{benefits.map((benefit) => <article className="min-h-64 border-b border-[#e4dfd6] p-6 last:border-b-0 sm:min-h-72 sm:border-b-0 sm:border-r sm:even:border-r-0 sm:p-9 lg:even:border-r lg:last:border-r-0" key={benefit.number}><div className="flex items-start justify-between gap-4"><p className="font-serif text-4xl italic text-orange-500">{benefit.number}</p><span className="grid size-11 place-items-center rounded-2xl bg-blue-100 text-blue-700">{benefit.icon}</span></div><h3 className="mt-12 text-xl font-semibold tracking-tight text-[#202220]">{benefit.title}</h3><p className="mt-4 max-w-sm text-sm leading-6 text-stone-600">{benefit.body}</p></article>)}</div></div></section>;
 }
 
 function KillerFeatureStories() {

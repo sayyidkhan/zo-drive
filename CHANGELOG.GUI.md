@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.42.3 - 2026-07-23
+
+### Changed
+
+- Moved the four Zo Drive edge messages into the numbered ownership panel,
+  keeping every icon and adding a fourth card.
+
 ## v1.42.2 - 2026-07-23
 
 ### Changed
