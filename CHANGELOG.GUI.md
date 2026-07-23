@@ -2,6 +2,29 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.40.1 - 2026-07-23
+
+### Changed
+
+- Reframed the landing-page conclusion as a direct two-column comparison of
+  six fragmented SaaS products versus the six integrated Zo Drive features.
+
+## v1.40.0 - 2026-07-23
+
+### Added
+
+- Made ZominAI retrieve the current recursive Drive inventory before answering
+  file ranking, comparison, listing, and aggregate questions.
+- Added computed largest, smallest, newest, oldest, file-count, and total-size
+  summaries so the local model answers from exact metadata instead of guessing.
+
+## v1.39.2 - 2026-07-23
+
+### Fixed
+
+- Corrected the Zo Transfer comparison to show WeTransfer Ultimate's current
+  US$25 monthly price and the matching monthly saving.
+
 ## v1.39.1 - 2026-07-23
 
 ### Changed

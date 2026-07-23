@@ -3,6 +3,16 @@
 All notable changes to ZominAI are recorded here. ZominAI follows its own
 semantic-versioned release track, independent of the Zo Drive GUI and CLI.
 
+## v1.9.0 - 2026-07-23
+
+### Added
+
+- Added deterministic recursive Drive inventory retrieval for file ranking,
+  comparison, listing, and aggregate questions.
+- Added exact largest, smallest, newest, oldest, file-count, and total-size
+  summaries plus sortable bounded file metadata for more reliable local-model
+  answers.
+
 ## v1.8.0 - 2026-07-23
 
 ### Added

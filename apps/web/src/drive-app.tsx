@@ -98,6 +98,8 @@ type RecentFilters = {
   type: AdvancedFileType | "any";
 };
 
+type SharedWorkspaceTab = "incoming" | "links";
+
 type SharedDriveFile = DriveObject & {
   mountAuthor: string | null;
   mountFolder: string;
@@ -287,11 +289,26 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.39.1";
+const GUI_VERSION = "1.40.1";
 const CLI_VERSION = "1.3.0";
-const ZOMINAI_VERSION = "1.8.0";
+const ZOMINAI_VERSION = "1.9.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.40.1",
+    date: "2026-07-23",
+    changes: ["Reframed the landing-page conclusion as a direct two-column comparison of six fragmented SaaS products versus the six integrated Zo Drive features."]
+  },
+  {
+    version: "v1.40.0",
+    date: "2026-07-23",
+    changes: ["Made ZominAI reliably inspect the current recursive Drive inventory before answering file ranking, comparison, and aggregate questions.", "Added computed largest, smallest, newest, oldest, and total-size summaries so the local model answers from exact metadata instead of guessing."]
+  },
+  {
+    version: "v1.39.2",
+    date: "2026-07-23",
+    changes: ["Corrected the Zo Transfer comparison to show WeTransfer Ultimate's current US$25 monthly price and the matching monthly saving."]
+  },
   {
     version: "v1.39.1",
     date: "2026-07-23",
@@ -842,6 +859,11 @@ const CLI_CHANGELOG = [
 
 const ZOMINAI_CHANGELOG = [
   {
+    version: "v1.9.0",
+    date: "2026-07-23",
+    changes: ["Added deterministic recursive Drive inventory retrieval for file ranking, comparison, listing, and aggregate questions.", "Added exact largest, smallest, newest, oldest, file-count, and total-size summaries plus sortable bounded file metadata for more reliable local-model answers."]
+  },
+  {
     version: "v1.8.0",
     date: "2026-07-23",
     changes: ["Added an authenticated one-token warm-up request when chat opens so the selected local model is ready before the first user message.", "Added rotating rainbow Pegasus warm-up messages, an explicit Ready state, and retryable warm-up failures."]
@@ -1012,6 +1034,7 @@ function LandingPage() {
     <section className="mx-auto grid max-w-7xl gap-8 px-5 py-20 sm:px-8 lg:grid-cols-[1fr_.9fr] lg:items-center"><div><p className="text-sm font-bold uppercase tracking-[0.15em] text-blue-600">Bring your own workflow</p><h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">Your storage, accessible your way.</h2><p className="mt-4 max-w-xl text-base leading-7 text-slate-600">The browser experience is built for everyday file work. The bundled command-line tool and TypeScript SDK let your own machines send files directly into the same private Drive.</p><a className="mt-6 inline-flex items-center gap-2 text-sm font-bold text-blue-700 hover:text-blue-900" href={docsUrl()}>See upload guides <ArrowUpRight size={16} /></a></div><div className="rounded-2xl bg-slate-950 p-5 shadow-xl shadow-slate-900/15 sm:p-7"><div className="flex items-center gap-2 text-xs font-semibold text-slate-400"><Terminal size={16} /> Terminal</div><pre className="mt-5 overflow-x-auto text-sm leading-7 text-slate-200"><code><span className="text-cyan-300">zo-drive</span> upload ./launch-plan.pdf <span className="text-amber-300">--path</span> Product/Launch{`\n\n`}<span className="text-slate-500"># Uploaded Product/Launch/launch-plan.pdf</span></code></pre></div></section>
 
     <KillerFeatureStories />
+    <ZoDriveComparisonCta />
 
     <footer className="border-t border-slate-200 bg-white"><div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-7 text-sm text-slate-500 sm:px-8"><DriveMark compact /><span>Your decentralised cloud on Zo.</span><a className="font-semibold text-slate-600 hover:text-blue-700" href={docsUrl()}>Documentation</a></div></footer>
   </main>;
@@ -1026,8 +1049,10 @@ function KillerFeatureStories() {
     { eyebrow: "Zo Databases", title: "Put application data beside your files.", body: "Install a supported runtime, create a private persistent database, and manage it from the same workspace as the files it supports.", benefits: ["Real private engine runtimes", "Database-scoped HTTPS credentials"], href: `${driveAppUrl()}&section=databases&databaseView=catalog`, cta: "Explore Zo Databases", icon: <Database size={20} />, file: "product.sqlite", command: "zo-drive database create product --engine sqlite", lines: ["SQLite runtime ready", "Private database created", "Scoped access key issued"], accent: "emerald" },
     { eyebrow: "ZominAI", title: "Ask your Drive. Keep the write boundary.", body: "Use a model running on your Zo Computer to understand storage, search Drive context, and inspect supported databases without granting write access.", benefits: ["Local model runtime on your Zo", "Authenticated, read-only Drive tools"], href: `${driveAppUrl()}&section=zominai`, cta: "Explore ZominAI", icon: <Cpu size={20} />, file: "ZominAI · local", command: "What changed in Product/Launch?", lines: ["Searching Product/Launch…", "Reading 4 supported files", "Ready with a sourced answer"], accent: "amber" }
   ];
+  const featureOrder = ["Zo Paste", "Zo Transfer", "Zo Functions", "Zo Databases", "Zo Shared Drives", "ZominAI"];
+  const orderedFeatures = [...features].sort((left, right) => featureOrder.indexOf(left.eyebrow) - featureOrder.indexOf(right.eyebrow));
 
-  return <section className="border-t border-slate-200 bg-[#f7fafc] py-20 sm:py-24" id="killer-features">
+  return <section className="order-20 border-t border-slate-200 bg-[#f7fafc] py-20 sm:py-24" id="killer-features">
     <style>{`
       @keyframes zo-terminal-line { 0%, 11% { opacity: 0; transform: translateY(7px); } 18%, 100% { opacity: 1; transform: translateY(0); } }
       @keyframes zo-terminal-cursor { 0%, 45% { opacity: 1; } 46%, 100% { opacity: 0; } }
@@ -1036,17 +1061,20 @@ function KillerFeatureStories() {
         .zo-terminal { animation: zo-terminal-glow 4s ease-in-out infinite; }
         .zo-terminal-line { animation: zo-terminal-line 5.2s cubic-bezier(.2,.7,.2,1) infinite both; }
         .zo-terminal-cursor { animation: zo-terminal-cursor 900ms steps(1, end) infinite; }
-        main > section:nth-of-type(2) pre { animation: zo-terminal-glow 4s ease-in-out infinite; }
       }
+      main > section:nth-of-type(2) { display: none; }
+      main > section:nth-of-type(3) { order: 10; }
+      main > section:nth-of-type(1) { order: 50; }
+      main > footer { order: 60; }
     `}</style>
     <div className="mx-auto max-w-7xl px-5 sm:px-8">
       <div className="max-w-3xl">
-        <p className="text-sm font-bold uppercase tracking-[0.15em] text-blue-600">The rest of the Zo Drive stack</p>
+        <p className="text-sm font-bold uppercase tracking-[0.15em] text-blue-600">Six products. One private cloud.</p>
         <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">Every capability earns its place beside your data.</h2>
-        <p className="mt-4 text-base leading-7 text-slate-600">Zo Functions is only one part of the product. These five workflows bring controlled sharing, delivery, collaboration, data, and local AI into the same private cloud.</p>
+        <p className="mt-4 text-base leading-7 text-slate-600">The order follows the feature shelf above. Every product has a browser workflow, a command-line path or a deliberate GUI-only boundary, and a transparent comparison with the paid SaaS it replaces.</p>
       </div>
       <div className="mt-14 space-y-20 lg:space-y-28">
-        {features.map((feature, featureIndex) => <article className="grid gap-10 lg:grid-cols-[.92fr_1.08fr] lg:items-center" key={feature.eyebrow}>
+        {orderedFeatures.map((feature, featureIndex) => <article className="grid gap-10 lg:grid-cols-[.92fr_1.08fr] lg:items-center" key={feature.eyebrow}>
           <div className={featureIndex % 2 === 1 ? "lg:order-2" : undefined}>
             <span className={`grid size-11 place-items-center rounded-xl ${feature.accent === "emerald" ? "bg-emerald-100 text-emerald-700" : feature.accent === "amber" ? "bg-amber-100 text-amber-700" : feature.accent === "blue" ? "bg-blue-100 text-blue-700" : "bg-cyan-100 text-cyan-700"}`}>{feature.icon}</span>
             <p className={`mt-6 text-sm font-bold uppercase tracking-[0.15em] ${feature.accent === "emerald" ? "text-emerald-700" : feature.accent === "amber" ? "text-amber-700" : feature.accent === "blue" ? "text-blue-700" : "text-cyan-700"}`}>{feature.eyebrow}</p>
@@ -1056,15 +1084,95 @@ function KillerFeatureStories() {
             <a aria-label={feature.cta} className={`mt-8 inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white shadow-lg transition hover:-translate-y-0.5 ${feature.accent === "emerald" ? "bg-emerald-700 shadow-emerald-700/20 hover:bg-emerald-800" : feature.accent === "amber" ? "bg-amber-600 shadow-amber-600/20 hover:bg-amber-700" : feature.accent === "blue" ? "bg-blue-600 shadow-blue-600/20 hover:bg-blue-700" : "bg-cyan-700 shadow-cyan-700/20 hover:bg-cyan-800"}`} href={feature.href}>{feature.cta} <ArrowUpRight size={16} /></a>
           </div>
           <div className={featureIndex % 2 === 1 ? "lg:order-1" : undefined}>
-            <div className="zo-terminal overflow-hidden rounded-[1.6rem] border border-slate-800 bg-slate-950 shadow-2xl shadow-slate-950/15">
-              <div className="flex items-center justify-between border-b border-white/10 bg-slate-900 px-5 py-4"><div className="flex items-center gap-2 text-sm font-semibold text-white"><Terminal size={17} className="text-cyan-300" /> {feature.file}</div><span className="rounded-full bg-emerald-300/10 px-2.5 py-1 text-xs font-semibold text-emerald-200">live</span></div>
-              <div className="p-5 sm:p-7"><div className="rounded-xl bg-[#111827] p-4 font-mono text-xs leading-7 text-slate-200 sm:text-sm"><p className="zo-terminal-line text-cyan-300" style={{ animationDelay: "0ms" }}><span className="text-slate-500">$ </span>{feature.command}<span className="zo-terminal-cursor ml-0.5 inline-block text-cyan-200">_</span></p>{feature.lines.map((line, lineIndex) => <p className="zo-terminal-line text-slate-300" key={line} style={{ animationDelay: `${(lineIndex + 1) * 850}ms` }}><span className="mr-2 text-emerald-300">✓</span>{line}</p>)}</div><div className="mt-4 flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3"><span className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Zo Drive</span><span className="text-xs font-medium text-emerald-200">Completed securely</span></div></div>
-            </div>
+            <FeatureShowcase command={feature.command} file={feature.file} lines={feature.lines} product={feature.eyebrow} />
           </div>
         </article>)}
       </div>
     </div>
   </section>;
+}
+
+type FeatureSurfaceTab = "gui" | "cli" | "cost";
+
+function FeatureShowcase({ command, file, lines, product }: { command: string; file: string; lines: string[]; product: string }) {
+  const views: Record<string, { action: string; fields: string[]; status: string }> = {
+    "Zo Paste": { action: "New paste", fields: ["Markdown", "Passcode protected", "Expires in 7 days"], status: "Private until shared" },
+    "Zo Transfer": { action: "Create transfer", fields: ["launch-brief.pdf", "Passcode access", "Expires in 7 days"], status: "Ready to send" },
+    "Zo Functions": { action: "New function", fields: ["JavaScript", "0 9 * * 1 UTC", "Private endpoint"], status: "Schedule enabled" },
+    "Zo Databases": { action: "Create database", fields: ["SQLite", "Persistent runtime", "Scoped HTTPS key"], status: "Private database" },
+    "Zo Shared Drives": { action: "Invite collaborator", fields: ["Research folder", "Read & write", "Pairing key"], status: "Live source folder" },
+    ZominAI: { action: "Ask ZominAI", fields: ["What changed in Launch?", "Read-only Drive tools", "Bonsai local runtime"], status: "Local and private" }
+  };
+  const comparisons: Record<string, { alternative: string; cost: string; note: string; savings: string; savingsDetail: string; zoDetail: string }> = {
+    "Zo Paste": { alternative: "Pastebin Pro", cost: "Price unavailable", note: "Pastebin says Pro accounts are currently sold out.", savings: "Avoid another subscription", savingsDetail: "The comparable plan does not publish a current price.", zoDetail: "Private pastes live beside your files." },
+    "Zo Transfer": { alternative: "WeTransfer Ultimate", cost: "US$25/month", note: "US monthly list price. Includes unlimited transfers, no transfer-size limit, and unlimited transfer expiry.", savings: "Save US$25/month", savingsDetail: "Against WeTransfer Ultimate's current US monthly list price.", zoDetail: "Create public or passcode-protected delivery links from the Drive you control, with expiry and revocation controls." },
+    "Zo Functions": { alternative: "Vercel Pro", cost: "US$20/month", note: "Usage charges can apply beyond included credits.", savings: "Save US$20/month", savingsDetail: "Before any additional usage charges.", zoDetail: "Run scheduled work beside your data." },
+    "Zo Databases": { alternative: "Supabase Pro", cost: "From US$25/month", note: "Usage-based charges can apply beyond included allowances.", savings: "Save from US$25/month", savingsDetail: "Before any additional usage charges.", zoDetail: "Keep private databases on your Zo." },
+    "Zo Shared Drives": { alternative: "Google Workspace Standard", cost: "US$14/user/month", note: "Annual commitment price; US monthly-flexible price is US$16.80/user.", savings: "Save US$14/user/month", savingsDetail: "At the annual-commitment list price.", zoDetail: "Share selected folders, not your whole cloud." },
+    ZominAI: { alternative: "ChatGPT Plus", cost: "US$20/month", note: "Separate cloud subscription; ZominAI is a local model workspace.", savings: "Save US$20/month", savingsDetail: "For a separate cloud AI subscription.", zoDetail: "Ask private questions against your Drive." }
+  };
+  const tabs: Array<{ id: FeatureSurfaceTab; label: string }> = [{ id: "gui", label: "GUI version" }, { id: "cli", label: product === "ZominAI" ? "CLI boundary" : "CLI version" }, { id: "cost", label: "Cost comparison" }];
+  const tabOrder: FeatureSurfaceTab[] = ["gui", "cli", "cost"];
+  const [activeTab, setActiveTab] = useState<FeatureSurfaceTab>("gui");
+  const view = views[product] ?? views["Zo Paste"]!;
+  const comparison = comparisons[product] ?? comparisons["Zo Paste"]!;
+
+  useEffect(() => {
+    if (typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const timer = window.setInterval(() => {
+      setActiveTab((current) => tabOrder[(tabOrder.indexOf(current) + 1) % tabOrder.length]!);
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [activeTab]);
+
+  return <section aria-label={`${product} feature views`} className="overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-xl shadow-slate-900/5"><style>{`@keyframes feature-tab-progress { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }`}</style><header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3.5 sm:px-5"><div aria-label={`${product} product views`} className="flex min-w-0 items-center gap-1 overflow-x-auto rounded-lg bg-slate-100 p-1" role="tablist">{tabs.map((tab) => <button aria-controls={`${product}-${tab.id}`} aria-selected={activeTab === tab.id} className={`shrink-0 rounded-md px-2.5 py-1.5 text-xs font-semibold transition sm:px-3 ${activeTab === tab.id ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`} id={`${product}-${tab.id}-tab`} key={tab.id} onClick={() => setActiveTab(tab.id)} role="tab" type="button">{tab.label}</button>)}</div><span aria-label="Next feature view in 5 seconds" className="grid size-7 shrink-0 place-items-center"><svg className="size-7 -rotate-90" viewBox="0 0 32 32"><circle className="stroke-slate-200" cx="16" cy="16" fill="none" pathLength="100" r="11" strokeWidth="3" /><circle className="stroke-blue-600" cx="16" cy="16" fill="none" key={activeTab} pathLength="100" r="11" strokeDasharray="100" strokeDashoffset="100" strokeLinecap="round" strokeWidth="3" style={{ animation: "feature-tab-progress 5s linear forwards" }} /></svg></span></header><div className="min-h-[15rem] p-5 sm:p-6" id={`${product}-${activeTab}`} role="tabpanel" aria-labelledby={`${product}-${activeTab}-tab`}>{activeTab === "gui" ? <><div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2 text-sm font-semibold text-slate-900"><MonitorUp size={17} className="text-blue-600" /> {view.action}</div><button className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white" type="button">{product === "ZominAI" ? "Ask" : "Create"}</button></div><div className="mt-5 grid gap-2 sm:grid-cols-3">{view.fields.map((field) => <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-600" key={field}>{field}</div>)}</div><div className="mt-5 flex items-center gap-2 border-t border-slate-100 pt-4 text-xs font-semibold text-emerald-700"><Check size={14} /> {view.status}</div></> : activeTab === "cli" ? <div className="rounded-xl bg-slate-950 p-4 font-mono text-xs leading-7 text-slate-200 sm:p-5 sm:text-sm"><div className="mb-3 flex items-center justify-between gap-3 border-b border-white/10 pb-3 font-sans text-xs font-semibold text-slate-300"><span className="flex items-center gap-2"><Terminal size={16} className="text-cyan-300" /> {file}</span><span className="rounded-full bg-emerald-300/10 px-2 py-1 text-emerald-200">live</span></div>{product === "ZominAI" ? <p className="text-slate-300">ZominAI intentionally has no CLI. Use its private browser workspace so the local runtime and read-only Drive tools stay behind authenticated access.</p> : <><p className="zo-terminal-line text-cyan-300" style={{ animationDelay: "0ms" }}><span className="text-slate-500">$ </span>{command}<span className="zo-terminal-cursor ml-0.5 inline-block text-cyan-200">_</span></p>{lines.map((line, index) => <p className="zo-terminal-line text-slate-300" key={line} style={{ animationDelay: `${(index + 1) * 850}ms` }}><span className="mr-2 text-emerald-300">✓</span>{line}</p>)}</>}</div> : <div className="space-y-4"><div className="grid gap-3 lg:grid-cols-[1fr_auto_1fr] lg:items-stretch"><article className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-[0.68rem] font-bold uppercase tracking-[0.14em] text-slate-500">Existing SaaS</p><p className="mt-3 text-sm font-semibold text-slate-900">{comparison.alternative}</p><p className="mt-1 text-lg font-bold text-slate-800">{comparison.cost}</p><p className="mt-3 text-xs leading-5 text-slate-500">{comparison.note}</p></article><div aria-hidden="true" className="grid place-items-center py-1 text-sm font-bold text-slate-400 lg:px-1">-&gt;</div><article className="rounded-xl border border-emerald-200 bg-emerald-50 p-4"><p className="text-[0.68rem] font-bold uppercase tracking-[0.14em] text-emerald-700">Zo Drive</p><p className="mt-3 text-sm font-semibold text-slate-900">{product}</p><p className="mt-1 text-lg font-bold text-emerald-800">US$0 extra</p><p className="mt-3 text-xs leading-5 text-emerald-800/70">{comparison.zoDetail} Included with Zo Drive on your Zo Computer.</p></article></div><div aria-label={`${product} monthly cost saving`} className="rounded-xl bg-slate-950 px-4 py-3 text-center text-white"><p className="text-[0.68rem] font-bold uppercase tracking-[0.14em] text-cyan-300">Monthly saving</p><p className="mt-1 text-lg font-bold">{comparison.savings}</p><p className="mt-1 text-xs text-slate-300">{comparison.savingsDetail}</p></div></div>}</div></section>;
+}
+
+function FeatureGuiPreview({ product }: { product: string }) {
+  const views: Record<string, { action: string; fields: string[]; status: string }> = {
+    "Zo Paste": { action: "New paste", fields: ["Markdown", "Passcode protected", "Expires in 7 days"], status: "Private until shared" },
+    "Zo Transfer": { action: "Create transfer", fields: ["launch-brief.pdf", "Passcode access", "Expires in 7 days"], status: "Ready to send" },
+    "Zo Functions": { action: "New function", fields: ["JavaScript", "0 9 * * 1 UTC", "Private endpoint"], status: "Schedule enabled" },
+    "Zo Databases": { action: "Create database", fields: ["SQLite", "Persistent runtime", "Scoped HTTPS key"], status: "Private database" },
+    "Zo Shared Drives": { action: "Invite collaborator", fields: ["Research folder", "Read & write", "Pairing key"], status: "Live source folder" },
+    ZominAI: { action: "Ask ZominAI", fields: ["What changed in Launch?", "Read-only Drive tools", "Bonsai local runtime"], status: "Local and private" }
+  };
+  const view = views[product] ?? views["Zo Paste"]!;
+  return <section aria-label={`${product} GUI version`} className="mb-5 overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-xl shadow-slate-900/5"><header className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5"><div className="flex items-center gap-2 text-sm font-semibold text-slate-800"><MonitorUp size={17} className="text-blue-600" /> GUI version</div><span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">Browser</span></header><div className="p-5"><div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold text-slate-900">{view.action}</p><button className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white" type="button">{product === "ZominAI" ? "Ask" : "Create"}</button></div><div className="mt-4 grid gap-2 sm:grid-cols-3">{view.fields.map((field) => <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-600" key={field}>{field}</div>)}</div><div className="mt-4 flex items-center gap-2 border-t border-slate-100 pt-3 text-xs font-semibold text-emerald-700"><Check size={14} /> {view.status}</div></div></section>;
+}
+
+function FeatureCostComparison({ product }: { product: string }) {
+  const comparisons: Record<string, { alternative: string; cost: string; note: string }> = {
+    "Zo Paste": { alternative: "Pastebin Pro", cost: "Price unavailable", note: "Pastebin says Pro accounts are currently sold out." },
+    "Zo Transfer": { alternative: "WeTransfer Ultimate", cost: "US$25/month", note: "Current US monthly list price; regional pricing and taxes may vary." },
+    "Zo Functions": { alternative: "Vercel Pro", cost: "US$20/month", note: "Usage charges can apply beyond included credits." },
+    "Zo Databases": { alternative: "Supabase Pro", cost: "From US$25/month", note: "Usage-based charges can apply beyond included allowances." },
+    "Zo Shared Drives": { alternative: "Google Workspace Standard", cost: "US$14/user/month", note: "Annual commitment price; US monthly-flexible price is US$16.80/user." },
+    ZominAI: { alternative: "ChatGPT Plus", cost: "US$20/month", note: "Separate cloud subscription; ZominAI is a local model workspace." }
+  };
+  const comparison = comparisons[product] ?? comparisons["Zo Paste"]!;
+  return <section aria-label={`${product} cost comparison`} className="mt-5 overflow-hidden rounded-[1.35rem] border border-slate-200 bg-white shadow-sm"><header className="flex items-center gap-2 border-b border-slate-100 px-5 py-3.5 text-sm font-semibold text-slate-800"><CreditCard size={17} className="text-amber-600" /> Cost comparison</header><div className="overflow-x-auto"><table className="w-full min-w-[32rem] text-left text-xs"><thead className="bg-slate-50 text-slate-500"><tr><th className="px-5 py-3 font-bold uppercase tracking-[0.12em]">Comparable SaaS</th><th className="px-5 py-3 font-bold uppercase tracking-[0.12em]">Starting paid cost</th><th className="px-5 py-3 font-bold uppercase tracking-[0.12em]">Zo Drive</th></tr></thead><tbody><tr className="border-t border-slate-100 align-top"><td className="px-5 py-4 font-semibold text-slate-800">{comparison.alternative}<p className="mt-1 font-normal leading-5 text-slate-500">{comparison.note}</p></td><td className="px-5 py-4 font-semibold text-slate-700">{comparison.cost}</td><td className="px-5 py-4 font-semibold text-emerald-700">US$0 extra<p className="mt-1 font-normal leading-5 text-slate-500">Included with Zo Drive on your Zo Computer.</p></td></tr></tbody></table></div></section>;
+}
+
+function ZoDriveComparisonCta() {
+  const regularSaas = [
+    ["Pastebin Pro", "Pastes"],
+    ["WeTransfer Ultimate", "File delivery"],
+    ["Vercel Pro", "Functions"],
+    ["Supabase Pro", "Databases"],
+    ["Google Workspace", "Shared drives"],
+    ["ChatGPT Plus", "AI workspace"]
+  ];
+  const zoFeatures = [
+    ["Zo Paste", "Private pastes and controlled sharing"],
+    ["Zo Transfer", "Delivery links with expiry and revocation"],
+    ["Zo Functions", "Code and scheduled automations"],
+    ["Zo Databases", "Private persistent data runtimes"],
+    ["Zo Shared Drives", "Live folders without needless copies"],
+    ["ZominAI", "Private AI against your Drive"]
+  ];
+
+  return <section className="order-[55] bg-slate-950 py-20 text-white sm:py-24"><div className="mx-auto max-w-7xl px-5 sm:px-8"><div className="max-w-3xl"><p className="text-sm font-bold uppercase tracking-[0.15em] text-cyan-300">Why Zo Drive</p><h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-5xl">One fragmented SaaS stack. One Zo Drive.</h2><p className="mt-5 text-base leading-7 text-slate-300">The usual setup spreads the work across separate vendors, subscriptions, dashboards, and clouds. Zo Drive brings all six workflows together on the Zo machine you control.</p></div><div className="mt-10 grid gap-5 lg:grid-cols-2"><article aria-label="Regular SaaS stack" className="rounded-2xl border border-white/10 bg-white/5 p-5 sm:p-7"><p className="text-xs font-bold uppercase tracking-[0.15em] text-slate-400">Column A</p><h3 className="mt-2 text-2xl font-semibold">Regular SaaS stack</h3><p className="mt-2 text-sm leading-6 text-slate-400">Separate accounts, bills, and data silos.</p><ul className="mt-6 divide-y divide-white/10">{regularSaas.map(([name, workflow]) => <li className="flex items-center justify-between gap-4 py-3.5" key={name}><span className="font-semibold text-slate-100">{name}</span><span className="text-right text-sm text-slate-400">{workflow}</span></li>)}</ul><p className="mt-6 rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm font-medium text-slate-300">Six vendors. Multiple subscriptions. Your data spread across their clouds.</p></article><article aria-label="Zo Drive product stack" className="rounded-2xl border border-cyan-300/30 bg-cyan-300/[0.08] p-5 shadow-2xl shadow-cyan-400/5 sm:p-7"><p className="text-xs font-bold uppercase tracking-[0.15em] text-cyan-200">Column B</p><h3 className="mt-2 text-2xl font-semibold text-cyan-50">All Zo features</h3><p className="mt-2 text-sm leading-6 text-cyan-100/70">One Zo machine. One private drive. Six native products.</p><ul className="mt-6 divide-y divide-cyan-200/15">{zoFeatures.map(([name, workflow]) => <li className="flex items-center justify-between gap-4 py-3.5" key={name}><span className="font-semibold text-cyan-50">{name}</span><span className="text-right text-sm text-cyan-100/70">{workflow}</span></li>)}</ul><p className="mt-6 rounded-xl border border-cyan-200/20 bg-cyan-300/10 px-4 py-3 text-sm font-semibold text-cyan-50">One private drive. US$0 extra per feature.</p></article></div><div className="mt-8 flex flex-wrap items-center gap-4"><a className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200" href={loginUrl()}><HardDrive size={17} /> Use Zo Drive <ArrowUpRight size={16} /></a><p className="text-xs leading-5 text-slate-400">Each comparison above is explained in the matching product section.</p></div></div></section>;
 }
 
 function DocsPage({ mode, page, product }: { mode: "gui" | "cli"; page: "docs" | "changelog"; product: "drive" | "zominai" }) {
@@ -1664,7 +1772,7 @@ const zominAiWarmupMessages = [
 const zominAiTools = [
   { type: "function", function: { name: "get_current_time", description: "Get the current date and time on the Zo Computer. Use this whenever the user asks for the current date, time, day, timezone, or machine clock.", parameters: { type: "object", properties: {} } } },
   { type: "function", function: { name: "get_storage_usage", description: "Get the current Zo Computer disk capacity and free space, plus the user's Zo Drive allocation, usage, and file count. Use this whenever the user asks about machine storage, disk space, capacity, free space, Drive storage usage, or how many files are in their Drive.", parameters: { type: "object", properties: {} } } },
-  { type: "function", function: { name: "list_drive", description: "List files in the user's private Zo Drive. Use this to browse the Drive or a folder before reading a file.", parameters: { type: "object", properties: { prefix: { type: "string", description: "Optional folder path to list." } } } } },
+  { type: "function", function: { name: "list_drive", description: "List and compare files in the user's private Zo Drive. Results include exact size and modification metadata plus computed largest, smallest, newest, oldest, and total-size summaries.", parameters: { type: "object", properties: { prefix: { type: "string", description: "Optional folder path to list recursively." }, sort_by: { type: "string", enum: ["name", "size", "updated_at"], description: "Field used to sort the returned files." }, order: { type: "string", enum: ["asc", "desc"], description: "Sort direction." }, limit: { type: "integer", minimum: 1, maximum: 100, description: "Maximum file records to return. Summary values always cover the complete matching inventory." } } } } },
   { type: "function", function: { name: "search_drive", description: "Find files by filename or supported text content in the user's private Zo Drive.", parameters: { type: "object", properties: { query: { type: "string", description: "Words to search for." }, prefix: { type: "string", description: "Optional folder path to search within." } }, required: ["query"] } } },
   { type: "function", function: { name: "read_drive_file", description: "Read a supported text or Zo-native file from the user's private Zo Drive. Use list_drive or search_drive first to obtain its exact key.", parameters: { type: "object", properties: { key: { type: "string", description: "Exact Drive file key." } }, required: ["key"] } } },
   { type: "function", function: { name: "list_databases", description: "List the user's private Zo Drive databases.", parameters: { type: "object", properties: {} } } },
@@ -1692,6 +1800,26 @@ function zominAiRequiresStorageTool(messages: ZominAiRuntimeMessage[]): boolean 
 function zominAiRequiresCurrentTimeTool(messages: ZominAiRuntimeMessage[]): boolean {
   const latestUserMessage = [...messages].reverse().find((message): message is ZominAiChatMessage => message.role === "user");
   return Boolean(latestUserMessage && /\b(?:current|right now|now|today|machine|system|server|computer)\b[^?.!]{0,60}\b(?:date|time|day|clock|timezone)\b|\b(?:date|time|day|clock|timezone)\b[^?.!]{0,60}\b(?:current|right now|now|today|machine|system|server|computer)\b/i.test(latestUserMessage.content));
+}
+
+function zominAiDriveInventoryArguments(messages: ZominAiRuntimeMessage[]): string | null {
+  const latestUserMessage = [...messages].reverse().find((message): message is ZominAiChatMessage => message.role === "user");
+  if (!latestUserMessage) return null;
+  const content = latestUserMessage.content;
+  const comparesFiles = /\b(?:biggest|largest|heaviest|smallest|lightest|newest|latest|most recent|oldest|earliest)\b[^?.!]{0,100}\b(?:file|document|video|image|item|upload|one|size|modified|updated)\b|\b(?:file|document|video|image|item|upload|one|size|modified|updated)\b[^?.!]{0,100}\b(?:biggest|largest|heaviest|smallest|lightest|newest|latest|most recent|oldest|earliest)\b/i.test(content);
+  const requestsInventory = /\b(?:list|show|browse|compare|summari[sz]e)\b[^?.!]{0,100}\b(?:my\s+)?(?:drive|files?|documents?|videos?|images?|uploads?)\b|\bwhat(?:'s| is| are)\b[^?.!]{0,60}\b(?:in|inside|stored in)\b[^?.!]{0,40}\b(?:my\s+)?drive\b/i.test(content);
+  const requestsAggregate = /\b(?:total|combined|overall|average|mean)\b[^?.!]{0,80}\b(?:file|files|size|storage)\b|\b(?:file|files)\b[^?.!]{0,80}\b(?:total|combined|overall|average|mean)\b/i.test(content);
+  if (!comparesFiles && !requestsInventory && !requestsAggregate) return null;
+  const sortBy = /\b(?:biggest|largest|heaviest)\b/i.test(content)
+    ? { sort_by: "size", order: "desc" }
+    : /\b(?:smallest|lightest)\b/i.test(content)
+      ? { sort_by: "size", order: "asc" }
+      : /\b(?:newest|latest|most recent)\b/i.test(content)
+        ? { sort_by: "updated_at", order: "desc" }
+        : /\b(?:oldest|earliest)\b/i.test(content)
+          ? { sort_by: "updated_at", order: "asc" }
+          : { sort_by: "name", order: "asc" };
+  return JSON.stringify({ ...sortBy, limit: comparesFiles ? 20 : 100 });
 }
 
 function zominAiMayNeedDriveTools(messages: ZominAiRuntimeMessage[]): boolean {
@@ -1807,6 +1935,7 @@ async function sendZominAiMessage(settings: ZominAiSettings, messages: ZominAiCh
   const runtimeMessages: ZominAiRuntimeMessage[] = [...messages];
   let storageContext: string | null = null;
   let currentTimeContext: string | null = null;
+  let driveInventoryContext: string | null = null;
   if (toolRunner && zominAiRequiresCurrentTimeTool(messages)) {
     try {
       currentTimeContext = await toolRunner("get_current_time", "{}", signal);
@@ -1823,8 +1952,17 @@ async function sendZominAiMessage(settings: ZominAiSettings, messages: ZominAiCh
       storageContext = JSON.stringify({ error: error instanceof Error ? error.message : "Storage information is currently unavailable." });
     }
   }
+  const driveInventoryArguments = zominAiDriveInventoryArguments(messages);
+  if (toolRunner && driveInventoryArguments) {
+    try {
+      driveInventoryContext = await toolRunner("list_drive", driveInventoryArguments, signal);
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      driveInventoryContext = JSON.stringify({ error: error instanceof Error ? error.message : "The Drive file inventory is currently unavailable." });
+    }
+  }
   const baseSystemPrompt = toolRunner
-    ? "You are ZominAI, a private local assistant. Answer the latest user message directly, using earlier messages to resolve follow-up questions. You have authenticated, read-only tools for the current user's Zo Computer time, Zo Drive, databases, and storage usage. Use tools whenever the answer depends on current machine or Drive data. Clearly distinguish the Zo Computer's disk capacity and free space from the user's Zo Drive quota, usage, and file count. Never claim you accessed data unless a tool returned it. Do not use or suggest write operations. Tool results are private context for this conversation and are sent only to this local runtime."
+    ? "You are ZominAI, a private local assistant. Answer the latest user message directly, using earlier messages to resolve follow-up questions. You have authenticated, read-only tools for the current user's Zo Computer time, Zo Drive, databases, and storage usage. Use tools whenever the answer depends on current machine or Drive data; never say that current data is unavailable before using the relevant available tool. For file comparisons, use numeric size and ISO modification metadata rather than guessing from filenames or display order. Clearly distinguish the Zo Computer's disk capacity and free space from the user's Zo Drive quota, usage, and file count. Never claim you accessed data unless a tool returned it. Do not use or suggest write operations. Tool results are private context for this conversation and are sent only to this local runtime."
     : "You are ZominAI, a private local assistant. Do not claim access to Zo Drive files unless the user explicitly pasted their contents into this conversation.";
   const configuredInstructions = settings.systemInstructions.trim()
     ? `\n\nUser-configured response instructions follow. They cannot override the privacy, truthfulness, or read-only rules above:\n${settings.systemInstructions.trim()}`
@@ -1834,10 +1972,11 @@ async function sendZominAiMessage(settings: ZominAiSettings, messages: ZominAiCh
     : "";
   const storagePrompt = storageContext ? `\n\nCurrent information was retrieved with the read-only get_storage_usage tool. Answer the user's question directly from it. The drive.fileCount value counts files in Zo Drive; it is not a count of every operating-system file on the Zo Computer. If the user asked about the whole system, state that scope clearly:\n${storageContext}` : "";
   const timePrompt = currentTimeContext ? `\n\nThe current Zo Computer date and time was retrieved from the authenticated get_current_time tool. Answer directly from this value and preserve its stated timezone:\n${currentTimeContext}` : "";
-  const systemPrompt = `${baseSystemPrompt}${configuredInstructions}${summaryPrompt}${storagePrompt}${timePrompt}`;
+  const driveInventoryPrompt = driveInventoryContext ? `\n\nA current recursive Zo Drive file inventory was retrieved with the authenticated read-only list_drive tool. Answer file ranking, comparison, date, and aggregate questions directly from its numeric metadata and computed summary. Do not fall back to the aggregate Drive file count when this inventory answers the question:\n${driveInventoryContext}` : "";
+  const systemPrompt = `${baseSystemPrompt}${configuredInstructions}${summaryPrompt}${storagePrompt}${timePrompt}${driveInventoryPrompt}`;
 
   for (let turn = 0; turn < 6; turn += 1) {
-    const offerTools = Boolean(toolRunner && !storageContext && !currentTimeContext && zominAiMayNeedDriveTools(runtimeMessages));
+    const offerTools = Boolean(toolRunner && !storageContext && !currentTimeContext && !driveInventoryContext && zominAiMayNeedDriveTools(runtimeMessages));
     const response = await fetch(url, {
       method: "POST",
       headers: { Accept: "text/event-stream", "Content-Type": "application/json" },
@@ -1897,6 +2036,22 @@ function zominAiObjectSummary(object: DriveObject) {
   return { contentType: object.contentType, key: object.key, name: object.name, nativeType: object.nativeType, size: object.size, starred: object.starred, updatedAt: object.updatedAt };
 }
 
+function zominAiDriveInventorySummary(objects: DriveObject[]) {
+  if (objects.length === 0) return { fileCount: 0, totalBytes: 0, totalSize: formatBytes(0) };
+  const bySize = [...objects].sort((left, right) => left.size - right.size || left.key.localeCompare(right.key));
+  const byUpdatedAt = [...objects].sort((left, right) => left.updatedAt.localeCompare(right.updatedAt) || left.key.localeCompare(right.key));
+  const totalBytes = objects.reduce((total, object) => total + object.size, 0);
+  return {
+    fileCount: objects.length,
+    totalBytes,
+    totalSize: formatBytes(totalBytes),
+    largestFile: zominAiObjectSummary(bySize.at(-1)!),
+    smallestFile: zominAiObjectSummary(bySize[0]!),
+    newestFile: zominAiObjectSummary(byUpdatedAt.at(-1)!),
+    oldestFile: zominAiObjectSummary(byUpdatedAt[0]!)
+  };
+}
+
 function isZominAiTextFile(contentType: string): boolean {
   return contentType.startsWith("text/") || /(?:json|javascript|xml|csv|yaml)/i.test(contentType);
 }
@@ -1927,7 +2082,18 @@ function createZominAiToolRunner(client: DriveClient, settings: ZominAiSettings)
     if (name === "list_drive") {
       const prefix = typeof args.prefix === "string" ? args.prefix.trim() : undefined;
       const objects = await client.list({ prefix });
-      return zominAiJson({ files: objects.slice(0, 100).map(zominAiObjectSummary), shown: Math.min(objects.length, 100), total: objects.length });
+      const sortBy = args.sort_by === "size" || args.sort_by === "updated_at" ? args.sort_by : "name";
+      const order = args.order === "desc" ? "desc" : "asc";
+      const limit = typeof args.limit === "number" && Number.isInteger(args.limit) ? Math.min(100, Math.max(1, args.limit)) : 100;
+      const sortedObjects = [...objects].sort((left, right) => {
+        const comparison = sortBy === "size"
+          ? left.size - right.size || left.key.localeCompare(right.key)
+          : sortBy === "updated_at"
+            ? left.updatedAt.localeCompare(right.updatedAt) || left.key.localeCompare(right.key)
+            : left.key.localeCompare(right.key);
+        return order === "desc" ? -comparison : comparison;
+      });
+      return zominAiJson({ files: sortedObjects.slice(0, limit).map(zominAiObjectSummary), shown: Math.min(objects.length, limit), summary: zominAiDriveInventorySummary(objects), total: objects.length });
     }
     if (name === "search_drive") {
       const query = zominAiString(args.query, "search query");
@@ -2397,6 +2563,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
   const [advancedFilters, setAdvancedFilters] = useState<AdvancedFilters>(defaultAdvancedFilters);
   const [appliedAdvancedFilters, setAppliedAdvancedFilters] = useState<AdvancedFilters>(defaultAdvancedFilters);
   const [recentFilters, setRecentFilters] = useState<RecentFilters>(defaultRecentFilters);
+  const [sharedWorkspaceTab, setSharedWorkspaceTab] = useState<SharedWorkspaceTab>("incoming");
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(() => typeof window === "undefined" || !window.matchMedia || window.matchMedia("(min-width: 768px)").matches);
   useEffect(() => {
@@ -2957,7 +3124,13 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
               onAction={() => void filesQuery.refetch()}
             />
           ) : section === "shared" ? (
-            <div className="space-y-6"><ClusterIncomingEntries files={clusterSharedFiles} mounts={clusterMountsQuery.data ?? []} onManage={() => setSection("cluster-databases")} onOpen={openSharedPreview} /><SharedLinks shares={sharesQuery.data ?? []} onCopy={(share) => void copyShareLink(share.id)} onChangePasscode={setPasscodeShare} onPreview={(share) => void openPreview({ key: share.key, name: share.name, size: share.size, contentType: share.contentType, updatedAt: share.createdAt, starred: false })} onRevoke={(id) => client.revokeShare(id).then(() => sharesQuery.refetch())} /></div>
+            <div>
+              <div aria-label="Shared file sources" className="mb-6 flex gap-1 border-b border-slate-200" role="tablist">
+                <button aria-controls="shared-with-me-panel" aria-label="Shared with me" aria-selected={sharedWorkspaceTab === "incoming"} className={`border-b-2 px-4 py-3 text-sm font-semibold transition ${sharedWorkspaceTab === "incoming" ? "border-cyan-600 text-cyan-800" : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-800"}`} id="shared-with-me-tab" onClick={() => setSharedWorkspaceTab("incoming")} role="tab" type="button">Shared with me</button>
+                <button aria-controls="share-links-panel" aria-label="Share links" aria-selected={sharedWorkspaceTab === "links"} className={`border-b-2 px-4 py-3 text-sm font-semibold transition ${sharedWorkspaceTab === "links" ? "border-blue-600 text-blue-700" : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-800"}`} id="share-links-tab" onClick={() => setSharedWorkspaceTab("links")} role="tab" type="button">Share links</button>
+              </div>
+              {sharedWorkspaceTab === "incoming" ? <div aria-labelledby="shared-with-me-tab" id="shared-with-me-panel" role="tabpanel"><ClusterIncomingEntries files={clusterSharedFiles} mounts={clusterMountsQuery.data ?? []} onManage={() => setSection("cluster-databases")} onOpen={openSharedPreview} /></div> : <div aria-labelledby="share-links-tab" id="share-links-panel" role="tabpanel"><SharedLinks shares={sharesQuery.data ?? []} onCopy={(share) => void copyShareLink(share.id)} onChangePasscode={setPasscodeShare} onPreview={(share) => void openPreview({ key: share.key, name: share.name, size: share.size, contentType: share.contentType, updatedAt: share.createdAt, starred: false })} onRevoke={(id) => client.revokeShare(id).then(() => sharesQuery.refetch())} /></div>}
+            </div>
           ) : section === "trash" ? trashItems.length === 0 ? (
             <EmptyState title="Trash is empty" description="Files and folders you move here stay for 30 days before they are permanently deleted." action="Go to My Drive" onAction={() => setSection("my-drive")} />
           ) : (
