@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.42.2 - 2026-07-23
+
+### Changed
+
+- Replaced the four-card Zo Drive edge section with numbered, icon-led
+  ownership benefits and removed the redundant section.
+
 ## v1.42.1 - 2026-07-23
 
 ### Fixed
