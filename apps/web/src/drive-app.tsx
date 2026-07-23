@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient
 import { flexRender, getCoreRowModel, useReactTable, type ColumnDef } from "@tanstack/react-table";
 import {
   ArrowLeft,
+  ArrowUp,
   ArrowUpRight,
   Bold,
   Check,
@@ -291,11 +292,16 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.41.3";
+const GUI_VERSION = "1.41.4";
 const CLI_VERSION = "1.3.0";
 const ZOMINAI_VERSION = "1.9.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.41.4",
+    date: "2026-07-23",
+    changes: ["Added a closing call to action after the SaaS comparison, with direct Drive access and a link back to the product walkthroughs."]
+  },
   {
     version: "v1.41.3",
     date: "2026-07-23",
@@ -1059,6 +1065,7 @@ function LandingPage() {
 
     <KillerFeatureStories />
     <ZoDriveComparisonCta />
+    <ZoDriveClosingCta />
 
     <footer className="border-t border-slate-200 bg-white"><div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-7 text-sm text-slate-500 sm:px-8"><DriveMark compact /><span>Your decentralised cloud on Zo.</span><a className="font-semibold text-slate-600 hover:text-blue-700" href={docsUrl()}>Documentation</a></div></footer>
   </main>;
@@ -1190,6 +1197,10 @@ function ZoDriveComparisonCta() {
   const zoFeatures = [["Zo Paste", "US$0"], ["Zo Transfer", "US$0"], ["Zo Functions", "US$0"], ["Zo Databases", "US$0"], ["Zo Shared Drives", "US$0"], ["ZominAI", "US$0"]];
 
   return <section className="order-[55] bg-slate-950 py-20 text-white sm:py-24"><div className="mx-auto max-w-7xl px-5 sm:px-8"><div className="max-w-3xl"><p className="text-sm font-bold uppercase tracking-[0.15em] text-cyan-300">Why Zo Drive</p><h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-5xl">Six subscriptions become one private suite.</h2><p className="mt-5 text-base leading-7 text-slate-300">Keep the workflows. Remove the repeated accounts, scattered data and avoidable monthly SaaS spend.</p></div><div className="mt-10 grid gap-5 lg:grid-cols-2"><article aria-label="Fragmented SaaS subscriptions" className="rounded-2xl border border-white/10 bg-white/5 p-5 sm:p-7"><p className="text-xs font-bold uppercase tracking-[0.15em] text-orange-300">Before / fragmented SaaS</p><h3 className="mt-2 text-2xl font-semibold">Six vendors</h3><ul className="mt-6 divide-y divide-white/10">{regularSaas.map(([name, cost]) => <li className="flex items-center justify-between gap-4 py-3.5" key={name}><span className="font-semibold text-slate-100">{name}</span><span className="text-right text-sm text-slate-400">{cost}</span></li>)}</ul><div className="mt-6 rounded-xl bg-black/50 px-4 py-4"><p className="text-xs font-bold uppercase tracking-[0.15em] text-slate-400">Published starting prices</p><p className="mt-2 text-3xl font-semibold tracking-tight text-white">US$104+ <span className="text-lg font-medium text-slate-400">/ month</span></p><p className="mt-2 text-sm leading-6 text-slate-400">Before Pastebin Pro and additional usage charges.</p></div></article><article aria-label="Zo Drive private suite" className="rounded-2xl border border-cyan-300/30 bg-cyan-300/[0.08] p-5 shadow-2xl shadow-cyan-400/5 sm:p-7"><p className="text-xs font-bold uppercase tracking-[0.15em] text-cyan-200">After / Zo Drive</p><h3 className="mt-2 text-2xl font-semibold text-cyan-50">One private system</h3><ul className="mt-6 divide-y divide-cyan-200/15">{zoFeatures.map(([name, cost]) => <li className="flex items-center justify-between gap-4 py-3.5" key={name}><span className="font-semibold text-cyan-50">{name}</span><span className="shrink-0 text-sm font-semibold text-cyan-200">{cost}</span></li>)}</ul><div className="mt-6 rounded-xl bg-cyan-950/70 px-4 py-4"><p className="text-xs font-bold uppercase tracking-[0.15em] text-cyan-100/70">Additional SaaS cost</p><p className="mt-2 text-3xl font-semibold tracking-tight text-cyan-50">US$0 <span className="text-lg font-medium text-cyan-100/70">extra / feature</span></p><p className="mt-2 text-sm leading-6 text-cyan-100/70">Included with Zo Drive on your Zo Computer.</p></div></article></div><div className="mt-8 flex flex-wrap items-center gap-4"><a className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200" href={loginUrl()}><HardDrive size={17} /> Use Zo Drive <ArrowUpRight size={16} /></a><p className="text-xs leading-5 text-slate-400">Each comparison above is explained in the matching product section.</p></div></div></section>;
+}
+
+function ZoDriveClosingCta() {
+  return <section aria-label="Zo Drive closing call to action" className="relative isolate overflow-hidden bg-[#f4f8ff] px-5 py-24 text-center sm:px-8 sm:py-32"><div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"><div className="absolute left-[8%] top-[-14rem] size-[28rem] rounded-full bg-sky-200/40 blur-3xl" /><div className="absolute bottom-[-16rem] right-[8%] size-[30rem] rounded-full bg-blue-200/45 blur-3xl" /></div><div className="mx-auto max-w-6xl"><p className="inline-flex items-center gap-2 font-mono text-xs font-semibold uppercase tracking-[0.15em] text-blue-700"><span className="size-2 rounded-full bg-blue-500" /> Bring your cloud home</p><h2 className="mt-7 text-5xl font-semibold leading-[0.94] tracking-[-0.065em] text-slate-950 sm:text-7xl lg:text-8xl">The workspace you own. <span className="block font-serif text-[1.05em] font-normal italic tracking-[-0.06em]">The work you can move.</span></h2><div className="mt-10 flex flex-wrap justify-center gap-3"><a className="inline-flex items-center gap-3 rounded-xl bg-blue-600 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:bg-blue-700" href={loginUrl()}>Open Zo Drive <ArrowUpRight size={18} /></a><a className="inline-flex items-center gap-3 rounded-xl border border-slate-300 bg-white/80 px-6 py-3.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-400 hover:bg-white" href="#killer-features">See how it works <ArrowUp size={18} /></a></div></div></section>;
 }
 
 function DocsPage({ mode, page, product }: { mode: "gui" | "cli"; page: "docs" | "changelog"; product: "drive" | "zominai" }) {

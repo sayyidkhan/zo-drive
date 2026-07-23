@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.41.4 - 2026-07-23
+
+### Added
+
+- Added a closing call to action after the SaaS comparison, with direct Drive
+  access and a link back to the product walkthroughs.
+
 ## v1.41.3 - 2026-07-23
 
 ### Fixed
