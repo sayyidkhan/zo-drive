@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.42.16 - 2026-07-23
+
+### Changed
+
+- Streamlined `/landing-page-3` into one cobalt-and-slate visual system without
+  changing its content, layout, navigation or interactions.
+
 ## v1.42.15 - 2026-07-23
 
 ### Added

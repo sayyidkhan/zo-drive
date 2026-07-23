@@ -1,7 +1,7 @@
 {
   "name": "@zo-drive/web",
   "private": true,
-  "version": "1.42.15",
+  "version": "1.42.16",
   "type": "module",
   "scripts": {
     "build": "tsc -b && vite build",

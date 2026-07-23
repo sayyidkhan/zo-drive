@@ -35,3 +35,49 @@
 .lp3-ticker span{padding:0 2.2rem;white-space:nowrap}
 @keyframes lp3-ticker{to{transform:translateX(-50%)}}
 @media(prefers-reduced-motion:reduce){.lp3-ticker{animation:none}.lp3-product-tab,.lp3-arrow-link svg{transition:none}}
+
+.zr-page{--lp3-ink:#10233d;--lp3-muted:#62748b;--lp3-line:#d8e3ef;--lp3-paper:#f6f9fd;--lp3-soft:#edf3fa;--lp3-blue:#2563eb;--lp3-navy:#0b1f33;--lp3-navy-raised:#102a46;--lp3-cyan:#67e8f9}
+.zr-page .lp3-page{background:var(--lp3-paper);color:var(--lp3-ink);font-family:var(--sans);letter-spacing:-.015em}
+.zr-page .lp3-page .lp3-section-title{color:inherit;font-family:var(--sans);font-weight:600;letter-spacing:-.06em}
+.zr-page .lp3-page :is(#why-zo,#interfaces,#products,#operators){border-top:1px solid var(--lp3-line)}
+.zr-page .lp3-page #why-zo{background:var(--lp3-soft)}
+.zr-page .lp3-page #interfaces{background:#f8fbff}
+.zr-page .lp3-page #products{background:#f2f6fb}
+.zr-page .lp3-page #operators{background:#f8fbff}
+.zr-page .lp3-page #why-zo>div>div:first-child>p,.zr-page .lp3-page #interfaces>div>div:first-child>div>p,.zr-page .lp3-page #products>div>p:first-child,.zr-page .lp3-page #operators>div>p:first-child{color:var(--lp3-blue)!important}
+.zr-page .lp3-page #why-zo>div>div:last-child,.zr-page .lp3-page #interfaces>div>div:last-child,.zr-page .lp3-page #operators>div>div:last-child{overflow:hidden;border-color:var(--lp3-line);border-radius:18px;background:#fff;box-shadow:0 22px 55px rgba(30,58,95,.07)}
+.zr-page .lp3-page #why-zo article{border-color:var(--lp3-line);background:rgba(255,255,255,.84)}
+.zr-page .lp3-page #why-zo article span.font-serif{color:var(--lp3-blue)!important}
+.zr-page .lp3-page #why-zo article span.rounded-full{background:#dbeafe;color:#1d4ed8}
+.zr-page .lp3-page [aria-label="Zo Drive GUI workflow"]{background:#edf4ff}
+.zr-page .lp3-page [aria-label="Zo Drive CLI workflow"]{border-color:rgba(184,211,238,.18);background:var(--lp3-navy)}
+.zr-page .lp3-page [aria-label="Zo Drive GUI workflow"]>div:nth-of-type(2){border-color:var(--lp3-line);border-radius:12px;box-shadow:0 10px 30px rgba(30,58,95,.06)}
+.zr-page .lp3-page [aria-label="Zo Drive CLI workflow"]>div:nth-of-type(2){border-color:rgba(184,211,238,.18);border-radius:12px;background:rgba(2,12,27,.4)}
+.zr-page .lp3-page .lp3-product-tab{border-color:var(--lp3-line);border-radius:12px;background:#fff;color:var(--lp3-ink);box-shadow:0 8px 22px rgba(30,58,95,.04)}
+.zr-page .lp3-page .lp3-product-tab[aria-selected="true"]{border-color:var(--lp3-navy);background:var(--lp3-navy);color:#fff;box-shadow:0 12px 28px rgba(11,31,51,.16)}
+.zr-page .lp3-page .lp3-product-stage{border:1px solid rgba(184,211,238,.16);border-radius:18px;background-color:var(--lp3-navy);box-shadow:0 28px 65px rgba(11,31,51,.18)}
+.zr-page .lp3-page .lp3-product-stage>div:last-child{border-color:rgba(184,211,238,.16);background:rgba(255,255,255,.045)}
+.zr-page .lp3-page .lp3-product-stage>div:last-child>span:first-child{color:var(--lp3-cyan)!important}
+.zr-page .lp3-page .lp3-product-stage>div:last-child>div>div{border-color:rgba(184,211,238,.16);border-radius:12px;background:rgba(255,255,255,.035)}
+.zr-page .lp3-page #pricing{background:var(--lp3-navy)}
+.zr-page .lp3-page #pricing article{border-color:rgba(184,211,238,.18);border-radius:16px;background:var(--lp3-navy-raised);box-shadow:0 18px 42px rgba(2,12,27,.18)}
+.zr-page .lp3-page #pricing article[aria-label="Zo product pricing"]{border-color:rgba(103,232,249,.32);background:linear-gradient(145deg,#102a46,#0d3448)}
+.zr-page .lp3-page #pricing article>div:last-child{border-color:rgba(184,211,238,.16);border-radius:12px;background:rgba(2,12,27,.36)}
+.zr-page .lp3-page #pricing [aria-label="Fragmented SaaS pricing"]>p:first-child{color:#93c5fd!important}
+.zr-page .lp3-page #pricing+section{border-color:var(--lp3-line);background:#dbeafe;color:#16375d}
+.zr-page .lp3-page #teams{background:var(--lp3-navy)}
+.zr-page .lp3-page #teams article{border-color:rgba(184,211,238,.18);border-radius:14px;background:rgba(255,255,255,.035)}
+.zr-page .lp3-page #teams>div>div:last-child{border-color:rgba(184,211,238,.18);border-radius:16px;background:rgba(255,255,255,.045)}
+.zr-page .lp3-page #teams>div>div:last-child>div>div:last-child>div{border-color:rgba(184,211,238,.16);border-radius:10px;background:rgba(255,255,255,.025)}
+.zr-page .lp3-page #teams>div>div:last-child p:first-child{color:var(--lp3-cyan)!important}
+.zr-page .lp3-page #operators>div>div:last-child article{border-color:var(--lp3-line);background:#fff}
+.zr-page .lp3-page #operators>div>div:last-child article>svg{color:var(--lp3-blue)}
+.zr-page .lp3-page #operators+section>div{border:1px solid rgba(37,99,235,.2);border-radius:18px;background:linear-gradient(135deg,#2563eb,#174da6);color:#fff;box-shadow:0 28px 70px rgba(30,64,175,.2)}
+.zr-page .lp3-page #operators+section>div>div:last-child{background:var(--lp3-navy)}
+.zr-page .lp3-page #operators+section .lp3-primary-cta{background:#fff;color:#15345b}
+.zr-page .lp3-page #operators+section .lp3-primary-cta+ a{border-color:rgba(255,255,255,.7);color:#fff}
+.zr-page .lp3-page .lp3-minimal-footer{border-color:var(--lp3-line);background:#f8fbff;color:var(--lp3-ink)}
+.zr-page .lp3-page .lp3-minimal-footer a{color:var(--lp3-ink)}
+.zr-page .lp3-page .lp3-footer-nav{color:var(--lp3-muted)}
+.zr-page .lp3-page .lp3-footer-meta{color:#8a99aa}
+.zr-page .lp3-page :is(a,button):focus-visible{outline:3px solid rgba(37,99,235,.35);outline-offset:3px}

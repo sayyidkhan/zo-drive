@@ -292,11 +292,16 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.42.15";
+const GUI_VERSION = "1.42.16";
 const CLI_VERSION = "1.3.0";
 const ZOMINAI_VERSION = "1.9.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.42.16",
+    date: "2026-07-23",
+    changes: ["Streamlined /landing-page-3 into one cobalt-and-slate visual system without changing its content, layout, navigation or interactions."],
+  },
   {
     version: "v1.42.15",
     date: "2026-07-23",
