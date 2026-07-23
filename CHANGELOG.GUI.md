@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.42.8 - 2026-07-23
+
+### Changed
+
+- Compacted the landing-page product suite and vertically centred its product
+  menu beside the selected stage.
+
 ## v1.42.7 - 2026-07-23
 
 ### Changed
