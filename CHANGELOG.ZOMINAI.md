@@ -3,6 +3,15 @@
 All notable changes to ZominAI are recorded here. ZominAI follows its own
 semantic-versioned release track, independent of the Zo Drive GUI and CLI.
 
+## v1.8.0 - 2026-07-23
+
+### Added
+
+- Added an authenticated one-token warm-up request when chat opens so the
+  selected local model is ready before the first user message.
+- Added rotating rainbow Pegasus warm-up messages, an explicit **Ready** state,
+  and a retryable failure state without saving warm-up output to chat history.
+
 ## v1.7.1 - 2026-07-23
 
 ### Fixed

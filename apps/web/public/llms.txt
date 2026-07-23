@@ -62,10 +62,11 @@ surface and use JSON except for object upload/download.
 ### Authenticated routes
 
 - `GET|POST /folders` — list folders or create one.
-- `GET /zominai/health`, `GET /zominai/time`, and `POST /zominai/chat` —
-  inspect the private model runtime, retrieve the current Zo Computer clock,
-  and stream local-model responses. These routes require an authenticated
-  browser session and never expose the private runtime port.
+- `GET /zominai/health`, `GET /zominai/time`, `POST /zominai/warmup`, and
+  `POST /zominai/chat` — inspect the private model runtime, retrieve the current
+  Zo Computer clock, warm the selected model with one throwaway token, and
+  stream local-model responses. These routes require an authenticated browser
+  session and never expose the private runtime port.
 - `GET|POST /clusters/invitations` and `DELETE /clusters/invitations/{id}` —
   create, list, or cancel unclaimed one-time pairing keys. Listing never
   returns a key secret; creation is the only time the key is returned.

@@ -2,6 +2,15 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.39.0 - 2026-07-23
+
+### Added
+
+- Opened the ZominAI drawer immediately and displayed a rotating Pegasus
+  warm-up bubble while the selected local model becomes ready.
+- Locked the composer until the real model warm-up succeeds, with an explicit
+  **Ready** state and a retry action when warm-up fails.
+
 ## v1.38.3 - 2026-07-23
 
 ### Fixed

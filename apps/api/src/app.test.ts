@@ -43,7 +43,12 @@ describe("Zo Drive API", () => {
     roots.push(root);
     const runtimeFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       if (input.toString().endsWith("/v1/models")) return new Response(JSON.stringify({ data: [{ id: "Bonsai-8B-Q1_0.gguf" }, { id: "Bonsai-27B-Q4_K_M.gguf" }] }));
-      expect(JSON.parse(String(init?.body))).toMatchObject({ model: "Bonsai-27B-Q4_K_M.gguf", stream: false });
+      const body = JSON.parse(String(init?.body)) as { max_tokens?: number; model?: string; stream?: boolean };
+      if (body.max_tokens === 1) {
+        expect(body).toMatchObject({ model: "Bonsai-8B-Q1_0.gguf", stream: false });
+        return new Response(JSON.stringify({ choices: [{ message: { content: "ready" } }] }));
+      }
+      expect(body).toMatchObject({ model: "Bonsai-27B-Q4_K_M.gguf", stream: false });
       return new Response(JSON.stringify({ choices: [{ message: { content: "Private answer" } }] }));
     });
     const app = createApp({
@@ -54,12 +59,17 @@ describe("Zo Drive API", () => {
 
     expect((await app.request("http://localhost/zominai/health")).status).toBe(401);
     await expect((await app.request("http://localhost/zominai/health", { headers: { "x-test-user-id": "alice" } })).json()).resolves.toEqual({ model: "Bonsai-8B-Q1_0.gguf", models: ["Bonsai-8B-Q1_0.gguf", "Bonsai-27B-Q4_K_M.gguf"], status: "ready" });
+    expect((await app.request("http://localhost/zominai/warmup", { method: "POST" })).status).toBe(401);
+    const warmupResponse = await app.request("http://localhost/zominai/warmup", { method: "POST", headers: { "content-type": "application/json", "x-test-user-id": "alice" }, body: JSON.stringify({ model: "Bonsai-8B-Q1_0.gguf" }) });
+    expect(warmupResponse.status).toBe(200);
+    await expect(warmupResponse.json()).resolves.toEqual({ model: "Bonsai-8B-Q1_0.gguf", status: "ready" });
+    expect(JSON.parse(String(runtimeFetch.mock.calls[1]?.[1]?.body))).toMatchObject({ max_tokens: 1, messages: [{ content: "Reply with only: ready", role: "user" }], model: "Bonsai-8B-Q1_0.gguf", stream: false, temperature: 0 });
     const response = await app.request("http://localhost/zominai/chat", { method: "POST", headers: { "content-type": "application/json", "x-test-user-id": "alice" }, body: JSON.stringify({ messages: [{ content: "Summarise my Drive", role: "user" }], model: "Bonsai-27B-Q4_K_M.gguf" }) });
     await expect(response.json()).resolves.toMatchObject({ choices: [{ message: { content: "Private answer" } }] });
     const unavailableResponse = await app.request("http://localhost/zominai/chat", { method: "POST", headers: { "content-type": "application/json", "x-test-user-id": "alice" }, body: JSON.stringify({ messages: [{ content: "Use another model", role: "user" }], model: "Not-Loaded.gguf" }) });
     expect(unavailableResponse.status).toBe(400);
     await expect(unavailableResponse.json()).resolves.toMatchObject({ error: { code: "ZOMINAI_MODEL_UNAVAILABLE" } });
-    expect(runtimeFetch).toHaveBeenCalledTimes(4);
+    expect(runtimeFetch).toHaveBeenCalledTimes(5);
   });
 
   it("returns the authenticated Zo Computer clock without calling the model", async () => {

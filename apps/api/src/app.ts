@@ -205,6 +205,7 @@ const zominAiChatSchema = z.object({
   tool_choice: z.literal("auto").optional(),
   tools: z.array(z.unknown()).max(10).optional()
 }).refine((value) => JSON.stringify(value).length <= 1_000_000, "ZominAI request is too large");
+const zominAiWarmupSchema = z.object({ model: z.string().trim().min(1).max(256).optional() });
 
 export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys, invalidApiKeyRateLimiter = new InvalidApiKeyRateLimiter(), sharing, forms, databases = new LocalDatabaseStore(storage.root), databaseApiKeys = new LocalDatabaseApiKeyStore({ root: storage.root }), functions = new LocalFunctionStore(storage.root), clusters = new LocalClusterStore({ root: storage.root }), clusterCache = new LocalClusterCache({ root: storage.root, maxBytes: 1024 * 1024 * 1024 }), maxDatabaseImportBytes = Number.MAX_SAFE_INTEGER, trustProxy = false, zominAi }: CreateAppOptions) {
   const app = new Hono();
@@ -306,6 +307,43 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
         return context.json({ model: zominAi.model, models: [], status: "unavailable" }, 503);
       } finally {
         clearTimeout(timeout);
+      }
+    });
+
+    app.post("/zominai/warmup", async (context) => {
+      if (!(await requireUser(context.req.raw, resolveReadUser))) return unauthorized(context);
+      const parsed = zominAiWarmupSchema.safeParse(await context.req.json().catch(() => ({})));
+      if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Select a valid ZominAI model" } }, 400);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 120_000);
+      const abort = () => controller.abort();
+      context.req.raw.signal.addEventListener("abort", abort, { once: true });
+      try {
+        const selectedModel = parsed.data.model ?? zominAi.model;
+        if (selectedModel !== zominAi.model) {
+          const models = await listRuntimeModels(controller.signal);
+          if (!models.includes(selectedModel)) return context.json({ error: { code: "ZOMINAI_MODEL_UNAVAILABLE", message: "Select a model currently loaded by the private ZominAI runtime." } }, 400);
+        }
+        const response = await runtimeFetch(runtimeUrl("/v1/chat/completions"), {
+          body: JSON.stringify({
+            max_tokens: 1,
+            messages: [{ content: "Reply with only: ready", role: "user" }],
+            model: selectedModel,
+            stream: false,
+            temperature: 0
+          }),
+          headers: { Accept: "application/json", "Content-Type": "application/json" },
+          method: "POST",
+          signal: controller.signal
+        });
+        if (!response.ok) return context.json({ error: { code: "ZOMINAI_UNAVAILABLE", message: "The private Bonsai runtime could not warm up." } }, 502);
+        await response.arrayBuffer();
+        return context.json({ model: selectedModel, status: "ready" });
+      } catch {
+        return context.json({ error: { code: "ZOMINAI_UNAVAILABLE", message: "The private Bonsai runtime could not warm up." } }, 503);
+      } finally {
+        clearTimeout(timeout);
+        context.req.raw.signal.removeEventListener("abort", abort);
       }
     });
 

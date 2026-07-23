@@ -114,6 +114,11 @@ type ZominAiSettings = {
   systemInstructions: string;
 };
 
+type ZominAiWarmup = {
+  detail: string;
+  state: "idle" | "warming" | "ready" | "failed";
+};
+
 type DriveTheme = "google-drive" | "zo-computer" | "zo-dark" | "zo-drive" | "zo-light" | "zo-system";
 
 type ZominAiVerification = {
@@ -282,11 +287,16 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.38.3";
+const GUI_VERSION = "1.39.0";
 const CLI_VERSION = "1.3.0";
-const ZOMINAI_VERSION = "1.7.1";
+const ZOMINAI_VERSION = "1.8.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.39.0",
+    date: "2026-07-23",
+    changes: ["Opened the ZominAI drawer immediately and showed a rotating Pegasus warm-up bubble while the selected local model becomes ready.", "Kept the chat composer locked until the real one-token model warm-up succeeds, with a clear retry state when it fails."]
+  },
   {
     version: "v1.38.3",
     date: "2026-07-23",
@@ -826,6 +836,11 @@ const CLI_CHANGELOG = [
 ];
 
 const ZOMINAI_CHANGELOG = [
+  {
+    version: "v1.8.0",
+    date: "2026-07-23",
+    changes: ["Added an authenticated one-token warm-up request when chat opens so the selected local model is ready before the first user message.", "Added rotating rainbow Pegasus warm-up messages, an explicit Ready state, and retryable warm-up failures."]
+  },
   {
     version: "v1.7.1",
     date: "2026-07-23",
@@ -1580,6 +1595,18 @@ function zominAiChatUrl(endpoint: string): string | null {
   }
 }
 
+function zominAiWarmupUrl(endpoint: string): string | null {
+  try {
+    const url = new URL(endpoint);
+    if (!zominAiHealthUrl(endpoint)) return null;
+    url.pathname = `${url.pathname.replace(/\/$/, "")}/warmup`;
+    url.search = "";
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 function zominAiTimeUrl(endpoint: string): string | null {
   try {
     const url = new URL(endpoint);
@@ -1606,6 +1633,28 @@ async function checkZominAiConnection(settings: ZominAiSettings, signal?: AbortS
     return { state: "disconnected", detail: `No local ZominAI runtime is listening at ${settings.endpoint}.`, models: [] };
   }
 }
+
+async function warmZominAi(settings: ZominAiSettings, signal?: AbortSignal): Promise<void> {
+  const warmupUrl = zominAiWarmupUrl(settings.endpoint);
+  if (!warmupUrl) throw new Error("The ZominAI gateway address is invalid.");
+  const response = await fetch(warmupUrl, {
+    body: JSON.stringify({ model: settings.model }),
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    method: "POST",
+    signal
+  });
+  if (response.ok) return;
+  const body = await response.json().catch(() => null) as { error?: { message?: unknown } } | null;
+  throw new Error(typeof body?.error?.message === "string" ? body.error.message : "The private Bonsai runtime could not warm up.");
+}
+
+const zominAiWarmupMessages = [
+  "Warming up my system…",
+  "Stretching my wings…",
+  "Warming up my legs…",
+  "Tuning my rainbow trail…",
+  "Almost ready to fly…"
+] as const;
 
 const zominAiTools = [
   { type: "function", function: { name: "get_current_time", description: "Get the current date and time on the Zo Computer. Use this whenever the user asks for the current date, time, day, timezone, or machine clock.", parameters: { type: "object", properties: {} } } },
@@ -1996,9 +2045,13 @@ function ZominAiChatDrawer({ client, connection, isOpen, onClose, onConnectionCh
   const [sending, setSending] = useState(false);
   const [streamingReply, setStreamingReply] = useState("");
   const [elapsedMs, setElapsedMs] = useState(0);
+  const [warmup, setWarmup] = useState<ZominAiWarmup>({ detail: "", state: "idle" });
+  const [warmupMessageIndex, setWarmupMessageIndex] = useState(0);
+  const [warmupAttempt, setWarmupAttempt] = useState(0);
   const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
   const [titleDraft, setTitleDraft] = useState("");
   const requestControllerRef = useRef<AbortController | null>(null);
+  const warmedModelRef = useRef<string | null>(null);
   const drawerRef = useRef<HTMLElement>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
   const activeSession = sessions.find((session) => session.id === activeSessionId) ?? sessions[0]!;
@@ -2007,6 +2060,14 @@ function ZominAiChatDrawer({ client, connection, isOpen, onClose, onConnectionCh
   const contextPercent = Math.min(100, Math.round((estimatedContextTokens / settings.contextTokens) * 100));
   const canCompactContext = zominAiContextSummary(activeSession.messages) !== null;
   const availableModels = connection.models.includes(settings.model) ? connection.models : [settings.model, ...connection.models];
+  const modelReady = warmup.state === "ready" && connection.state === "connected";
+  const displayedConnection = warmup.state === "warming"
+    ? { label: "Warming up", ariaLabel: "ZominAI warming up", colour: "bg-amber-50 text-amber-700", dot: "bg-amber-500 animate-pulse", detail: zominAiWarmupMessages[warmupMessageIndex] }
+    : warmup.state === "failed" || connection.state === "disconnected"
+      ? { label: "Not ready", ariaLabel: "ZominAI not ready", colour: "bg-red-50 text-red-700", dot: "bg-red-500", detail: warmup.detail || connection.detail }
+      : modelReady
+        ? { label: "Ready", ariaLabel: "ZominAI ready", colour: "bg-emerald-50 text-emerald-700", dot: "bg-emerald-500", detail: `${settings.model} is warm and ready to respond.` }
+        : { label: "Checking", ariaLabel: "ZominAI checking connection", colour: "bg-amber-50 text-amber-700", dot: "bg-amber-500 animate-pulse", detail: connection.detail };
   const drawerTransitionClass = resizing
     ? "transition-none"
     : "transition-[transform,width,border-color,box-shadow] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]";
@@ -2018,6 +2079,34 @@ function ZominAiChatDrawer({ client, connection, isOpen, onClose, onConnectionCh
   useEffect(() => {
     window.localStorage.setItem(zominAiDrawerWidthStorageKey, String(drawerWidth));
   }, [drawerWidth]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setWarmup({ detail: "", state: "idle" });
+      return;
+    }
+    if (warmedModelRef.current === settings.model) {
+      setWarmup({ detail: `${settings.model} is warm and ready to respond.`, state: "ready" });
+      return;
+    }
+    const controller = new AbortController();
+    setWarmupMessageIndex(0);
+    setWarmup({ detail: "Preparing the selected local model.", state: "warming" });
+    void warmZominAi(settings, controller.signal).then(() => {
+      warmedModelRef.current = settings.model;
+      setWarmup({ detail: `${settings.model} is warm and ready to respond.`, state: "ready" });
+    }).catch((error) => {
+      if (controller.signal.aborted) return;
+      setWarmup({ detail: error instanceof Error ? error.message : "The private Bonsai runtime could not warm up.", state: "failed" });
+    });
+    return () => controller.abort();
+  }, [isOpen, settings.endpoint, settings.model, warmupAttempt]);
+
+  useEffect(() => {
+    if (warmup.state !== "warming") return;
+    const timer = window.setInterval(() => setWarmupMessageIndex((current) => (current + 1) % zominAiWarmupMessages.length), 1_600);
+    return () => window.clearInterval(timer);
+  }, [warmup.state]);
 
   useEffect(() => {
     const transcript = transcriptRef.current;
@@ -2140,7 +2229,7 @@ function ZominAiChatDrawer({ client, connection, isOpen, onClose, onConnectionCh
 
   async function send() {
     const content = draft.trim();
-    if (!content || sending) return;
+    if (!content || sending || !modelReady) return;
     const nextMessages = [...activeSession.messages, { role: "user" as const, content }];
     const updatedAt = new Date().toISOString();
     setSessions((current) => current.map((session) => session.id === activeSession.id ? { ...session, messages: nextMessages, title: session.messages.length === 0 ? zominAiChatTitle(content) : session.title, updatedAt } : session));
@@ -2163,7 +2252,7 @@ function ZominAiChatDrawer({ client, connection, isOpen, onClose, onConnectionCh
     <div className={`flex h-full w-full flex-col bg-white transition-[transform,opacity] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none md:w-[var(--zominai-drawer-width)] ${isOpen ? "translate-x-0 opacity-100" : "translate-x-8 opacity-0"}`}>
       <header className="flex items-center gap-3 border-b border-slate-200 px-4 py-3">
         <span className="grid size-9 place-items-center overflow-hidden rounded-xl bg-cyan-950 p-0.5"><img className="size-full rounded-[0.6rem] object-cover" src={zominAiButtonUrl} alt="ZominAI Pegasus" /></span>
-        <div className="min-w-0 flex-1"><div className="flex items-center gap-2"><p className="text-sm font-semibold text-slate-900">ZominAI</p><span aria-label={`ZominAI ${connection.state === "connected" ? "connected" : connection.state === "checking" ? "checking connection" : "not connected"}`} className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold ${connection.state === "connected" ? "bg-emerald-50 text-emerald-700" : connection.state === "checking" ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-700"}`} title={connection.detail}><span aria-hidden="true" className={`size-1.5 rounded-full ${connection.state === "connected" ? "bg-emerald-500" : connection.state === "checking" ? "bg-amber-500 animate-pulse" : "bg-red-500"}`} />{connection.state === "connected" ? "Connected" : connection.state === "checking" ? "Checking" : "Not connected"}</span><button aria-label="Refresh ZominAI connection" className="rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-cyan-800 disabled:cursor-wait disabled:opacity-50" disabled={connection.state === "checking"} onClick={onRefreshConnection} title="Refresh connection" type="button"><RefreshCw className={connection.state === "checking" ? "animate-spin" : ""} size={14} /></button></div><label className="sr-only" htmlFor="zominai-model-selector">ZominAI model</label><select aria-label="ZominAI model" className="mt-0.5 block max-w-full cursor-pointer truncate rounded-md border border-transparent bg-transparent pr-6 text-xs font-medium text-slate-500 outline-none transition hover:border-slate-200 hover:bg-slate-50 focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100 disabled:cursor-wait" disabled={sending || connection.state === "checking"} id="zominai-model-selector" onChange={(event) => onModelChange(event.target.value)} title="Select the local model for the next message" value={settings.model}>{availableModels.map((model) => <option key={model} value={model}>{model}</option>)}</select></div>
+        <div className="min-w-0 flex-1"><div className="flex items-center gap-2"><p className="text-sm font-semibold text-slate-900">ZominAI</p><span aria-label={displayedConnection.ariaLabel} className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold ${displayedConnection.colour}`} title={displayedConnection.detail}><span aria-hidden="true" className={`size-1.5 rounded-full ${displayedConnection.dot}`} />{displayedConnection.label}</span><button aria-label="Refresh ZominAI connection" className="rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-cyan-800 disabled:cursor-wait disabled:opacity-50" disabled={connection.state === "checking" || warmup.state === "warming"} onClick={() => { warmedModelRef.current = null; setWarmupAttempt((attempt) => attempt + 1); onRefreshConnection(); }} title="Refresh connection and warm up the selected model" type="button"><RefreshCw className={connection.state === "checking" || warmup.state === "warming" ? "animate-spin" : ""} size={14} /></button></div><label className="sr-only" htmlFor="zominai-model-selector">ZominAI model</label><select aria-label="ZominAI model" className="mt-0.5 block max-w-full cursor-pointer truncate rounded-md border border-transparent bg-transparent pr-6 text-xs font-medium text-slate-500 outline-none transition hover:border-slate-200 hover:bg-slate-50 focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100 disabled:cursor-wait" disabled={sending || warmup.state === "warming" || connection.state === "checking"} id="zominai-model-selector" onChange={(event) => onModelChange(event.target.value)} title="Select the local model for the next message" value={settings.model}>{availableModels.map((model) => <option key={model} value={model}>{model}</option>)}</select></div>
         <button aria-label="New ZominAI chat" className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-700 px-2.5 py-2 text-xs font-semibold text-white transition hover:bg-cyan-800" onClick={createChat}><Plus size={15} /> <span className="hidden sm:inline">New chat</span></button>
         <button aria-controls="zominai-chat-history" aria-expanded={historyOpen} aria-label="Toggle ZominAI chat history" className={`rounded-lg p-2 transition ${historyOpen ? "bg-cyan-50 text-cyan-800" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`} onClick={() => setHistoryOpen((open) => !open)} title="Chat history"><History size={18} /></button>
         <button aria-label="Close ZominAI chat" className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900" onClick={onClose}><X size={19} /></button>
@@ -2178,14 +2267,16 @@ function ZominAiChatDrawer({ client, connection, isOpen, onClose, onConnectionCh
         </>}
         <section className="flex min-h-0 min-w-0 flex-1 flex-col">
           <div aria-label="ZominAI conversation" className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-slate-50/70 p-4" ref={transcriptRef}>
-            {activeSession.messages.length === 0 ? <div className="grid h-full min-h-56 place-items-center text-center"><div className="max-w-60"><img className="mx-auto size-12 rounded-2xl object-cover shadow-sm" src={zominAiButtonUrl} alt="ZominAI Pegasus" /><p className="mt-4 text-sm font-semibold text-slate-900">Ask about your Drive</p><p className="mt-2 text-xs leading-5 text-slate-500">ZominAI can search and read supported Drive files, inspect databases, check the Zo Computer clock, and run read-only queries. Results stay with this local model.</p></div></div> : activeSession.messages.map((message, index) => <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`} key={`${message.role}-${index}`}><div className="max-w-[88%]"><div className={`whitespace-pre-wrap rounded-2xl px-3 py-2.5 text-sm leading-6 ${message.role === "user" ? "rounded-br-md bg-cyan-800 text-white" : message.failed ? "rounded-bl-md border border-red-200 bg-red-50 text-red-800" : message.stopped ? "rounded-bl-md border border-amber-200 bg-amber-50 text-slate-700" : "rounded-bl-md border border-slate-200 bg-white text-slate-700"}`}>{message.content}</div>{message.role === "assistant" && <div className="mt-1 flex items-center gap-2 px-1">{typeof message.elapsedMs === "number" && <p aria-label="ZominAI response metrics" className="text-[10px] text-slate-400">{message.stopped ? "Stopped after" : "Completed in"} {zominAiElapsedLabel(message.elapsedMs)}{message.stopped ? "" : typeof message.tokensPerSecond === "number" ? ` · ${message.tokensPerSecondEstimated ? "est. " : ""}${zominAiTokensPerSecondLabel(message.tokensPerSecond)}` : " · TPS unavailable"}</p>}{(message.failed || message.stopped) && index === activeSession.messages.length - 1 && <button aria-label="Retry message to ZominAI" className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-semibold text-cyan-800 transition hover:bg-cyan-50 disabled:text-slate-300" disabled={sending} onClick={() => void retryLastMessage()} type="button"><RotateCcw size={12} /> Try again</button>}</div>}</div></div>)}
+            {activeSession.messages.length === 0 && warmup.state !== "warming" && warmup.state !== "failed" ? <div className="grid h-full min-h-56 place-items-center text-center"><div className="max-w-60"><img className="mx-auto size-12 rounded-2xl object-cover shadow-sm" src={zominAiButtonUrl} alt="ZominAI Pegasus" /><p className="mt-4 text-sm font-semibold text-slate-900">Ask about your Drive</p><p className="mt-2 text-xs leading-5 text-slate-500">ZominAI can search and read supported Drive files, inspect databases, check the Zo Computer clock, and run read-only queries. Results stay with this local model.</p></div></div> : activeSession.messages.map((message, index) => <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`} key={`${message.role}-${index}`}><div className="max-w-[88%]"><div className={`whitespace-pre-wrap rounded-2xl px-3 py-2.5 text-sm leading-6 ${message.role === "user" ? "rounded-br-md bg-cyan-800 text-white" : message.failed ? "rounded-bl-md border border-red-200 bg-red-50 text-red-800" : message.stopped ? "rounded-bl-md border border-amber-200 bg-amber-50 text-slate-700" : "rounded-bl-md border border-slate-200 bg-white text-slate-700"}`}>{message.content}</div>{message.role === "assistant" && <div className="mt-1 flex items-center gap-2 px-1">{typeof message.elapsedMs === "number" && <p aria-label="ZominAI response metrics" className="text-[10px] text-slate-400">{message.stopped ? "Stopped after" : "Completed in"} {zominAiElapsedLabel(message.elapsedMs)}{message.stopped ? "" : typeof message.tokensPerSecond === "number" ? ` · ${message.tokensPerSecondEstimated ? "est. " : ""}${zominAiTokensPerSecondLabel(message.tokensPerSecond)}` : " · TPS unavailable"}</p>}{(message.failed || message.stopped) && index === activeSession.messages.length - 1 && <button aria-label="Retry message to ZominAI" className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-semibold text-cyan-800 transition hover:bg-cyan-50 disabled:text-slate-300" disabled={sending} onClick={() => void retryLastMessage()} type="button"><RotateCcw size={12} /> Try again</button>}</div>}</div></div>)}
+            {warmup.state === "warming" && <div className="flex justify-start"><div aria-label="ZominAI warm-up status" aria-live="polite" className="inline-flex max-w-[88%] items-center gap-2 rounded-2xl rounded-bl-md border border-cyan-200 bg-white px-3 py-2.5 text-sm leading-6 text-slate-600 shadow-sm"><span className="grid size-6 shrink-0 place-items-center overflow-hidden rounded-lg bg-cyan-950 p-0.5"><img className="size-full rounded-md object-cover" src={zominAiButtonUrl} alt="" /></span><LoaderCircle className="shrink-0 animate-spin text-cyan-700" size={15} /><span>{zominAiWarmupMessages[warmupMessageIndex]}</span></div></div>}
+            {warmup.state === "failed" && <div className="flex justify-start"><div className="max-w-[88%]"><div aria-label="ZominAI warm-up failed" className="rounded-2xl rounded-bl-md border border-red-200 bg-red-50 px-3 py-2.5 text-sm leading-6 text-red-800">I could not finish warming up. {warmup.detail}</div><button className="mt-1 inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-semibold text-cyan-800 transition hover:bg-cyan-50" onClick={() => { warmedModelRef.current = null; setWarmupAttempt((attempt) => attempt + 1); onRefreshConnection(); }} type="button"><RotateCcw size={12} /> Try warm-up again</button></div></div>}
             {sending && <div className="flex justify-start"><div className="max-w-[88%]"><div className={`rounded-2xl rounded-bl-md border border-slate-200 bg-white px-3 py-2.5 text-sm leading-6 ${streamingReply ? "whitespace-pre-wrap text-slate-700" : "inline-flex items-center gap-2 text-slate-500"}`}>{streamingReply || <><LoaderCircle className="animate-spin" size={15} /> Thinking…</>}</div><p aria-live="polite" className="mt-1 px-1 text-[10px] font-medium text-slate-400">{streamingReply ? "Responding" : "Elapsed"} · {zominAiElapsedLabel(elapsedMs)}</p></div></div>}
           </div>
           <div aria-label="ZominAI context used" className="flex items-center gap-3 border-t border-slate-200 bg-white px-3 py-2">
             <div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-2 text-[11px] text-slate-500"><span className="truncate">Context used · estimated {zominAiTokenLabel(estimatedContextTokens)} / {zominAiTokenLabel(settings.contextTokens)} tokens</span><span className="shrink-0 font-medium text-slate-600">{contextPercent}%</span></div><div aria-hidden="true" className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full ${contextPercent >= 85 ? "bg-amber-500" : "bg-cyan-600"}`} style={{ width: `${Math.max(2, contextPercent)}%` }} /></div>{activeSession.compactedAt && <p className="mt-1 text-[10px] text-slate-400">Compacted {zominAiTimestamp(activeSession.compactedAt)}</p>}</div>
             <button aria-label="Compact ZominAI context" className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 px-2 py-1.5 text-[11px] font-semibold text-slate-600 hover:border-cyan-300 hover:text-cyan-800 disabled:cursor-not-allowed disabled:text-slate-300" disabled={!canCompactContext || sending} onClick={compactContext} title={canCompactContext ? "Keep recent messages active and compact earlier context locally" : "Add more messages before compacting context"} type="button"><Minimize2 size={14} /><span className="hidden sm:inline">Compact</span></button>
           </div>
-          <form className="border-t border-slate-200 bg-white p-3" onSubmit={(event) => { event.preventDefault(); void send(); }}><label className="sr-only" htmlFor="zominai-drawer-message">Message ZominAI</label><div className="flex items-end gap-2 rounded-xl border border-slate-300 p-1.5 focus-within:border-cyan-600 focus-within:ring-4 focus-within:ring-cyan-100"><textarea aria-label="Message ZominAI" className="min-h-10 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-slate-400" disabled={sending} id="zominai-drawer-message" onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder="Ask ZominAI…" rows={1} value={draft} />{sending ? <button aria-label="Stop ZominAI response" className="grid size-9 place-items-center rounded-lg bg-red-600 text-white transition hover:bg-red-700" onClick={stopResponse} title="Stop generating" type="button"><Square fill="currentColor" size={14} /></button> : <button aria-label="Send message to ZominAI" className="grid size-9 place-items-center rounded-lg bg-cyan-700 text-white hover:bg-cyan-800 disabled:bg-slate-300" disabled={!draft.trim()} type="submit"><Send size={17} /></button>}</div></form>
+          <form className="border-t border-slate-200 bg-white p-3" onSubmit={(event) => { event.preventDefault(); void send(); }}><label className="sr-only" htmlFor="zominai-drawer-message">Message ZominAI</label><div className="flex items-end gap-2 rounded-xl border border-slate-300 p-1.5 focus-within:border-cyan-600 focus-within:ring-4 focus-within:ring-cyan-100"><textarea aria-label="Message ZominAI" className="min-h-10 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-slate-400" disabled={sending || !modelReady} id="zominai-drawer-message" onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder={warmup.state === "warming" ? "ZominAI is warming up…" : warmup.state === "failed" ? "Warm-up required before chatting" : connection.state !== "connected" ? "Connecting to ZominAI…" : "Ask ZominAI…"} rows={1} value={draft} />{sending ? <button aria-label="Stop ZominAI response" className="grid size-9 place-items-center rounded-lg bg-red-600 text-white transition hover:bg-red-700" onClick={stopResponse} title="Stop generating" type="button"><Square fill="currentColor" size={14} /></button> : <button aria-label="Send message to ZominAI" className="grid size-9 place-items-center rounded-lg bg-cyan-700 text-white hover:bg-cyan-800 disabled:bg-slate-300" disabled={!draft.trim() || !modelReady} type="submit"><Send size={17} /></button>}</div></form>
         </section>
       </div>
     </div>
@@ -2697,17 +2788,16 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
       setZominAiChatOpen(false);
       return;
     }
+    setZominAiChatSettings(readZominAiSettings());
+    setZominAiConnection({ state: "checking", detail: "Checking the local Bonsai runtime.", models: [] });
+    setZominAiChatOpen(true);
     try {
       const status = await getZominAiDownloadStatus();
-      if (status.state === "ready") {
-        setZominAiChatSettings(readZominAiSettings());
-        setZominAiConnection({ state: "checking", detail: "Checking the local Bonsai runtime.", models: [] });
-        setZominAiChatOpen(true);
-        return;
-      }
+      if (status.state === "ready") return;
     } catch {
       // An unavailable local status service means the runtime is not ready.
     }
+    setZominAiChatOpen(false);
     setZominAiPane("install");
     setSection("zominai");
     setCurrentPath("");
