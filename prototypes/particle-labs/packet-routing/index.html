@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f4f8ff" />
+    <title>Zo Drive Particle Lab — Packet Routing</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="lab">
+      <div class="ambient-wash wash-left" aria-hidden="true"></div>
+      <div class="ambient-wash wash-right" aria-hidden="true"></div>
+      <canvas class="particle-field" aria-hidden="true"></canvas>
+
+      <header class="lab-header">
+        <a class="brand" href="#" aria-label="Zo Drive particle lab home">
+          <span class="brand-mark">z</span>
+          <span>Zo Drive</span>
+        </a>
+        <p class="lab-index">02 / Packet Routing</p>
+      </header>
+
+      <section class="intro" aria-labelledby="lab-title">
+        <p class="eyebrow"><span></span>Private data in motion</p>
+        <h1 id="lab-title">Every packet<br /><em>finds its way home.</em></h1>
+        <p class="description">
+          Your files move through the tools you choose, then return to the
+          private Drive you control.
+        </p>
+        <div class="route-key" aria-label="Animation legend">
+          <span><i></i> Encrypted packet</span>
+          <span><i></i> Local destination</span>
+        </div>
+      </section>
+
+      <section class="drive-destination" aria-label="Private Zo Drive destination">
+        <div class="destination-aura" aria-hidden="true"></div>
+        <article class="drive-card">
+          <div class="card-topbar">
+            <div class="traffic" aria-hidden="true"><i></i><i></i><i></i></div>
+            <span class="card-title"><i>z</i> My Drive</span>
+            <span class="lock" aria-label="Private">Private</span>
+          </div>
+          <div class="card-body">
+            <div class="drive-heading">
+              <div>
+                <p>LOCAL DESTINATION</p>
+                <h2>Your private Drive</h2>
+              </div>
+              <span class="secure-status"><i></i> Secure</span>
+            </div>
+
+            <div class="ingress">
+              <div class="ingress-mark" aria-hidden="true">
+                <span></span><span></span><span></span>
+              </div>
+              <div>
+                <b>Receiving privately</b>
+                <small>Packets resolve on your Zo</small>
+              </div>
+              <strong>LIVE</strong>
+            </div>
+
+            <div class="folders" aria-hidden="true">
+              <div><i></i><span><b>Projects</b><small>24 files</small></span></div>
+              <div><i></i><span><b>Research</b><small>18 files</small></span></div>
+              <div><i></i><span><b>Shared</b><small>7 files</small></span></div>
+            </div>
+
+            <div class="storage">
+              <span><b>2.4 GB</b> stored locally</span><span>10 GB</span>
+              <i><b></b></i>
+            </div>
+          </div>
+        </article>
+        <p class="destination-note"><span></span> Nothing leaves without your say</p>
+      </section>
+
+      <footer>
+        <span>Move your cursor through the packet stream</span>
+        <span>ZO PARTICLE STUDY / 2026</span>
+      </footer>
+    </main>
+    <script src="./particle.js"></script>
+  </body>
+</html>
