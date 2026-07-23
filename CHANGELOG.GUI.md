@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.42.9 - 2026-07-23
+
+### Changed
+
+- Reworked the landing workflow section to explain GUI and CLI capabilities,
+  including the ZominAI browser-only boundary.
+
 ## v1.42.8 - 2026-07-23
 
 ### Changed
