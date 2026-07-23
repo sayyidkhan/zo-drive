@@ -99,7 +99,34 @@ describe("Zo Drive API", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("text/event-stream");
-    await expect(response.text()).resolves.toBe(events);
+    await expect(response.text()).resolves.toBe(`: zominai-stream-open\n\n${events}`);
+  });
+
+  it("opens the ZominAI stream before the runtime emits its first token", async () => {
+    const root = await mkdtemp(join(tmpdir(), "zo-drive-zominai-keepalive-"));
+    roots.push(root);
+    let resolveRuntime!: (response: Response) => void;
+    const runtimeFetch = vi.fn(() => new Promise<Response>((resolve) => { resolveRuntime = resolve; }));
+    const app = createApp({
+      storage: new LocalDriveStorage({ root }),
+      resolveUserId: (request) => request.headers.get("x-test-user-id"),
+      zominAi: { endpoint: "http://127.0.0.1:57183", fetch: runtimeFetch, model: "Bonsai-8B-Q1_0.gguf" }
+    });
+
+    const response = await app.request("http://localhost/zominai/chat", { method: "POST", headers: { "content-type": "application/json", "x-test-user-id": "alice" }, body: JSON.stringify({ messages: [{ content: "Hello", role: "user" }], stream: true }) });
+    const reader = response.body!.getReader();
+
+    expect(response.status).toBe(200);
+    await expect(reader.read()).resolves.toMatchObject({ done: false, value: new TextEncoder().encode(": zominai-stream-open\n\n") });
+    resolveRuntime(new Response('data: {"choices":[{"delta":{"content":"Hello"}}]}\n\ndata: [DONE]\n\n', { headers: { "content-type": "text/event-stream" } }));
+    const decoder = new TextDecoder();
+    let rest = "";
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      rest += decoder.decode(chunk.value, { stream: true });
+    }
+    expect(rest).toContain('"content":"Hello"');
   });
 
   it("aborts private runtime generation when the downstream stream is cancelled", async () => {

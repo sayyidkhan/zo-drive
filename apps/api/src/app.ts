@@ -330,40 +330,68 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
             return context.json({ error: { code: "ZOMINAI_MODEL_UNAVAILABLE", message: "Select a model currently loaded by the private ZominAI runtime." } }, 400);
           }
         }
-        const response = await runtimeFetch(runtimeUrl("/v1/chat/completions"), {
+        const runtimeRequest = () => runtimeFetch(runtimeUrl("/v1/chat/completions"), {
           body: JSON.stringify({ ...parsed.data, model: selectedModel, stream: parsed.data.stream ?? false }),
           headers: { Accept: parsed.data.stream ? "text/event-stream" : "application/json", "Content-Type": "application/json" },
           method: "POST",
           signal: controller.signal
         });
-        if (!response.ok) {
-          cleanup();
-          return context.json({ error: { code: "ZOMINAI_UNAVAILABLE", message: "The private Bonsai runtime rejected this request. Try a new chat or a shorter message." } }, 502);
-        }
-        if (parsed.data.stream && response.body) {
-          const reader = response.body.getReader();
+        if (parsed.data.stream) {
+          const encoder = new TextEncoder();
+          let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+          let closed = false;
+          let heartbeat: ReturnType<typeof setInterval> | null = null;
           const body = new ReadableStream<Uint8Array>({
-            async pull(streamController) {
-              try {
-                const chunk = await reader.read();
-                if (chunk.done) {
-                  cleanup();
-                  streamController.close();
-                } else {
-                  streamController.enqueue(chunk.value);
-                }
-              } catch (error) {
+            start(streamController) {
+              const enqueue = (value: Uint8Array) => {
+                if (!closed) streamController.enqueue(value);
+              };
+              const close = () => {
+                if (closed) return;
+                closed = true;
+                if (heartbeat) clearInterval(heartbeat);
                 cleanup();
-                streamController.error(error);
-              }
+                streamController.close();
+              };
+              enqueue(encoder.encode(": zominai-stream-open\n\n"));
+              heartbeat = setInterval(() => enqueue(encoder.encode(": zominai-keep-alive\n\n")), 5_000);
+              void (async () => {
+                try {
+                  const response = await runtimeRequest();
+                  if (!response.ok || !response.body) {
+                    enqueue(encoder.encode(`event: zominai-error\ndata: ${JSON.stringify({ error: { code: "ZOMINAI_UNAVAILABLE", message: "The private Bonsai runtime rejected this request. Try a new chat or a shorter message." } })}\n\n`));
+                    close();
+                    return;
+                  }
+                  reader = response.body.getReader();
+                  while (!closed) {
+                    const chunk = await reader.read();
+                    if (chunk.done) break;
+                    enqueue(chunk.value);
+                  }
+                  close();
+                } catch {
+                  if (!closed && !controller.signal.aborted) {
+                    enqueue(encoder.encode(`event: zominai-error\ndata: ${JSON.stringify({ error: { code: "ZOMINAI_UNAVAILABLE", message: "The private Bonsai runtime is unavailable. Try again shortly." } })}\n\n`));
+                    close();
+                  }
+                }
+              })();
             },
             async cancel(reason) {
+              closed = true;
+              if (heartbeat) clearInterval(heartbeat);
               controller.abort();
               cleanup();
-              await reader.cancel(reason);
+              await reader?.cancel(reason);
             }
           });
           return new Response(body, { headers: { "cache-control": "no-store, no-transform", "content-type": "text/event-stream; charset=utf-8", "x-accel-buffering": "no" } });
+        }
+        const response = await runtimeRequest();
+        if (!response.ok) {
+          cleanup();
+          return context.json({ error: { code: "ZOMINAI_UNAVAILABLE", message: "The private Bonsai runtime rejected this request. Try a new chat or a shorter message." } }, 502);
         }
         const body = await response.arrayBuffer();
         cleanup();

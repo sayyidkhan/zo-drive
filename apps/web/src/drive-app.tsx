@@ -114,7 +114,7 @@ type ZominAiSettings = {
   systemInstructions: string;
 };
 
-type DriveTheme = "zominai-drive" | "zo-computer" | "zo-dark" | "zo-drive" | "zo-light" | "zo-system";
+type DriveTheme = "google-drive" | "zo-computer" | "zo-dark" | "zo-drive" | "zo-light" | "zo-system";
 
 type ZominAiVerification = {
   checkedAt: string;
@@ -282,11 +282,21 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.38.1";
+const GUI_VERSION = "1.38.3";
 const CLI_VERSION = "1.3.0";
-const ZOMINAI_VERSION = "1.7.0";
+const ZOMINAI_VERSION = "1.7.1";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.38.3",
+    date: "2026-07-23",
+    changes: ["Applied the Google red, yellow, green, and blue palette throughout the selected controls, workspace rail, and navigation instead of using it only as decoration.", "Made Shared Drive files open directly from Recent and Shared with me instead of routing to the Shared Drives management screen."]
+  },
+  {
+    version: "v1.38.2",
+    date: "2026-07-23",
+    changes: ["Reintroduced Google Drive as a dark, four-colour Google theme inspired by Gemini's red, yellow, green, and blue visual language."]
+  },
   {
     version: "v1.38.1",
     date: "2026-07-22",
@@ -817,6 +827,11 @@ const CLI_CHANGELOG = [
 
 const ZOMINAI_CHANGELOG = [
   {
+    version: "v1.7.1",
+    date: "2026-07-23",
+    changes: ["Kept slow local-model requests alive through Zo's HTTP edge from the moment chat starts until the first token arrives.", "Forwarded runtime failures inside the open stream so failed turns stay retryable.", "Skipped the full Drive tool schema for ordinary conversation while preserving authenticated tools for Drive and machine-data prompts."]
+  },
+  {
     version: "v1.7.0",
     date: "2026-07-22",
     changes: ["Added an authenticated current-time tool so machine date, time, day, and timezone questions use the Zo Computer clock.", "Added end-to-end response cancellation that stops browser streaming, the gateway request, and local model generation while keeping the turn retryable.", "Made every completed response show runtime TPS, a labelled estimate when runtime timings are absent, or an explicit unavailable state for older history.", "Improved follow-up handling so recent conversation context remains authoritative."]
@@ -934,7 +949,7 @@ function LandingPage() {
     { icon: <Send size={21} />, title: "Share on your terms", copy: "Use Zo Transfer for public or passcode-protected links with expiry controls." }
   ];
 
-  return <main className="min-h-screen overflow-hidden bg-[#f7fafc] text-slate-900">
+  return <main className="flex min-h-screen flex-col overflow-hidden bg-[#f7fafc] text-slate-900">
     <div className="relative isolate">
       <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[43rem] overflow-hidden bg-[#ecf7ff]"><div className="absolute -left-36 -top-32 size-[34rem] rounded-full bg-sky-300/30 blur-3xl" /><div className="absolute right-[-8rem] top-24 size-[30rem] rounded-full bg-blue-300/35 blur-3xl" /></div>
       <header className="mx-auto flex max-w-7xl items-center justify-between px-5 py-5 sm:px-8">
@@ -976,8 +991,60 @@ function LandingPage() {
 
     <section className="mx-auto grid max-w-7xl gap-8 px-5 py-20 sm:px-8 lg:grid-cols-[1fr_.9fr] lg:items-center"><div><p className="text-sm font-bold uppercase tracking-[0.15em] text-blue-600">Bring your own workflow</p><h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">Your storage, accessible your way.</h2><p className="mt-4 max-w-xl text-base leading-7 text-slate-600">The browser experience is built for everyday file work. The bundled command-line tool and TypeScript SDK let your own machines send files directly into the same private Drive.</p><a className="mt-6 inline-flex items-center gap-2 text-sm font-bold text-blue-700 hover:text-blue-900" href={docsUrl()}>See upload guides <ArrowUpRight size={16} /></a></div><div className="rounded-2xl bg-slate-950 p-5 shadow-xl shadow-slate-900/15 sm:p-7"><div className="flex items-center gap-2 text-xs font-semibold text-slate-400"><Terminal size={16} /> Terminal</div><pre className="mt-5 overflow-x-auto text-sm leading-7 text-slate-200"><code><span className="text-cyan-300">zo-drive</span> upload ./launch-plan.pdf <span className="text-amber-300">--path</span> Product/Launch{`\n\n`}<span className="text-slate-500"># Uploaded Product/Launch/launch-plan.pdf</span></code></pre></div></section>
 
+    <KillerFeatureStories />
+
     <footer className="border-t border-slate-200 bg-white"><div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-7 text-sm text-slate-500 sm:px-8"><DriveMark compact /><span>Your decentralised cloud on Zo.</span><a className="font-semibold text-slate-600 hover:text-blue-700" href={docsUrl()}>Documentation</a></div></footer>
   </main>;
+}
+
+function KillerFeatureStories() {
+  const features = [
+    { eyebrow: "Zo Functions", title: "Automations that live beside your data.", body: "Write a JavaScript or Python handler beside your data, run it manually or on a UTC schedule, and expose it only when you deliberately choose to.", benefits: ["Private or deliberate public endpoints", "UTC cron schedules and visible run history"], href: `${driveAppUrl()}&section=functions`, cta: "Explore Zo Functions", icon: <Terminal size={20} />, file: "weekly-report.js", command: "zo-drive function create --name weekly-report --source-file ./weekly-report.js", lines: ["Private JavaScript function created", "Schedule: 0 9 * * 1 UTC", "Ready to run or invoke"], accent: "cyan" },
+    { eyebrow: "Zo Paste", title: "Share notes and code with control.", body: "Create a private text paste, then share exactly that note or snippet without exposing the rest of your Drive.", benefits: ["View-only or editable links", "Passcode, expiry, and revocation"], href: `${driveAppUrl()}&section=pastes`, cta: "Explore Zo Paste", icon: <Code2 size={20} />, file: "launch-notes.md", command: "zo-drive paste create launch-notes.md --editable", lines: ["Creating private paste…", "Link access: editable", "Passcode protection enabled"], accent: "cyan" },
+    { eyebrow: "Zo Transfer", title: "Deliver files without opening a folder.", body: "Choose an existing Drive file or upload a new one, then send a purpose-built delivery link that expires when you say it should.", benefits: ["Public or passcode access", "Clear expiry and revocation controls"], href: `${driveAppUrl()}&section=transfer`, cta: "Explore Zo Transfer", icon: <Send size={20} />, file: "launch-brief.pdf", command: "zo-drive transfer create launch-brief.pdf --expires 7d", lines: ["Preparing delivery link…", "Access: passcode protected", "Expires in 7 days"], accent: "blue" },
+    { eyebrow: "Zo Shared Drives", title: "Collaborate without making copies.", body: "Share selected folders as live remote mounts so the people you choose can work from the source folder you control.", benefits: ["Viewer and editor access", "Private bounded cache for opened content"], href: `${driveAppUrl()}&section=cluster-databases`, cta: "Explore Zo Shared Drives", icon: <Network size={20} />, file: "Research / shared", command: "zo-drive shared invite Research --role editor", lines: ["Pairing key created", "Role: Read & write", "Source folder stays live"], accent: "cyan" },
+    { eyebrow: "Zo Databases", title: "Put application data beside your files.", body: "Install a supported runtime, create a private persistent database, and manage it from the same workspace as the files it supports.", benefits: ["Real private engine runtimes", "Database-scoped HTTPS credentials"], href: `${driveAppUrl()}&section=databases&databaseView=catalog`, cta: "Explore Zo Databases", icon: <Database size={20} />, file: "product.sqlite", command: "zo-drive database create product --engine sqlite", lines: ["SQLite runtime ready", "Private database created", "Scoped access key issued"], accent: "emerald" },
+    { eyebrow: "ZominAI", title: "Ask your Drive. Keep the write boundary.", body: "Use a model running on your Zo Computer to understand storage, search Drive context, and inspect supported databases without granting write access.", benefits: ["Local model runtime on your Zo", "Authenticated, read-only Drive tools"], href: `${driveAppUrl()}&section=zominai`, cta: "Explore ZominAI", icon: <Cpu size={20} />, file: "ZominAI · local", command: "What changed in Product/Launch?", lines: ["Searching Product/Launch…", "Reading 4 supported files", "Ready with a sourced answer"], accent: "amber" }
+  ];
+
+  return <section className="border-t border-slate-200 bg-[#f7fafc] py-20 sm:py-24" id="killer-features">
+    <style>{`
+      @keyframes zo-terminal-line { 0%, 11% { opacity: 0; transform: translateY(7px); } 18%, 100% { opacity: 1; transform: translateY(0); } }
+      @keyframes zo-terminal-cursor { 0%, 45% { opacity: 1; } 46%, 100% { opacity: 0; } }
+      @keyframes zo-terminal-glow { 0%, 100% { box-shadow: 0 24px 56px rgba(15, 23, 42, .16); } 50% { box-shadow: 0 28px 68px rgba(37, 99, 235, .25); } }
+      @media (prefers-reduced-motion: no-preference) {
+        .zo-terminal { animation: zo-terminal-glow 4s ease-in-out infinite; }
+        .zo-terminal-line { animation: zo-terminal-line 5.2s cubic-bezier(.2,.7,.2,1) infinite both; }
+        .zo-terminal-cursor { animation: zo-terminal-cursor 900ms steps(1, end) infinite; }
+        main > section:nth-of-type(2) pre { animation: zo-terminal-glow 4s ease-in-out infinite; }
+      }
+    `}</style>
+    <div className="mx-auto max-w-7xl px-5 sm:px-8">
+      <div className="max-w-3xl">
+        <p className="text-sm font-bold uppercase tracking-[0.15em] text-blue-600">The rest of the Zo Drive stack</p>
+        <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">Every capability earns its place beside your data.</h2>
+        <p className="mt-4 text-base leading-7 text-slate-600">Zo Functions is only one part of the product. These five workflows bring controlled sharing, delivery, collaboration, data, and local AI into the same private cloud.</p>
+      </div>
+      <div className="mt-14 space-y-20 lg:space-y-28">
+        {features.map((feature, featureIndex) => <article className="grid gap-10 lg:grid-cols-[.92fr_1.08fr] lg:items-center" key={feature.eyebrow}>
+          <div className={featureIndex % 2 === 1 ? "lg:order-2" : undefined}>
+            <span className={`grid size-11 place-items-center rounded-xl ${feature.accent === "emerald" ? "bg-emerald-100 text-emerald-700" : feature.accent === "amber" ? "bg-amber-100 text-amber-700" : feature.accent === "blue" ? "bg-blue-100 text-blue-700" : "bg-cyan-100 text-cyan-700"}`}>{feature.icon}</span>
+            <p className={`mt-6 text-sm font-bold uppercase tracking-[0.15em] ${feature.accent === "emerald" ? "text-emerald-700" : feature.accent === "amber" ? "text-amber-700" : feature.accent === "blue" ? "text-blue-700" : "text-cyan-700"}`}>{feature.eyebrow}</p>
+            <h3 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">{feature.title}</h3>
+            <p className="mt-4 max-w-xl text-base leading-7 text-slate-600">{feature.body}</p>
+            <div className="mt-7 space-y-3 text-sm font-medium text-slate-700">{feature.benefits.map((benefit) => <p className="flex items-center gap-3" key={benefit}><span className={`grid size-6 place-items-center rounded-full ${feature.accent === "emerald" ? "bg-emerald-100 text-emerald-700" : feature.accent === "amber" ? "bg-amber-100 text-amber-700" : feature.accent === "blue" ? "bg-blue-100 text-blue-700" : "bg-cyan-100 text-cyan-700"}`}><Check size={14} /></span>{benefit}</p>)}</div>
+            <a aria-label={feature.cta} className={`mt-8 inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white shadow-lg transition hover:-translate-y-0.5 ${feature.accent === "emerald" ? "bg-emerald-700 shadow-emerald-700/20 hover:bg-emerald-800" : feature.accent === "amber" ? "bg-amber-600 shadow-amber-600/20 hover:bg-amber-700" : feature.accent === "blue" ? "bg-blue-600 shadow-blue-600/20 hover:bg-blue-700" : "bg-cyan-700 shadow-cyan-700/20 hover:bg-cyan-800"}`} href={feature.href}>{feature.cta} <ArrowUpRight size={16} /></a>
+          </div>
+          <div className={featureIndex % 2 === 1 ? "lg:order-1" : undefined}>
+            <div className="zo-terminal overflow-hidden rounded-[1.6rem] border border-slate-800 bg-slate-950 shadow-2xl shadow-slate-950/15">
+              <div className="flex items-center justify-between border-b border-white/10 bg-slate-900 px-5 py-4"><div className="flex items-center gap-2 text-sm font-semibold text-white"><Terminal size={17} className="text-cyan-300" /> {feature.file}</div><span className="rounded-full bg-emerald-300/10 px-2.5 py-1 text-xs font-semibold text-emerald-200">live</span></div>
+              <div className="p-5 sm:p-7"><div className="rounded-xl bg-[#111827] p-4 font-mono text-xs leading-7 text-slate-200 sm:text-sm"><p className="zo-terminal-line text-cyan-300" style={{ animationDelay: "0ms" }}><span className="text-slate-500">$ </span>{feature.command}<span className="zo-terminal-cursor ml-0.5 inline-block text-cyan-200">_</span></p>{feature.lines.map((line, lineIndex) => <p className="zo-terminal-line text-slate-300" key={line} style={{ animationDelay: `${(lineIndex + 1) * 850}ms` }}><span className="mr-2 text-emerald-300">✓</span>{line}</p>)}</div><div className="mt-4 flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3"><span className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Zo Drive</span><span className="text-xs font-medium text-emerald-200">Completed securely</span></div></div>
+            </div>
+          </div>
+        </article>)}
+      </div>
+    </div>
+  </section>;
 }
 
 function DocsPage({ mode, page, product }: { mode: "gui" | "cli"; page: "docs" | "changelog"; product: "drive" | "zominai" }) {
@@ -1268,14 +1335,14 @@ const driveThemeStorageKey = "zo-drive:theme:v1";
 
 function readDriveTheme(): DriveTheme {
   const stored = window.localStorage.getItem(driveThemeStorageKey);
-  if (stored === "google-drive" || stored === "zominai-drive") return "zominai-drive";
+  if (stored === "google-drive" || stored === "zominai-drive") return "google-drive";
   return stored === "zo-computer" || stored === "zo-dark" || stored === "zo-light" || stored === "zo-system" ? stored : "zo-drive";
 }
 
 function ThemeScreen({ onThemeChange, theme }: { onThemeChange: (theme: DriveTheme) => void; theme: DriveTheme }) {
   const options: Array<{ description: string; id: DriveTheme; label: string }> = [
     { id: "zo-drive", label: "Zo Drive", description: "Keep the familiar blue workspace built for organising files and running Drive tools." },
-    { id: "zominai-drive", label: "ZominAI Drive", description: "Use ZominAI's cyan palette across a bright, focused Drive workspace." },
+    { id: "google-drive", label: "Google Drive", description: "Use a dark Google-colour workspace with Gemini-inspired red, yellow, green, and blue accents." },
     { id: "zo-computer", label: "Zo Computer", description: "Use Zo's black-and-white Pegasus direction with serif display type and an ink-forward workspace." },
     { id: "zo-light", label: "Zo Light", description: "Zo's built-in light appearance for a clean white workspace." },
     { id: "zo-dark", label: "Zo Dark", description: "Zo's built-in dark appearance for an ink-blue workspace." },
@@ -1295,13 +1362,13 @@ function ThemeScreen({ onThemeChange, theme }: { onThemeChange: (theme: DriveThe
 function ThemeOptions({ onThemeChange, options, theme, title }: { onThemeChange: (theme: DriveTheme) => void; options: Array<{ description: string; id: DriveTheme; label: string }>; theme: DriveTheme; title: string }) {
   return <section><div className="border-b border-slate-100 px-5 py-3"><p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">{title}</p></div><div className={`grid gap-5 p-5 ${options.length === 3 ? "lg:grid-cols-3" : "lg:grid-cols-2"}`}>{options.map((option) => {
         const selected = theme === option.id;
-        const zominAiDrive = option.id === "zominai-drive";
+        const googleDrive = option.id === "google-drive";
         const zoComputer = option.id === "zo-computer";
         const dark = option.id === "zo-dark";
         const system = option.id === "zo-system";
-        const previewClass = zoComputer ? "bg-[#f5f0e7] text-[#171512]" : dark ? "bg-[#0b1020] text-slate-100" : system ? "bg-gradient-to-br from-white via-white to-slate-950 text-slate-900" : zominAiDrive ? "bg-[#f7fcfd] text-[#164e63]" : option.id === "zo-drive" ? "bg-[#f8faff] text-slate-800" : "bg-white text-slate-900";
-        const lineClass = dark ? "bg-slate-700" : zoComputer ? "bg-stone-300" : zominAiDrive ? "bg-cyan-200" : "bg-slate-200";
-        return <article className={`overflow-hidden rounded-2xl border-2 transition ${selected ? "border-slate-900 shadow-lg shadow-slate-950/10" : "border-slate-200 hover:border-slate-400"}`} key={option.id}><div className={`min-h-44 p-5 ${previewClass}`}><div className={`flex items-center gap-2 border-b pb-3 text-sm font-semibold ${dark ? "border-white/15" : zoComputer ? "border-stone-300 font-mono" : zominAiDrive ? "border-cyan-200" : "border-slate-200"}`}><span className={`grid size-8 place-items-center rounded-lg ${dark ? "bg-violet-500 text-white" : zoComputer ? "bg-[#171512] text-white" : zominAiDrive ? "bg-cyan-700 text-white" : option.id === "zo-drive" ? "bg-blue-600 text-white" : "bg-slate-900 text-white"}`}>{zoComputer ? <span className="font-serif text-lg leading-none">Z</span> : zominAiDrive ? <Cpu size={17} /> : system ? <Settings2 size={17} /> : option.id === "zo-drive" ? <img className="size-5 object-contain" src={drivePegasusLogoUrl} alt="" /> : <Palette size={17} />}</span>{option.label}</div><div className="mt-5"><p className={`text-base font-semibold ${dark ? "text-white" : "text-current"}`}>{zoComputer ? "Run your life on Zo." : zominAiDrive ? "A clear workspace for focused work." : system ? "Adapts with your device." : dark ? "A calm workspace after dark." : "Your files, your way."}</p><div className={`mt-4 h-2 w-3/4 rounded-full ${lineClass}`} /><div className={`mt-2 h-2 w-1/2 rounded-full ${lineClass}`} /></div></div><div className="p-5"><div className="flex items-start justify-between gap-4"><p className="text-sm leading-6 text-slate-500">{option.description}</p>{selected && <span className="grid size-7 shrink-0 place-items-center rounded-full bg-slate-900 text-white"><Check size={16} /></span>}</div><button aria-pressed={selected} className={`mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition ${selected ? "bg-slate-100 text-slate-600" : "bg-slate-900 text-white hover:bg-slate-700"}`} onClick={() => onThemeChange(option.id)} type="button">{selected ? "Current theme" : `Use ${option.label}`}</button></div></article>;
+        const previewClass = zoComputer ? "bg-[#f5f0e7] text-[#171512]" : dark ? "bg-[#0b1020] text-slate-100" : system ? "bg-gradient-to-br from-white via-white to-slate-950 text-slate-900" : googleDrive ? "bg-black text-white" : option.id === "zo-drive" ? "bg-[#f8faff] text-slate-800" : "bg-white text-slate-900";
+        const lineClass = dark ? "bg-slate-700" : zoComputer ? "bg-stone-300" : googleDrive ? "bg-white/20" : "bg-slate-200";
+        return <article className={`overflow-hidden rounded-2xl border-2 transition ${selected ? "border-slate-900 shadow-lg shadow-slate-950/10" : "border-slate-200 hover:border-slate-400"}`} key={option.id}><div className={`min-h-44 p-5 ${previewClass}`}><div className={`flex items-center gap-2 border-b pb-3 text-sm font-semibold ${dark || googleDrive ? "border-white/15" : zoComputer ? "border-stone-300 font-mono" : "border-slate-200"}`}><span className={`grid size-8 place-items-center rounded-lg ${dark ? "bg-violet-500 text-white" : zoComputer ? "bg-[#171512] text-white" : googleDrive ? "bg-[#4285f4] text-white" : option.id === "zo-drive" ? "bg-blue-600 text-white" : "bg-slate-900 text-white"}`}>{zoComputer ? <span className="font-serif text-lg leading-none">Z</span> : googleDrive ? <Palette size={17} /> : system ? <Settings2 size={17} /> : option.id === "zo-drive" ? <img className="size-5 object-contain" src={drivePegasusLogoUrl} alt="" /> : <Palette size={17} />}</span>{option.label}</div><div className="mt-5"><p className={`text-base font-semibold ${dark || googleDrive ? "text-white" : "text-current"}`}>{zoComputer ? "Run your life on Zo." : googleDrive ? "Google colour, focused work." : system ? "Adapts with your device." : dark ? "A calm workspace after dark." : "Your files, your way."}</p>{googleDrive ? <div className="mt-7 flex items-center gap-3"><span className="size-3 rounded-full bg-[#ea4335]" /><span className="size-3 rounded-full bg-[#fbbc04]" /><span className="size-3 rounded-full bg-[#34a853]" /><span className="size-3 rounded-full bg-[#4285f4]" /></div> : <><div className={`mt-4 h-2 w-3/4 rounded-full ${lineClass}`} /><div className={`mt-2 h-2 w-1/2 rounded-full ${lineClass}`} /></>}</div></div><div className="p-5"><div className="flex items-start justify-between gap-4"><p className="text-sm leading-6 text-slate-500">{option.description}</p>{selected && <span className="grid size-7 shrink-0 place-items-center rounded-full bg-slate-900 text-white"><Check size={16} /></span>}</div><button aria-pressed={selected} className={`mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition ${selected ? "bg-slate-100 text-slate-600" : "bg-slate-900 text-white hover:bg-slate-700"}`} onClick={() => onThemeChange(option.id)} type="button">{selected ? "Current theme" : `Use ${option.label}`}</button></div></article>;
       })}</div></section>;
 }
 
@@ -1323,19 +1390,23 @@ function DarkThemeStyles({ selector }: { selector: string }) {
 
 function DriveThemeStyles({ theme }: { theme: DriveTheme }) {
   if (theme === "zo-drive") return null;
-  if (theme === "zominai-drive") return <style>{`
-    [data-drive-theme="zominai-drive"] { background: #f7fcfd; color: #164e63; color-scheme: light; }
-    [data-drive-theme="zominai-drive"] .bg-white { background-color: #ffffff !important; }
-    [data-drive-theme="zominai-drive"] .bg-slate-50, [data-drive-theme="zominai-drive"] .bg-\\[\\#f8faff\\] { background-color: #f7fcfd !important; }
-    [data-drive-theme="zominai-drive"] .bg-slate-100 { background-color: #ecfeff !important; }
-    [data-drive-theme="zominai-drive"] .bg-blue-50 { background-color: #cffafe !important; }
-    [data-drive-theme="zominai-drive"] .border-slate-100, [data-drive-theme="zominai-drive"] .border-slate-200, [data-drive-theme="zominai-drive"] .border-slate-300 { border-color: #bae6fd !important; }
-    [data-drive-theme="zominai-drive"] .text-slate-900, [data-drive-theme="zominai-drive"] .text-slate-800, [data-drive-theme="zominai-drive"] .text-slate-700 { color: #164e63 !important; }
-    [data-drive-theme="zominai-drive"] .text-slate-600, [data-drive-theme="zominai-drive"] .text-slate-500 { color: #155e75 !important; }
-    [data-drive-theme="zominai-drive"] .text-slate-400 { color: #0e7490 !important; }
-    [data-drive-theme="zominai-drive"] .bg-blue-600, [data-drive-theme="zominai-drive"] .bg-blue-700 { background-color: #0e7490 !important; }
-    [data-drive-theme="zominai-drive"] .text-blue-600, [data-drive-theme="zominai-drive"] .text-blue-700 { color: #0e7490 !important; }
-    [data-drive-theme="zominai-drive"] .hover\\:bg-blue-50:hover, [data-drive-theme="zominai-drive"] .hover\\:bg-slate-50:hover, [data-drive-theme="zominai-drive"] .hover\\:bg-slate-100:hover { background-color: #cffafe !important; }
+  if (theme === "google-drive") return <style>{`
+    [data-drive-theme="google-drive"] { --google-blue: #4285f4; --google-green: #34a853; --google-red: #ea4335; --google-yellow: #fbbc04; background: #000000 !important; color: #f8f9fa; color-scheme: dark; }
+    [data-drive-theme="google-drive"] .bg-white { background-color: #101010 !important; }
+    [data-drive-theme="google-drive"] .bg-slate-50, [data-drive-theme="google-drive"] .bg-slate-100, [data-drive-theme="google-drive"] .bg-\\[\\#f8faff\\] { background-color: #000000 !important; }
+    [data-drive-theme="google-drive"] .bg-blue-50 { background: linear-gradient(90deg, rgba(234, 67, 53, 0.25), rgba(251, 188, 4, 0.24), rgba(52, 168, 83, 0.24), rgba(66, 133, 244, 0.28)) !important; }
+    [data-drive-theme="google-drive"] .border-slate-100, [data-drive-theme="google-drive"] .border-slate-200, [data-drive-theme="google-drive"] .border-slate-300 { border-color: #303134 !important; }
+    [data-drive-theme="google-drive"] .text-slate-900, [data-drive-theme="google-drive"] .text-slate-800, [data-drive-theme="google-drive"] .text-slate-700 { color: #f8f9fa !important; }
+    [data-drive-theme="google-drive"] .text-slate-600, [data-drive-theme="google-drive"] .text-slate-500, [data-drive-theme="google-drive"] .text-slate-400 { color: #bdc1c6 !important; }
+    [data-drive-theme="google-drive"] .bg-blue-600, [data-drive-theme="google-drive"] .bg-blue-700 { background: linear-gradient(105deg, var(--google-blue) 0 25%, var(--google-green) 25% 50%, var(--google-yellow) 50% 75%, var(--google-red) 75% 100%) !important; }
+    [data-drive-theme="google-drive"] .text-blue-600, [data-drive-theme="google-drive"] .text-blue-700 { color: #8ab4f8 !important; }
+    [data-drive-theme="google-drive"] > header { border-bottom: 3px solid transparent !important; border-image: linear-gradient(90deg, var(--google-red), var(--google-yellow), var(--google-green), var(--google-blue)) 1 !important; }
+    [data-drive-theme="google-drive"] #drive-navigation nav > button:nth-of-type(4n + 1) svg { color: var(--google-red); }
+    [data-drive-theme="google-drive"] #drive-navigation nav > button:nth-of-type(4n + 2) svg { color: var(--google-yellow); }
+    [data-drive-theme="google-drive"] #drive-navigation nav > button:nth-of-type(4n + 3) svg { color: var(--google-green); }
+    [data-drive-theme="google-drive"] #drive-navigation nav > button:nth-of-type(4n) svg { color: var(--google-blue); }
+    [data-drive-theme="google-drive"] .hover\\:bg-blue-50:hover, [data-drive-theme="google-drive"] .hover\\:bg-slate-50:hover, [data-drive-theme="google-drive"] .hover\\:bg-slate-100:hover { background-color: #202124 !important; }
+    [data-drive-theme="google-drive"] button:focus-visible, [data-drive-theme="google-drive"] input:focus-visible { outline-color: #fbbc04 !important; }
   `}</style>;
   if (theme === "zo-light") return <style>{`
     [data-drive-theme="zo-light"] { background: #ffffff; color: #18181b; }
@@ -1569,6 +1640,12 @@ function zominAiRequiresCurrentTimeTool(messages: ZominAiRuntimeMessage[]): bool
   return Boolean(latestUserMessage && /\b(?:current|right now|now|today|machine|system|server|computer)\b[^?.!]{0,60}\b(?:date|time|day|clock|timezone)\b|\b(?:date|time|day|clock|timezone)\b[^?.!]{0,60}\b(?:current|right now|now|today|machine|system|server|computer)\b/i.test(latestUserMessage.content));
 }
 
+function zominAiMayNeedDriveTools(messages: ZominAiRuntimeMessage[]): boolean {
+  const latestUserMessage = [...messages].reverse().find((message): message is ZominAiChatMessage => message.role === "user");
+  if (!latestUserMessage) return false;
+  return /\b(?:my|drive|file|folder|document|spreadsheet|presentation|paste|database|table|schema|sql|storage|disk|computer|server)\b|[/\\]/i.test(latestUserMessage.content);
+}
+
 function zominAiCompletionMetrics(value: { timings?: unknown; usage?: unknown }): Pick<ZominAiCompletion, "completionTokens" | "tokensPerSecond" | "tokensPerSecondEstimated"> {
   const usage = value.usage && typeof value.usage === "object" ? value.usage as { completion_tokens?: unknown } : null;
   const timings = value.timings && typeof value.timings === "object" ? value.timings as { predicted_ms?: unknown; predicted_n?: unknown; predicted_per_second?: unknown } : null;
@@ -1601,16 +1678,21 @@ async function readZominAiCompletion(response: Response, onProgress?: (content: 
   const streamedToolCalls = new Map<number, { arguments: string; id: string; name: string }>();
   let buffer = "";
   let content = "";
+  let streamError: string | null = null;
   let metrics: Pick<ZominAiCompletion, "completionTokens" | "tokensPerSecond" | "tokensPerSecondEstimated"> = {};
 
   const consumeLine = (line: string) => {
     if (!line.startsWith("data:")) return;
     const data = line.slice(5).trim();
     if (!data || data === "[DONE]") return;
-    let event: { choices?: Array<{ delta?: { content?: unknown; tool_calls?: unknown }; message?: { content?: unknown; tool_calls?: unknown } }>; timings?: unknown; usage?: unknown };
+    let event: { choices?: Array<{ delta?: { content?: unknown; tool_calls?: unknown }; message?: { content?: unknown; tool_calls?: unknown } }>; error?: { message?: unknown }; timings?: unknown; usage?: unknown };
     try {
       event = JSON.parse(data) as typeof event;
     } catch {
+      return;
+    }
+    if (typeof event.error?.message === "string" && event.error.message.trim()) {
+      streamError = event.error.message.trim();
       return;
     }
     metrics = { ...metrics, ...zominAiCompletionMetrics(event) };
@@ -1645,6 +1727,7 @@ async function readZominAiCompletion(response: Response, onProgress?: (content: 
     if (done) break;
   }
   if (buffer.trim()) consumeLine(buffer.trim());
+  if (streamError) throw new Error(streamError);
 
   const toolCalls = [...streamedToolCalls.values()].flatMap((call, index): ZominAiToolCall[] => {
     if (!["describe_database", "get_current_time", "get_storage_usage", "list_databases", "list_drive", "query_database", "read_drive_file", "search_drive"].includes(call.name)) return [];
@@ -1700,7 +1783,7 @@ async function sendZominAiMessage(settings: ZominAiSettings, messages: ZominAiCh
   const systemPrompt = `${baseSystemPrompt}${configuredInstructions}${summaryPrompt}${storagePrompt}${timePrompt}`;
 
   for (let turn = 0; turn < 6; turn += 1) {
-    const offerTools = Boolean(toolRunner && !storageContext && !currentTimeContext);
+    const offerTools = Boolean(toolRunner && !storageContext && !currentTimeContext && zominAiMayNeedDriveTools(runtimeMessages));
     const response = await fetch(url, {
       method: "POST",
       headers: { Accept: "text/event-stream", "Content-Type": "application/json" },
@@ -2438,6 +2521,23 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
     }
   }
 
+  async function openSharedPreview(file: SharedDriveFile) {
+    if (!client.downloadClusterObject) {
+      toast.error("Shared file previews are unavailable until Zo Drive is updated");
+      return;
+    }
+    try {
+      const response = await client.downloadClusterObject({ id: file.mountId, key: file.key });
+      const url = URL.createObjectURL(await response.blob());
+      setPreview((current) => {
+        if (current) URL.revokeObjectURL(current.url);
+        return { object: file, url };
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not load the shared file");
+    }
+  }
+
   async function createFolder() {
     if (!folderName.trim()) return;
     const path = currentPath ? `${currentPath}/${folderName.trim()}` : folderName.trim();
@@ -2762,7 +2862,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
               onAction={() => void filesQuery.refetch()}
             />
           ) : section === "shared" ? (
-            <div className="space-y-6"><ClusterIncomingEntries files={clusterSharedFiles} mounts={clusterMountsQuery.data ?? []} onOpen={() => setSection("cluster-databases")} /><SharedLinks shares={sharesQuery.data ?? []} onCopy={(share) => void copyShareLink(share.id)} onChangePasscode={setPasscodeShare} onPreview={(share) => void openPreview({ key: share.key, name: share.name, size: share.size, contentType: share.contentType, updatedAt: share.createdAt, starred: false })} onRevoke={(id) => client.revokeShare(id).then(() => sharesQuery.refetch())} /></div>
+            <div className="space-y-6"><ClusterIncomingEntries files={clusterSharedFiles} mounts={clusterMountsQuery.data ?? []} onManage={() => setSection("cluster-databases")} onOpen={openSharedPreview} /><SharedLinks shares={sharesQuery.data ?? []} onCopy={(share) => void copyShareLink(share.id)} onChangePasscode={setPasscodeShare} onPreview={(share) => void openPreview({ key: share.key, name: share.name, size: share.size, contentType: share.contentType, updatedAt: share.createdAt, starred: false })} onRevoke={(id) => client.revokeShare(id).then(() => sharesQuery.refetch())} /></div>
           ) : section === "trash" ? trashItems.length === 0 ? (
             <EmptyState title="Trash is empty" description="Files and folders you move here stay for 30 days before they are permanently deleted." action="Go to My Drive" onAction={() => setSection("my-drive")} />
           ) : (
@@ -2770,7 +2870,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
           ) : (section === "my-drive" ? folders.length === 0 && files.length === 0 : section === "home" ? displayedFiles.length === 0 && clusterSharedFiles.length === 0 : displayedFiles.length === 0) ? (
             <EmptyState title={search ? "No matching files" : section === "home" ? "No recent files" : section === "starred" ? "No starred files" : "Your drive is ready for its first file"} description={section === "home" ? "Recent uploads, changes, and Zo-native files will appear here." : section === "starred" && !search ? "Use the star next to any file to keep it here." : undefined} action={section === "starred" ? "Go to My Drive" : "Upload files"} onAction={() => section === "starred" ? setSection("my-drive") : fileInput.current?.click()} />
           ) : section === "home" ? (
-            <div className="space-y-6"><RecentEntries files={[...recentFiles, ...clusterSharedFiles].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))} onOpenShared={() => { setSection("cluster-databases"); setCurrentPath(""); }} onPreview={openPreview} onDelete={(key) => deleteMutation.mutate(key)} onToggleStar={(file) => starMutation.mutate({ key: file.key, starred: file.starred })} onShare={(file) => { setShareSettings(null); setShareFile(file); }} /></div>
+            <div className="space-y-6"><RecentEntries files={[...recentFiles, ...clusterSharedFiles].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))} onOpenShared={openSharedPreview} onPreview={openPreview} onDelete={(key) => deleteMutation.mutate(key)} onToggleStar={(file) => starMutation.mutate({ key: file.key, starred: file.starred })} onShare={(file) => { setShareSettings(null); setShareFile(file); }} /></div>
           ) : (
             <DriveEntries
               files={displayedFiles}
@@ -4680,7 +4780,7 @@ function RecentFiltersBar({ filters, onChange }: { filters: RecentFilters; onCha
 
 function RecentEntries({ files, onOpenShared, onPreview, onDelete, onToggleStar, onShare }: {
   files: Array<DriveObject | SharedDriveFile>;
-  onOpenShared: () => void;
+  onOpenShared: (file: SharedDriveFile) => void;
   onPreview: (file: DriveObject) => void;
   onDelete: (key: string) => void;
   onToggleStar: (file: DriveObject) => void;
@@ -4696,7 +4796,7 @@ function RecentEntries({ files, onOpenShared, onPreview, onDelete, onToggleStar,
           {items.map((file) => {
             const sharedFile = isSharedDriveFile(file);
             return <article key={sharedFile ? `${file.mountId}:${file.key}` : file.key} className="group grid gap-3 border-b border-slate-100 px-5 py-3 last:border-b-0 hover:bg-slate-50 lg:grid-cols-[minmax(13rem,1fr)_11rem_7rem_9rem_11rem_7rem] lg:items-center lg:gap-4">
-              <button className="flex min-w-0 items-center gap-3 text-left" onClick={() => sharedFile ? onOpenShared() : void onPreview(file)}><span className={`rounded-lg p-2 ${sharedFile ? "bg-cyan-50 text-cyan-700" : "bg-slate-100 text-slate-500"}`}>{sharedFile ? <Network size={18} /> : fileIcon(file.contentType)}</span><span className="min-w-0"><span className="block truncate text-sm font-medium text-slate-800">{file.name}</span>{sharedFile && <span className="mt-0.5 block truncate text-xs text-cyan-800">Shared by {sharedDriveAuthor(file.mountAuthor)}</span>}</span></button>
+              <button className="flex min-w-0 items-center gap-3 text-left" onClick={() => sharedFile ? onOpenShared(file) : void onPreview(file)}><span className={`rounded-lg p-2 ${sharedFile ? "bg-cyan-50 text-cyan-700" : "bg-slate-100 text-slate-500"}`}>{sharedFile ? <Network size={18} /> : fileIcon(file.contentType)}</span><span className="min-w-0"><span className="block truncate text-sm font-medium text-slate-800">{file.name}</span>{sharedFile && <span className="mt-0.5 block truncate text-xs text-cyan-800">Shared by {sharedDriveAuthor(file.mountAuthor)}</span>}</span></button>
               <span className="text-xs text-slate-500">{formatRecentActivity(file.updatedAt)}</span>
               <span className="text-xs text-slate-500">{formatBytes(file.size)}</span>
               <span className="truncate text-xs text-slate-500" title={sharedFile ? `${file.mountFolder} / ${file.key}` : recentFileLocation(file.key)}>{sharedFile ? file.mountFolder : recentFileLocation(file.key)}</span>
@@ -4789,9 +4889,9 @@ function SharedLinks({ shares, onCopy, onChangePasscode, onPreview, onRevoke }: 
   return <section aria-label="Links shared by you" className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><header className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-5"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Share links</p><h2 className="mt-1 text-base font-semibold text-slate-900">Links shared by you</h2></div><span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">{shares.length} active</span></header><div className="divide-y divide-slate-100">{shares.map((share) => <article key={share.id} className="min-w-0 p-4 sm:flex sm:items-center sm:gap-4 sm:px-5"><div className="flex min-w-0 items-center gap-3 sm:flex-1"><span className="grid size-11 shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-600"><Share2 size={20} /></span><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-800" title={share.name}>{share.name}</p><p className="mt-1 text-xs leading-5 text-slate-500">{share.access === "public" ? "Anyone with the link" : "Passcode protected"} · {share.expiresAt ? `Expires ${new Date(share.expiresAt).toLocaleString()}` : "No expiry"}</p></div></div><div aria-label={`Actions for ${share.name}`} className="mt-4 grid grid-cols-[auto_auto_1fr] items-center gap-2 border-t border-slate-100 pt-3 sm:mt-0 sm:flex sm:shrink-0 sm:border-0 sm:pt-0"><button className="grid size-10 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-blue-700" onClick={() => onPreview(share)} aria-label={`View ${share.name}`} title="Preview"><Eye size={18} /></button><button className="grid size-10 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-blue-700" onClick={() => onCopy(share)} aria-label={`Copy link for ${share.name}`} title="Copy link"><Copy size={17} /></button><button className="col-start-3 justify-self-end rounded-lg px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50" onClick={() => onRevoke(share.id)}>Revoke</button>{share.access === "passcode" && <button className="col-span-3 inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 sm:col-auto" onClick={() => onChangePasscode(share)}>Change passcode</button>}</div></article>)}</div></section>;
 }
 
-function ClusterIncomingEntries({ files, mounts, onOpen }: { files: SharedDriveFile[]; mounts: ClusterMount[]; onOpen: () => void }) {
+function ClusterIncomingEntries({ files, mounts, onManage, onOpen }: { files: SharedDriveFile[]; mounts: ClusterMount[]; onManage: () => void; onOpen: (file: SharedDriveFile) => void }) {
   if (mounts.length === 0) return null;
-  return <section className="overflow-hidden rounded-xl border border-cyan-200 bg-cyan-50/40"><header className="flex flex-wrap items-center justify-between gap-3 border-b border-cyan-100 px-5 py-4"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-800">Shared with me</p><h2 className="mt-1 text-lg font-semibold text-slate-900">{mounts.length} connected folder{mounts.length === 1 ? "" : "s"}</h2></div><button className="rounded-lg bg-cyan-700 px-3 py-2 text-sm font-semibold text-white hover:bg-cyan-800" onClick={onOpen}>Open Shared Drives</button></header>{files.length > 0 ? <div className="divide-y divide-cyan-100">{files.slice(0, 20).map((file) => <div className="flex flex-wrap items-center gap-3 px-5 py-3" key={`${file.mountId}:${file.key}`}><Network size={17} className="text-cyan-700" /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-800">{file.name}</span><span className="block truncate text-xs text-slate-500">{file.mountFolder} / {file.key}</span><span className="mt-1 block text-xs text-cyan-800">Shared by {sharedDriveAuthor(file.mountAuthor)} · {sharedDriveRoleLabel(file.mountRole)}</span></span><span className="text-xs text-slate-500">{formatDate(file.updatedAt)}</span></div>)}</div> : <p className="px-5 py-4 text-sm text-slate-500">The connected folder is ready. Its files will appear here when the remote Zo adds or changes them.</p>}</section>;
+  return <section className="overflow-hidden rounded-xl border border-cyan-200 bg-cyan-50/40"><header className="flex flex-wrap items-center justify-between gap-3 border-b border-cyan-100 px-5 py-4"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-800">Shared with me</p><h2 className="mt-1 text-lg font-semibold text-slate-900">{mounts.length} connected folder{mounts.length === 1 ? "" : "s"}</h2></div><button className="rounded-lg bg-cyan-700 px-3 py-2 text-sm font-semibold text-white hover:bg-cyan-800" onClick={onManage}>Manage Shared Drives</button></header>{files.length > 0 ? <div className="divide-y divide-cyan-100">{files.slice(0, 20).map((file) => <button className="flex w-full flex-wrap items-center gap-3 px-5 py-3 text-left hover:bg-cyan-100/60" key={`${file.mountId}:${file.key}`} onClick={() => onOpen(file)}><Network size={17} className="text-cyan-700" /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-800">{file.name}</span><span className="block truncate text-xs text-slate-500">{file.mountFolder} / {file.key}</span><span className="mt-1 block text-xs text-cyan-800">Shared by {sharedDriveAuthor(file.mountAuthor)} · {sharedDriveRoleLabel(file.mountRole)}</span></span><span className="text-xs text-slate-500">{formatDate(file.updatedAt)}</span></button>)}</div> : <p className="px-5 py-4 text-sm text-slate-500">The connected folder is ready. Its files will appear here when the remote Zo adds or changes them.</p>}</section>;
 }
 
 function SharedFilePage({ client, shareId }: { client: SharedClient; shareId: string }) {

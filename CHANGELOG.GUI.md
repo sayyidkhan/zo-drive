@@ -2,6 +2,25 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.38.3 - 2026-07-23
+
+### Fixed
+
+- Opening a Shared Drive file from Recent or Shared with me now previews that
+  file directly instead of sending the user to the Shared Drives management
+  screen.
+
+### Changed
+
+- Applied Google Drive's red, yellow, green, and blue palette to the primary
+  controls, selected navigation, and workspace rail instead of using it only
+  as a decorative preview.
+- Reintroduced **Google Drive** as a dark, four-colour Google theme inspired
+  by Gemini's red, yellow, green, and blue visual language.
+- Replaced the landing-page SaaS card grid with individual, animated workflow
+  walkthroughs for Zo Paste, Zo Transfer, Zo Shared Drives, Zo Databases, and
+  ZominAI, alongside the existing Zo Functions story.
+
 ## v1.38.1 - 2026-07-22
 
 ### Changed

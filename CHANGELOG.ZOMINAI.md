@@ -3,6 +3,22 @@
 All notable changes to ZominAI are recorded here. ZominAI follows its own
 semantic-versioned release track, independent of the Zo Drive GUI and CLI.
 
+## v1.7.1 - 2026-07-23
+
+### Fixed
+
+- Opened each chat stream immediately and sent periodic keep-alives while the
+  local model evaluates its prompt, preventing Zo's HTTP edge from returning a
+  false HTTP 503 before the first generated token.
+- Forwarded runtime failures inside the open stream so failed turns remain
+  visible and retryable instead of ending as empty responses.
+
+### Changed
+
+- Omitted the full read-only Drive tool schema for ordinary conversation while
+  preserving it for prompts about files, folders, storage, databases, and the
+  Zo Computer.
+
 ## v1.7.0 - 2026-07-22
 
 ### Added
