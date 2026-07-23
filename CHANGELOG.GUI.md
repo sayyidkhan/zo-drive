@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.42.1 - 2026-07-23
+
+### Fixed
+
+- Moved the Zo Drive identity and documentation bar to the bottom of the
+  landing page after the closing call to action.
+
 ## v1.42.0 - 2026-07-23
 
 ### Changed
