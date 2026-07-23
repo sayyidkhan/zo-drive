@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.42.14 - 2026-07-23
+
+### Changed
+
+- Unified the main landing page into a consistent cobalt-and-slate visual system
+  without changing its content or layout.
+
 ## v1.42.13 - 2026-07-23
 
 ### Changed

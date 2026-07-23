@@ -292,11 +292,16 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.42.13";
+const GUI_VERSION = "1.42.14";
 const CLI_VERSION = "1.3.0";
 const ZOMINAI_VERSION = "1.9.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.42.14",
+    date: "2026-07-23",
+    changes: ["Unified the main landing page into a consistent cobalt-and-slate visual system without changing its content or layout."],
+  },
   {
     version: "v1.42.13",
     date: "2026-07-23",
@@ -1093,6 +1098,35 @@ function DriveModeSwitch({ guiHref = docsUrl("gui"), mode, page = "docs" }: { gu
   </nav>;
 }
 
+function LandingTheme() {
+  return <style>{`
+    .zo-landing-theme { background: #f5f8fc; }
+    .zo-landing-theme > div:first-child > .pointer-events-none { background: #eef6ff !important; }
+    .zo-landing-theme > div:first-child > header { border-bottom: 1px solid rgba(148, 163, 184, .24); }
+    .zo-landing-theme h1 .text-emerald-950 { color: #12314c; }
+    .zo-landing-theme h1 .text-orange-500 { color: #2563eb; }
+    .zo-landing-theme [aria-label="The ownership advantage"] { border-block: 1px solid #dbe6f2; background: #f7faff !important; }
+    .zo-landing-theme [aria-label="The ownership advantage"] > div > div:first-child > p { color: #2563eb; }
+    .zo-landing-theme [aria-label="The ownership advantage"] h2 { color: #10233d; }
+    .zo-landing-theme [aria-label="The ownership advantage"] h2 .text-emerald-950 { color: #2563eb; }
+    .zo-landing-theme [aria-label="The ownership advantage"] > div > div:last-child { border-color: #dbe6f2; background: #ffffff; }
+    .zo-landing-theme [aria-label="The ownership advantage"] article { border-color: #e2eaf3; }
+    .zo-landing-theme [aria-label="The ownership advantage"] article .text-orange-500 { color: #2563eb; }
+    .zo-landing-theme [aria-label="The ownership advantage"] article h3 { color: #1e3a5f; }
+    .zo-landing-theme [aria-label="The ownership advantage"] article .text-stone-600 { color: #61758d; }
+    .zo-landing-theme [aria-label="The ownership advantage"] + section > div:last-child { border-color: #dbe6f2; box-shadow: 0 24px 52px rgba(30, 58, 95, .08); }
+    .zo-landing-theme section[aria-label="Zo Drive product suite"] { background: #0b1f33 !important; }
+    .zo-landing-theme section[aria-label="Zo Drive product suite"] .text-emerald-200 { color: #a5f3fc; }
+    .zo-landing-theme section[aria-label="Zo Drive product suite"] button[aria-pressed="true"] { color: #a5f3fc !important; }
+    .zo-landing-theme section[aria-label="Zo Drive product suite"] article.bg-gradient-to-br { background-image: linear-gradient(135deg, #123052 0%, #174f7e 100%) !important; box-shadow: 0 24px 48px rgba(1, 15, 31, .38); }
+    .zo-landing-theme section.order-\\[55\\] { background: #0b1f33 !important; }
+    .zo-landing-theme section.order-\\[55\\] .text-orange-300 { color: #cbd5e1; }
+    .zo-landing-theme section[aria-label="Zo Drive closing call to action"] { background: #eef6ff !important; }
+    .zo-landing-theme section[aria-label="Zo Drive closing call to action"] > div[aria-hidden="true"] { opacity: .72; }
+    .zo-landing-theme > footer { border-color: #dbe6f2; background: #f8fbff; }
+  `}</style>;
+}
+
 function LandingPage() {
   useEffect(() => {
     const standaloneFunctions = Array.from(document.querySelectorAll<HTMLElement>("main > section")).find((section) => section.querySelector("h2")?.textContent?.includes("Automations that live beside your data."));
@@ -1100,7 +1134,8 @@ function LandingPage() {
     return () => standaloneFunctions?.classList.remove("hidden");
   }, []);
 
-  return <main className="flex min-h-screen flex-col overflow-hidden bg-[#f7fafc] text-slate-900">
+  return <main className="zo-landing-theme flex min-h-screen flex-col overflow-hidden bg-[#f7fafc] text-slate-900">
+    <LandingTheme />
     <div className="relative isolate">
       <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[43rem] overflow-hidden bg-[#ecf7ff]"><div className="absolute -left-36 -top-32 size-[34rem] rounded-full bg-sky-300/30 blur-3xl" /><div className="absolute right-[-8rem] top-24 size-[30rem] rounded-full bg-blue-300/35 blur-3xl" /></div>
       <header className="mx-auto flex max-w-7xl items-center justify-between px-5 py-5 sm:px-8">
