@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f5f8fc" />
+    <title>Zo Drive — Your private cloud, in motion</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./particle.css" />
+  </head>
+  <body>
+    <main>
+      <section class="hero" id="top">
+        <div class="hero-wash wash-one" aria-hidden="true"></div><div class="hero-wash wash-two" aria-hidden="true"></div><canvas class="particle-field" aria-hidden="true"></canvas>
+        <header>
+          <a class="brand" href="#top" aria-label="Zo Drive home"><span class="brand-mark">z</span><span>Zo Drive</span></a>
+          <nav aria-label="Primary navigation"><a href="#platform">Platform</a><a href="#workflows">Workflows</a></nav>
+          <a class="nav-cta" href="#start">Open Zo Drive <span>↗</span></a>
+        </header>
+
+        <div class="hero-copy">
+          <p class="eyebrow"><span></span>Decentralised cloud, on your Zo</p>
+          <h1>Your cloud,<br /><em>under your control.</em></h1>
+          <p class="hero-lede">A private workspace for the files you own—running on your Zo machine, connected to the way your team actually works.</p>
+          <div class="hero-actions"><a class="button primary" href="#start">Sign in to Zo Drive <span>→</span></a><a class="button ghost" href="#platform">Explore the platform <span>↓</span></a></div>
+          <div class="hero-proof"><span><b>Private</b> by default</span><span><b>One Drive</b> · available in GUI and CLI</span><span><b>Share</b> on your terms</span></div>
+        </div>
+
+        <div class="product-orbit" aria-label="Zo Drive product preview">
+          <div class="floating-chip chip-one"><span class="chip-icon violet">✦</span><span><b>Zo Functions</b><small>weekly-report.js · active</small></span><i>✓</i></div>
+          <div class="floating-chip chip-two"><span class="chip-icon cyan">⌁</span><span><b>ZominAI</b><small>Private local context</small></span><i>✓</i></div>
+          <div class="drive-window">
+            <div class="window-top"><div class="traffic"><i></i><i></i><i></i></div><div class="window-title"><span class="window-logo">z</span>My Drive</div><button aria-label="Search files">⌕</button></div>
+            <div class="drive-body">
+              <aside><span class="nav-label">Workspace</span><a class="side-link active"><i>⌂</i>Home</a><a class="side-link"><i>▰</i>My Drive</a><a class="side-link"><i>↗</i>Shared with me</a><a class="side-link"><i>★</i>Starred</a><span class="nav-label second">Create</span><a class="side-link"><i>+</i>New file</a><a class="side-link"><i>↑</i>Upload</a><div class="storage"><span><b>2.4 GB</b> of 10 GB</span><i><b></b></i><small>Storage on your Zo</small></div></aside>
+              <section class="file-area"><div class="file-head"><div><p>Good morning, Sayyid</p><h2>Your work, in one place.</h2></div><button class="new-button">+ New</button></div><div class="suggestions"><article class="suggestion main"><span>Continue working</span><b>product-brief.md</b><small>Edited 12 minutes ago</small><i>↗</i></article><article class="suggestion ai"><span>Ask ZominAI</span><b>Find what matters.</b><small>Private context, local-first</small><i>✦</i></article></div><div class="files-title"><span>Recent files</span><button>View all</button></div><div class="file-list"><div><span class="file-icon blue">▤</span><p><b>Q3 product roadmap</b><small>Product / Strategy</small></p><time>Today</time><button>•••</button></div><div><span class="file-icon gold">▱</span><p><b>Partner launch assets</b><small>Design / Brand</small></p><time>Yesterday</time><button>•••</button></div><div><span class="file-icon green">▦</span><p><b>Revenue model v4</b><small>Finance / Planning</small></p><time>Jul 19</time><button>•••</button></div></div></section>
+              <aside class="insight"><div class="insight-head"><span>Activity</span><button>•••</button></div><div class="activity"><span class="avatar rose">D</span><p><b>Dina shared</b><small>Partner launch assets</small></p><time>2m</time></div><div class="activity"><span class="avatar blue-avatar">S</span><p><b>You updated</b><small>Q3 product roadmap</small></p><time>12m</time></div><div class="activity"><span class="avatar gold-avatar">A</span><p><b>Alex commented</b><small>Revenue model v4</small></p><time>1h</time></div><div class="trust-card"><span>Private by default</span><b>Nothing leaves your Zo without your say.</b><a href="#workflows">Review access →</a></div></aside>
+            </div>
+          </div>
+          <div class="orbital-line one"></div><div class="orbital-line two"></div>
+        </div>
+        <div class="hero-footer"><span>01 / OWN THE DATA</span><span>02 / RUN THE WORK</span><span>03 / SHARE ON YOUR TERMS</span></div>
+      </section>
+
+      <section class="statement" id="platform"><div><p class="eyebrow dark"><span></span>The Zo Drive edge</p><h2>Cloud convenience.<br /><em>Your own foundation.</em></h2></div><p>Zo Drive keeps the simplicity of a modern workspace while the storage stays with the machine—and the person—you trust.</p></section>
+
+      <section class="capabilities" id="workflows"><div class="capabilities-intro"><p class="eyebrow dark"><span></span>One private workspace</p><h2>Everything your work needs,<br /><em>without another stack.</em></h2></div><div class="capability-grid"><button class="capability active" data-panel="storage"><span class="cap-num">01</span><span class="cap-icon blue">▰</span><h3>Storage you control</h3><p>Folders and files that live on your Zo machine, not a rented silo.</p><i>→</i></button><button class="capability" data-panel="share"><span class="cap-num">02</span><span class="cap-icon coral">↗</span><h3>Sharing on your terms</h3><p>Private by default. Public and passcode links only when you choose.</p><i>→</i></button><button class="capability" data-panel="build"><span class="cap-num">03</span><span class="cap-icon violet">⌘</span><h3>Built for your workflow</h3><p>Use the browser, CLI, SDK, functions and databases from the same Drive.</p><i>→</i></button><button class="capability" data-panel="ai"><span class="cap-num">04</span><span class="cap-icon cyan">✦</span><h3>Intelligence that stays close</h3><p>Bring local AI to the work without exporting its context to another platform.</p><i>→</i></button></div><div class="feature-stage" id="feature-stage"><div class="stage-copy"><p class="eyebrow dark" id="stage-label"><span></span>01 / STORAGE</p><h3 id="stage-title">A Drive that stays<br /><em>on your side.</em></h3><p id="stage-text">Your files stay on the Zo machine you control, with an interface that makes them feel effortless to manage.</p><a href="#start" id="stage-link">Explore Zo Drive storage <span>→</span></a></div><div class="stage-visual"><div class="stage-tabbar"><i></i><i></i><i></i><span id="stage-window-title">My Drive / Product</span></div><div class="stage-content" id="stage-content"></div></div></div></section>
+
+      <section class="closing" id="start"><p class="eyebrow dark"><span></span>Bring your cloud home</p><h2>The workspace you own.<br /><em>The work you can move.</em></h2><div><a class="button primary" href="#top">Open Zo Drive <span>↗</span></a><a class="button ghost dark-ghost" href="#platform">See how it works <span>↑</span></a></div></section>
+    </main><footer><a class="brand" href="#top"><span class="brand-mark">z</span><span>Zo Drive</span></a><span>Your decentralised cloud on Zo.</span><a href="#platform">Platform</a></footer><script src="./particle.js"></script><script src="./script.js"></script>
+  </body>
+</html>
