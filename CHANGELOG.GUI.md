@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.41.6 - 2026-07-23
+
+### Changed
+
+- Moved the landing-page call to action below the hero and the ownership-
+  advantage section after the SaaS comparison.
+
 ## v1.41.5 - 2026-07-23
 
 ### Added

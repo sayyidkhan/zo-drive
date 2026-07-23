@@ -292,11 +292,16 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.41.5";
+const GUI_VERSION = "1.41.6";
 const CLI_VERSION = "1.3.0";
 const ZOMINAI_VERSION = "1.9.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.41.6",
+    date: "2026-07-23",
+    changes: ["Moved the landing-page call to action below the hero and the ownership-advantage section after the SaaS comparison."]
+  },
   {
     version: "v1.41.5",
     date: "2026-07-23",
@@ -1062,7 +1067,7 @@ function LandingPage() {
       </section>
     </div>
 
-    <OwnershipAdvantage />
+    <ZoDriveClosingCta />
 
     <section className="border-y border-slate-200 bg-white py-20 sm:py-24"><div className="mx-auto max-w-7xl px-5 sm:px-8"><div className="max-w-2xl"><p className="text-sm font-bold uppercase tracking-[0.15em] text-blue-600">The Zo Drive edge</p><h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">A decentralised cloud, not another rented file bucket.</h2><p className="mt-4 text-base leading-7 text-slate-600">Keep the convenience of cloud storage while keeping the storage itself on the machine you control.</p></div><div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{features.map((feature) => <article className="rounded-2xl border border-slate-200 bg-[#f9fbfc] p-6" key={feature.title}><span className="grid size-10 place-items-center rounded-xl bg-blue-100 text-blue-700">{feature.icon}</span><h3 className="mt-5 font-semibold text-slate-950">{feature.title}</h3><p className="mt-2 text-sm leading-6 text-slate-600">{feature.copy}</p></article>)}</div></div></section>
 
@@ -1072,7 +1077,7 @@ function LandingPage() {
 
     <KillerFeatureStories />
     <ZoDriveComparisonCta />
-    <ZoDriveClosingCta />
+    <OwnershipAdvantage />
 
     <footer className="border-t border-slate-200 bg-white"><div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-7 text-sm text-slate-500 sm:px-8"><DriveMark compact /><span>Your decentralised cloud on Zo.</span><a className="font-semibold text-slate-600 hover:text-blue-700" href={docsUrl()}>Documentation</a></div></footer>
   </main>;
