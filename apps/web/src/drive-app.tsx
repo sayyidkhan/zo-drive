@@ -292,11 +292,16 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.41.4";
+const GUI_VERSION = "1.41.5";
 const CLI_VERSION = "1.3.0";
 const ZOMINAI_VERSION = "1.9.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.41.5",
+    date: "2026-07-23",
+    changes: ["Added an ownership-advantage section beneath the landing-page hero, explaining source control, deliberate sharing, and compounding workflows."]
+  },
   {
     version: "v1.41.4",
     date: "2026-07-23",
@@ -1057,6 +1062,8 @@ function LandingPage() {
       </section>
     </div>
 
+    <OwnershipAdvantage />
+
     <section className="border-y border-slate-200 bg-white py-20 sm:py-24"><div className="mx-auto max-w-7xl px-5 sm:px-8"><div className="max-w-2xl"><p className="text-sm font-bold uppercase tracking-[0.15em] text-blue-600">The Zo Drive edge</p><h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">A decentralised cloud, not another rented file bucket.</h2><p className="mt-4 text-base leading-7 text-slate-600">Keep the convenience of cloud storage while keeping the storage itself on the machine you control.</p></div><div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{features.map((feature) => <article className="rounded-2xl border border-slate-200 bg-[#f9fbfc] p-6" key={feature.title}><span className="grid size-10 place-items-center rounded-xl bg-blue-100 text-blue-700">{feature.icon}</span><h3 className="mt-5 font-semibold text-slate-950">{feature.title}</h3><p className="mt-2 text-sm leading-6 text-slate-600">{feature.copy}</p></article>)}</div></div></section>
 
     <section className="mx-auto grid max-w-7xl gap-10 px-5 py-20 sm:px-8 lg:grid-cols-[.92fr_1.08fr] lg:items-center lg:py-28"><div><p className="text-sm font-bold uppercase tracking-[0.15em] text-violet-700">Zo Functions</p><h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">Automations that live beside your data.</h2><p className="mt-4 max-w-xl text-base leading-7 text-slate-600">Write a small handler, keep the source in your Drive, then run it manually, on a schedule, or through a deliberate public endpoint. No separate server to deploy or maintain.</p><div className="mt-7 space-y-3 text-sm font-medium text-slate-700"><p className="flex items-center gap-3"><span className="grid size-6 place-items-center rounded-full bg-violet-100 text-violet-700"><Check size={14} /></span> JavaScript and Python handlers</p><p className="flex items-center gap-3"><span className="grid size-6 place-items-center rounded-full bg-violet-100 text-violet-700"><Check size={14} /></span> Private by default, public only when you choose</p><p className="flex items-center gap-3"><span className="grid size-6 place-items-center rounded-full bg-violet-100 text-violet-700"><Check size={14} /></span> UTC cron schedules and visible run history</p></div><a aria-label="Open Zo Functions workspace" className="mt-8 inline-flex items-center gap-2 rounded-xl bg-violet-700 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-700/20 transition hover:-translate-y-0.5 hover:bg-violet-800" href={`${driveAppUrl()}&section=functions`}><Terminal size={17} /> Open Zo Functions <ArrowUpRight size={16} /></a></div><div className="overflow-hidden rounded-[1.6rem] border border-slate-800 bg-slate-950 shadow-2xl shadow-violet-950/15"><div className="flex items-center justify-between border-b border-white/10 bg-slate-900 px-5 py-4"><div className="flex items-center gap-2 text-sm font-semibold text-white"><Terminal size={17} className="text-violet-300" /> weekly-report.js</div><span className="rounded-full bg-violet-300/10 px-2.5 py-1 text-xs font-semibold text-violet-200">private</span></div><div className="grid gap-5 p-5 sm:grid-cols-[minmax(0,1fr)_10rem]"><pre className="overflow-x-auto rounded-xl bg-[#111827] p-4 text-xs leading-6 text-slate-200"><code><span className="text-violet-300">export default async function</span> <span className="text-sky-300">handler</span>(input) {'{'}{`\n`}  <span className="text-violet-300">return</span> {'{'}{`\n`}    report: <span className="text-amber-300">"weekly"</span>,{`\n`}    generatedAt: <span className="text-sky-300">new Date</span>().toISOString(){`\n`}  {'}'};{`\n`}{'}'}</code></pre><div className="space-y-3"><div className="rounded-xl border border-white/10 bg-white/5 p-3"><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Schedule</p><code className="mt-2 block text-sm font-semibold text-violet-200">0 9 * * 1</code><p className="mt-1 text-xs leading-5 text-slate-400">Every Monday, 09:00 UTC</p></div><div className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 p-3"><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-300">Latest run</p><p className="mt-2 text-sm font-semibold text-emerald-100">Success</p><p className="mt-1 text-xs text-emerald-200/70">Completed in 143 ms</p></div></div></div></div></section>
@@ -1069,6 +1076,16 @@ function LandingPage() {
 
     <footer className="border-t border-slate-200 bg-white"><div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-7 text-sm text-slate-500 sm:px-8"><DriveMark compact /><span>Your decentralised cloud on Zo.</span><a className="font-semibold text-slate-600 hover:text-blue-700" href={docsUrl()}>Documentation</a></div></footer>
   </main>;
+}
+
+function OwnershipAdvantage() {
+  const benefits = [
+    { number: "01", title: "Keep the source", body: "Your files and product data remain on the Zo Computer you control." },
+    { number: "02", title: "Open with intent", body: "Share one paste, one transfer or one folder without opening the entire estate." },
+    { number: "03", title: "Compound the stack", body: "Every new workflow starts beside your existing files, functions and databases." }
+  ];
+
+  return <section aria-label="The ownership advantage" className="bg-[#fcfaf6] py-20 sm:py-28"><div className="mx-auto max-w-7xl px-5 sm:px-8"><div className="grid gap-8 lg:grid-cols-[.38fr_1fr] lg:items-end"><p className="text-sm font-bold uppercase tracking-[0.15em] text-orange-500">The ownership advantage</p><h2 className="max-w-5xl text-4xl font-semibold leading-[0.98] tracking-[-0.06em] text-[#121512] sm:text-6xl lg:text-7xl">A cloud should increase your <span className="font-serif font-normal italic text-emerald-950">agency,</span> not your dependency.</h2></div><div className="mt-12 grid overflow-hidden rounded-[1.7rem] border border-[#ebe7df] bg-[#f4f1eb] sm:grid-cols-3">{benefits.map((benefit) => <article className="min-h-64 border-b border-[#e4dfd6] p-6 last:border-b-0 sm:min-h-72 sm:border-b-0 sm:border-r sm:p-9 sm:last:border-r-0" key={benefit.number}><p className="font-serif text-4xl italic text-orange-500">{benefit.number}</p><h3 className="mt-16 text-xl font-semibold tracking-tight text-[#202220]">{benefit.title}</h3><p className="mt-4 max-w-sm text-sm leading-6 text-stone-600">{benefit.body}</p></article>)}</div></div></section>;
 }
 
 function KillerFeatureStories() {

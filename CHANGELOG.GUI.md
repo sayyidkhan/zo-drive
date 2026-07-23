@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.41.5 - 2026-07-23
+
+### Added
+
+- Added an ownership-advantage section beneath the landing-page hero, explaining
+  source control, deliberate sharing, and compounding workflows.
+
 ## v1.41.4 - 2026-07-23
 
 ### Added
