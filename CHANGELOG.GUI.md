@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.42.20 - 2026-07-24
+
+### Changed
+
+- Animated the remote-access terminal with typed commands and sequenced output.
+- Added a complete static transcript for reduced-motion and assistive-technology users.
+
 ## v1.42.19 - 2026-07-24
 
 ### Changed
