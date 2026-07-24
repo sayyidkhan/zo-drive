@@ -59,6 +59,20 @@ For development, use a directory such as:
 
 On Zo, configure a persistent directory such as `~/zo-drive-data` and point `ZO_DRIVE_DATA_ROOT` to it.
 
+## ZominAI runtime storage
+
+ZominAI model weights are deliberately kept outside `ZO_DRIVE_DATA_ROOT` so
+they are not shown in My Drive and do not count against a user's Drive quota.
+The managed Bonsai 8B version is stored at:
+
+```text
+/root/.local/share/zominai/models/Bonsai-8B-Q1_0.gguf
+```
+
+The Zo Drive owner can install or remove that exact model version through the
+authenticated ZominAI installation endpoint. Removing it stops inference but
+retains the llama.cpp runtime for a later reinstall.
+
 ## Run locally
 
 Install dependencies once:

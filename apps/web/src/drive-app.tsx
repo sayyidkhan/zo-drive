@@ -140,6 +140,7 @@ type ZominAiDownloadStatus = {
   state: "downloading" | "ready" | "stopped";
   updatedAt: string;
 };
+type ZominAiInstallation = { model: { fileName: string; installed: boolean; location: string; sizeBytes: number; version: string }; runtimeLocation: string; state: "downloading" | "installed" | "not-installed" | "removed" };
 
 type ZominAiConnection = {
   detail: string;
@@ -295,7 +296,7 @@ const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
 const GUI_VERSION = "1.42.21";
 const CLI_VERSION = "1.3.0";
-const ZOMINAI_VERSION = "1.9.0";
+const ZOMINAI_VERSION = "1.10.0";
 
 const GUI_CHANGELOG = [
   {
@@ -1160,6 +1161,40 @@ function LandingTheme() {
     .zo-landing-theme section[aria-label="Zo Drive closing call to action"] { background: #eef6ff !important; }
     .zo-landing-theme section[aria-label="Zo Drive closing call to action"] > div[aria-hidden="true"] { opacity: .72; }
     .zo-landing-theme > footer { border-color: #dbe6f2; background: #f8fbff; }
+    @keyframes zo-remote-terminal-line-1 { 0%, 2% { clip-path: inset(0 100% 0 0); opacity: 0; } 10%, 86% { clip-path: inset(0 0 0 0); opacity: 1; } 96%, 100% { clip-path: inset(0 100% 0 0); opacity: 0; } }
+    @keyframes zo-remote-terminal-line-2 { 0%, 10% { clip-path: inset(0 100% 0 0); opacity: 0; } 19%, 86% { clip-path: inset(0 0 0 0); opacity: 1; } 96%, 100% { clip-path: inset(0 100% 0 0); opacity: 0; } }
+    @keyframes zo-remote-terminal-line-3 { 0%, 19% { clip-path: inset(0 100% 0 0); opacity: 0; } 28%, 86% { clip-path: inset(0 0 0 0); opacity: 1; } 96%, 100% { clip-path: inset(0 100% 0 0); opacity: 0; } }
+    @keyframes zo-remote-terminal-line-4 { 0%, 37% { clip-path: inset(0 100% 0 0); opacity: 0; } 49%, 86% { clip-path: inset(0 0 0 0); opacity: 1; } 96%, 100% { clip-path: inset(0 100% 0 0); opacity: 0; } }
+    @keyframes zo-remote-terminal-line-5 { 0%, 49% { clip-path: inset(0 100% 0 0); opacity: 0; } 58%, 86% { clip-path: inset(0 0 0 0); opacity: 1; } 96%, 100% { clip-path: inset(0 100% 0 0); opacity: 0; } }
+    @keyframes zo-remote-terminal-line-6 { 0%, 58% { clip-path: inset(0 100% 0 0); opacity: 0; } 67%, 86% { clip-path: inset(0 0 0 0); opacity: 1; } 96%, 100% { clip-path: inset(0 100% 0 0); opacity: 0; } }
+    @keyframes zo-remote-terminal-cursor { 0%, 45% { opacity: 1; } 46%, 100% { opacity: 0; } }
+    @media (prefers-reduced-motion: no-preference) {
+      .zo-remote-terminal > div > p { animation-duration: 12s; animation-iteration-count: infinite; animation-timing-function: steps(48, end); animation-fill-mode: both; }
+      .zo-remote-terminal > div:first-child > p:nth-child(1) { animation-name: zo-remote-terminal-line-1; }
+      .zo-remote-terminal > div:first-child > p:nth-child(2) { animation-name: zo-remote-terminal-line-2; }
+      .zo-remote-terminal > div:first-child > p:nth-child(3) { animation-name: zo-remote-terminal-line-3; }
+      .zo-remote-terminal > div:last-child > p:nth-child(1) { animation-name: zo-remote-terminal-line-4; }
+      .zo-remote-terminal > div:last-child > p:nth-child(2) { animation-name: zo-remote-terminal-line-5; }
+      .zo-remote-terminal > div:last-child > p:nth-child(3) { animation-name: zo-remote-terminal-line-6; }
+      .zo-remote-terminal > div > p:first-child::after { content: "_"; margin-left: .25rem; color: #67e8f9; animation: zo-remote-terminal-cursor 900ms steps(1, end) infinite; }
+    }
+    @media (min-width: 1024px) {
+      .zo-landing-theme > div.relative.isolate > header,
+      .zo-landing-theme > div.relative.isolate > section,
+      .zo-landing-theme [aria-label="The ownership advantage"] > div,
+      .zo-landing-theme [aria-label="Remote local-machine access"] > div,
+      .zo-landing-theme [aria-label="Zo Drive product suite"] > div,
+      .zo-landing-theme > footer > div { max-width: 72rem !important; }
+      .zo-landing-theme section.order-\[55\] > div { max-width: 57.6rem !important; }
+      .zo-landing-theme [aria-label="Zo Drive closing call to action"] > div:not([aria-hidden="true"]) { max-width: 64.8rem !important; }
+      .zo-landing-theme > div.relative.isolate > section > div.relative.mx-auto { max-width: 29.16rem !important; }
+      .zo-landing-theme > div.relative.isolate h1,
+      .zo-landing-theme [aria-label="The ownership advantage"] h2 { font-size: 4.05rem !important; }
+      .zo-landing-theme [aria-label="Remote local-machine access"] h2 { font-size: 2.7rem !important; }
+      .zo-landing-theme [aria-label="Zo Drive product suite"] h2 { font-size: 3.375rem !important; }
+      .zo-landing-theme section.order-\[55\] h2 { font-size: 2.7rem !important; }
+      .zo-landing-theme [aria-label="Zo Drive closing call to action"] h2 { font-size: 5.4rem !important; }
+    }
   `}</style>;
 }
 
@@ -1192,9 +1227,10 @@ function LandingPage() {
             <a className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50" href={docsUrl()}>Read the docs <ArrowUpRight size={17} /></a>
             <a className="inline-flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-slate-800" href="https://github.com/sayyidkhan/zo-drive" rel="noreferrer" target="_blank"><Github size={17} /> View source</a>
           </div>
+          <div className="mt-10 flex flex-wrap gap-x-6 gap-y-3 text-sm font-medium text-slate-600 lg:flex-nowrap"><span className="inline-flex items-center gap-2 whitespace-nowrap"><Check size={16} className="text-blue-600" /> Data stays on your Zo</span><span className="inline-flex items-center gap-2 whitespace-nowrap"><Check size={16} className="text-blue-600" /> Folder-preserving uploads</span><span className="inline-flex items-center gap-2 whitespace-nowrap"><Check size={16} className="text-blue-600" /> GUI &amp; CLI Access</span></div>
         </div>
 
-        <div className="relative mx-auto w-full max-w-xl">
+        <div className="relative mx-auto w-full max-w-[32.4rem]">
           <div className="absolute -inset-5 -z-10 rounded-[2.5rem] bg-white/70 blur-xl" />
           <div className="overflow-hidden rounded-[1.65rem] border border-white/90 bg-white shadow-2xl shadow-blue-950/15">
             <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-4"><span className="size-2.5 rounded-full bg-red-300" /><span className="size-2.5 rounded-full bg-amber-300" /><span className="size-2.5 rounded-full bg-emerald-300" /><span className="ml-2 text-xs font-semibold text-slate-400">My Drive</span></div>
@@ -1296,7 +1332,7 @@ function RemoteTerminalDemo() {
 }
 
 function RemoteAccessSection() {
-  return <section aria-label="Remote local-machine access" className="border-y border-slate-200 bg-[#f7faff] py-20 sm:py-24"><div className="mx-auto grid max-w-7xl gap-10 px-5 sm:px-8 lg:grid-cols-[.88fr_1.12fr] lg:items-center"><div><p className="text-sm font-bold uppercase tracking-[0.15em] text-blue-600">Remote machine access</p><h2 className="mt-3 max-w-xl text-4xl font-semibold leading-[0.98] tracking-[-0.06em] text-slate-950 sm:text-5xl">Work locally. <span className="font-serif font-normal italic text-blue-700">Keep Zo authoritative.</span></h2><p className="mt-5 max-w-xl text-base leading-7 text-slate-600">Connect the Zo Drive CLI on your local machine to your Zo Computer, then work against the same private folders, files and product data from your terminal. Zo remains the source of truth.</p><div className="mt-8 grid grid-cols-[1fr_auto_1fr] items-center gap-3"><div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><MonitorUp size={20} className="text-blue-600" /><p className="mt-4 text-sm font-semibold text-slate-900">Your local machine</p><p className="mt-1 text-xs leading-5 text-slate-500">Use the CLI where you already work.</p></div><span className="grid size-10 place-items-center rounded-full border border-cyan-200 bg-cyan-50 text-cyan-700"><Network size={18} /></span><div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><HardDrive size={20} className="text-blue-600" /><p className="mt-4 text-sm font-semibold text-slate-900">Your Zo Computer</p><p className="mt-1 text-xs leading-5 text-slate-500">Keeps the private Drive and data.</p></div></div><a className="mt-8 inline-flex items-center gap-1.5 text-sm font-bold text-blue-700 hover:text-blue-900" href={docsUrl("cli")}>Read the remote CLI guide <ArrowUpRight size={15} /></a></div><div className="overflow-hidden rounded-[1.6rem] border border-slate-800 bg-[#0b1f33] shadow-2xl shadow-slate-900/15"><div className="flex items-center justify-between border-b border-white/10 px-5 py-4"><span className="flex items-center gap-2 text-sm font-semibold text-white"><Terminal size={17} className="text-cyan-300" /> Remote Zo Drive connection</span><span className="rounded-full bg-cyan-300/10 px-2.5 py-1 text-xs font-semibold text-cyan-200">private</span></div><RemoteTerminalDemo /><div className="grid border-t border-white/10 text-xs sm:grid-cols-3"><div className="border-b border-white/10 px-5 py-4 sm:border-b-0 sm:border-r"><p className="font-bold uppercase tracking-[0.14em] text-slate-500">Configure once</p><p className="mt-2 font-semibold text-slate-200">Local device key</p></div><div className="border-b border-white/10 px-5 py-4 sm:border-b-0 sm:border-r"><p className="font-bold uppercase tracking-[0.14em] text-slate-500">Operate remotely</p><p className="mt-2 font-semibold text-slate-200">Files and workflows</p></div><div className="px-5 py-4"><p className="font-bold uppercase tracking-[0.14em] text-slate-500">Data stays on Zo</p><p className="mt-2 font-semibold text-slate-200">One private source</p></div></div></div></div></section>;
+  return <section aria-label="Remote local-machine access" className="border-y border-slate-200 bg-[#f7faff] py-20 sm:py-24"><div className="mx-auto grid max-w-7xl gap-10 px-5 sm:px-8 lg:grid-cols-[.88fr_1.12fr] lg:items-center"><div><p className="text-sm font-bold uppercase tracking-[0.15em] text-blue-600">Remote machine access</p><h2 className="mt-3 max-w-xl text-4xl font-semibold leading-[0.98] tracking-[-0.06em] text-slate-950 sm:text-5xl">Work locally. <span className="font-serif font-normal italic text-blue-700">Keep Zo authoritative.</span></h2><p className="mt-5 max-w-xl text-base leading-7 text-slate-600">Connect the Zo Drive CLI on your local machine to your Zo Computer, then work against the same private folders, files and product data from your terminal. Zo remains the source of truth.</p><div className="mt-8 grid grid-cols-[1fr_auto_1fr] items-center gap-3"><div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><MonitorUp size={20} className="text-blue-600" /><p className="mt-4 text-sm font-semibold text-slate-900">Your local machine</p><p className="mt-1 text-xs leading-5 text-slate-500">Use the CLI where you already work.</p></div><span className="grid size-10 place-items-center rounded-full border border-cyan-200 bg-cyan-50 text-cyan-700"><Network size={18} /></span><div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><HardDrive size={20} className="text-blue-600" /><p className="mt-4 text-sm font-semibold text-slate-900">Your Zo Computer</p><p className="mt-1 text-xs leading-5 text-slate-500">Keeps the private Drive and data.</p></div></div><a className="mt-8 inline-flex items-center gap-1.5 text-sm font-bold text-blue-700 hover:text-blue-900" href={docsUrl("cli")}>Read the remote CLI guide <ArrowUpRight size={15} /></a></div><div className="overflow-hidden rounded-[1.6rem] border border-slate-800 bg-[#0b1f33] shadow-2xl shadow-slate-900/15"><div className="flex items-center justify-between border-b border-white/10 px-5 py-4"><span className="flex items-center gap-2 text-sm font-semibold text-white"><Terminal size={17} className="text-cyan-300" /> Remote Zo Drive connection</span><span className="rounded-full bg-cyan-300/10 px-2.5 py-1 text-xs font-semibold text-cyan-200">private</span></div><div className="zo-remote-terminal space-y-5 p-5 font-mono text-xs leading-7 sm:p-6"><div><p className="text-slate-400"><span className="text-slate-500">$ </span><span className="text-cyan-300">zo-drive</span> configure</p><p className="mt-2 text-slate-300">Zo Drive URL: <span className="text-white">https://your-zo.example</span></p><p className="text-emerald-300">✓ Secure connection saved on this machine</p></div><div className="border-t border-white/10 pt-5"><p className="text-slate-400"><span className="text-slate-500">$ </span><span className="text-cyan-300">zo-drive</span> upload ./launch-plan.pdf <span className="text-amber-300">--path</span> Product/Launch</p><p className="mt-2 text-emerald-300">✓ Uploaded to your Zo Computer</p><p className="text-slate-400">✓ Ready for the next job</p></div></div><div className="grid border-t border-white/10 text-xs sm:grid-cols-3"><div className="border-b border-white/10 px-5 py-4 sm:border-b-0 sm:border-r"><p className="font-bold uppercase tracking-[0.14em] text-slate-500">Configure once</p><p className="mt-2 font-semibold text-slate-200">Local device key</p></div><div className="border-b border-white/10 px-5 py-4 sm:border-b-0 sm:border-r"><p className="font-bold uppercase tracking-[0.14em] text-slate-500">Operate remotely</p><p className="mt-2 font-semibold text-slate-200">Files and workflows</p></div><div className="px-5 py-4"><p className="font-bold uppercase tracking-[0.14em] text-slate-500">Data stays on Zo</p><p className="mt-2 font-semibold text-slate-200">One private source</p></div></div></div></div></section>;
 }
 
 function KillerFeatureStories() {
@@ -1366,7 +1402,7 @@ function ProductSuite() {
   const selected = products[selectedIndex]!;
   const tone = selected.tone === "emerald" ? "from-emerald-950 to-[#103a35]" : selected.tone === "amber" ? "from-amber-950 to-[#49331d]" : selected.tone === "blue" ? "from-blue-950 to-[#1b3f71]" : "from-cyan-950 to-[#123c47]";
 
-  return <section aria-label="Zo Drive product suite" className="order-20 bg-[#101410] py-14 text-white sm:py-16" id="killer-features"><div className="mx-auto max-w-7xl px-5 sm:px-8"><div className="grid gap-6 border-b border-white/10 pb-8 lg:grid-cols-[1.2fr_.8fr] lg:items-end"><div><p className="text-sm font-bold uppercase tracking-[0.15em] text-emerald-200">The Zo Drive suite</p><h2 className="mt-3 text-4xl font-semibold leading-[.92] tracking-[-0.065em] sm:text-6xl">Six focused products.<span className="block font-serif font-normal italic text-emerald-200">One calm system.</span></h2></div><p className="max-w-xl text-sm leading-6 text-white/65">Move from publishing to delivery, automation, data, collaboration and AI without moving your work between vendors.</p></div><div className="mt-8 grid gap-6 lg:grid-cols-[.8fr_1.2fr] lg:items-center"><div className="divide-y divide-white/10 border-y border-white/10 lg:self-center">{products.map((product, index) => <button aria-pressed={selectedIndex === index} aria-label={`Select ${product.name}`} className={`flex w-full items-center gap-4 px-0 py-3.5 text-left transition ${selectedIndex === index ? "text-emerald-200" : "text-white/65 hover:text-white"}`} key={product.name} onClick={() => setSelectedIndex(index)} type="button"><span className="w-6 font-mono text-xs font-semibold">{String(index + 1).padStart(2, "0")}</span><span className="flex-1 text-base font-semibold">{product.name}</span><span className="text-xs font-bold uppercase tracking-[.13em]">{product.verb}</span></button>)}</div><article className={`overflow-hidden rounded-[1.5rem] bg-gradient-to-br ${tone} p-5 shadow-2xl shadow-black/20 sm:p-6`}><div className="flex items-start justify-between gap-5"><span className="grid size-11 place-items-center rounded-xl bg-white/10 text-emerald-200">{selected.icon}</span><span className="rounded-full border border-white/15 px-3 py-1 text-xs font-bold uppercase tracking-[.14em] text-white/70">{selected.verb}</span></div><p className="mt-6 text-sm font-bold uppercase tracking-[.15em] text-emerald-200">{selected.name}</p><h3 className="mt-3 max-w-2xl text-3xl font-semibold leading-[.98] tracking-[-.05em] sm:text-4xl">{selected.title}</h3><p className="mt-3 max-w-2xl text-sm leading-6 text-white/70">{selected.body}</p><div className="mt-5"><FeatureShowcase command={selected.command} file={selected.file} lines={selected.lines} product={selected.name} /></div><a className="mt-5 inline-flex items-center gap-2 text-sm font-bold uppercase tracking-[.13em] text-emerald-200 hover:text-white" href={selected.href}>{selected.cta} <ArrowUpRight size={16} /></a></article></div></div></section>;
+  return <section aria-label="Zo Drive product suite" className="order-20 bg-[#101410] py-14 text-white sm:py-16" id="killer-features"><div className="mx-auto max-w-7xl px-5 sm:px-8"><div className="grid gap-6 border-b border-white/10 pb-8 lg:grid-cols-[1.2fr_.8fr] lg:items-end"><div><p className="text-sm font-bold uppercase tracking-[0.15em] text-emerald-200">The Zo Drive suite</p><h2 className="mt-3 text-4xl font-semibold leading-[.92] tracking-[-0.065em] sm:text-6xl">Six focused products.<span className="block font-serif font-normal italic text-emerald-200">One calm system.</span></h2></div><p className="max-w-xl text-sm leading-6 text-white/65">Move from publishing to delivery, automation, data, collaboration and AI without moving your work between vendors.</p></div><div className="mt-8 grid gap-6 lg:grid-cols-[.35fr_.65fr] lg:items-center"><div className="divide-y divide-white/10 border-y border-white/10 lg:self-center">{products.map((product, index) => <button aria-pressed={selectedIndex === index} aria-label={`Select ${product.name}`} className={`flex w-full items-center gap-4 px-0 py-3.5 text-left transition ${selectedIndex === index ? "text-emerald-200" : "text-white/65 hover:text-white"}`} key={product.name} onClick={() => setSelectedIndex(index)} type="button"><span className="w-6 font-mono text-xs font-semibold">{String(index + 1).padStart(2, "0")}</span><span className="flex-1 text-base font-semibold">{product.name}</span><span className="text-xs font-bold uppercase tracking-[.13em]">{product.verb}</span></button>)}</div><article className={`w-full overflow-hidden rounded-[1.5rem] bg-gradient-to-br ${tone} p-5 shadow-2xl shadow-black/20 sm:p-6`}><div className="flex items-start justify-between gap-5"><span className="grid size-11 place-items-center rounded-xl bg-white/10 text-emerald-200">{selected.icon}</span><span className="rounded-full border border-white/15 px-3 py-1 text-xs font-bold uppercase tracking-[.14em] text-white/70">{selected.verb}</span></div><p className="mt-6 text-sm font-bold uppercase tracking-[.15em] text-emerald-200">{selected.name}</p><h3 className="mt-3 max-w-2xl text-3xl font-semibold leading-[.98] tracking-[-.05em] sm:text-4xl">{selected.title}</h3><p className="mt-3 max-w-2xl text-sm leading-6 text-white/70">{selected.body}</p><div className="mt-5"><FeatureShowcase command={selected.command} file={selected.file} lines={selected.lines} product={selected.name} /></div><a className="mt-5 inline-flex items-center gap-2 text-sm font-bold uppercase tracking-[.13em] text-emerald-200 hover:text-white" href={selected.href}>{selected.cta} <ArrowUpRight size={16} /></a></article></div></div></section>;
 }
 
 type FeatureSurfaceTab = "gui" | "cli" | "cost";
@@ -1463,7 +1499,7 @@ function ZoDriveComparisonCta() {
   ];
   const zoFeatures = [["Zo Paste", "US$0"], ["Zo Transfer", "US$0"], ["Zo Functions", "US$0"], ["Zo Databases", "US$0"], ["Zo Shared Drives", "US$0"], ["ZominAI", "US$0"]];
 
-  return <section className="order-[55] bg-slate-950 py-20 text-white sm:py-24"><div className="mx-auto max-w-7xl px-5 sm:px-8"><div className="max-w-3xl"><p className="text-sm font-bold uppercase tracking-[0.15em] text-cyan-300">Why Zo Drive</p><h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-5xl">Six subscriptions become one private suite.</h2><p className="mt-5 text-base leading-7 text-slate-300">Keep the workflows. Remove the repeated accounts, scattered data and avoidable monthly SaaS spend.</p></div><div className="mt-10 grid gap-5 lg:grid-cols-2"><article aria-label="Fragmented SaaS subscriptions" className="rounded-2xl border border-white/10 bg-white/5 p-5 sm:p-7"><p className="text-xs font-bold uppercase tracking-[0.15em] text-orange-300">Before / fragmented SaaS</p><h3 className="mt-2 text-2xl font-semibold">Six vendors</h3><ul className="mt-6 divide-y divide-white/10">{regularSaas.map(([name, cost]) => <li className="flex items-center justify-between gap-4 py-3.5" key={name}><span className="font-semibold text-slate-100">{name}</span><span className="text-right text-sm text-slate-400">{cost}</span></li>)}</ul><div className="mt-6 rounded-xl bg-black/50 px-4 py-4"><p className="text-xs font-bold uppercase tracking-[0.15em] text-slate-400">Published starting prices</p><p className="mt-2 text-3xl font-semibold tracking-tight text-white">US$104+ <span className="text-lg font-medium text-slate-400">/ month</span></p><p className="mt-2 text-sm leading-6 text-slate-400">Before Pastebin Pro and additional usage charges.</p></div></article><article aria-label="Zo Drive private suite" className="rounded-2xl border border-cyan-300/30 bg-cyan-300/[0.08] p-5 shadow-2xl shadow-cyan-400/5 sm:p-7"><p className="text-xs font-bold uppercase tracking-[0.15em] text-cyan-200">After / Zo Drive</p><h3 className="mt-2 text-2xl font-semibold text-cyan-50">One private system</h3><ul className="mt-6 divide-y divide-cyan-200/15">{zoFeatures.map(([name, cost]) => <li className="flex items-center justify-between gap-4 py-3.5" key={name}><span className="font-semibold text-cyan-50">{name}</span><span className="shrink-0 text-sm font-semibold text-cyan-200">{cost}</span></li>)}</ul><div className="mt-6 rounded-xl bg-cyan-950/70 px-4 py-4"><p className="text-xs font-bold uppercase tracking-[0.15em] text-cyan-100/70">Additional SaaS cost</p><p className="mt-2 text-3xl font-semibold tracking-tight text-cyan-50">US$0 <span className="text-lg font-medium text-cyan-100/70">extra / feature</span></p><p className="mt-2 text-sm leading-6 text-cyan-100/70">Included with Zo Drive on your Zo Computer.</p></div></article></div></div></section>;
+  return <section className="order-[55] bg-slate-950 py-20 text-white sm:py-24"><div className="mx-auto max-w-[64rem] px-5 sm:px-8"><div className="max-w-3xl"><p className="text-sm font-bold uppercase tracking-[0.15em] text-cyan-300">Why Zo Drive</p><h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-5xl">Six subscriptions become one private suite.</h2><p className="mt-5 text-base leading-7 text-slate-300">Keep the workflows. Remove the repeated accounts, scattered data and avoidable monthly SaaS spend.</p></div><div className="mt-10 grid gap-5 lg:grid-cols-2"><article aria-label="Fragmented SaaS subscriptions" className="rounded-2xl border border-white/10 bg-white/5 p-5 sm:p-7"><p className="text-xs font-bold uppercase tracking-[0.15em] text-orange-300">Before / fragmented SaaS</p><h3 className="mt-2 text-2xl font-semibold">Six vendors</h3><ul className="mt-6 divide-y divide-white/10">{regularSaas.map(([name, cost]) => <li className="flex items-center justify-between gap-4 py-3.5" key={name}><span className="font-semibold text-slate-100">{name}</span><span className="text-right text-sm text-slate-400">{cost}</span></li>)}</ul><div className="mt-6 rounded-xl bg-black/50 px-4 py-4"><p className="text-xs font-bold uppercase tracking-[0.15em] text-slate-400">Published starting prices</p><p className="mt-2 text-3xl font-semibold tracking-tight text-white">US$104+ <span className="text-lg font-medium text-slate-400">/ month</span></p><p className="mt-2 text-sm leading-6 text-slate-400">Before Pastebin Pro and additional usage charges.</p></div></article><article aria-label="Zo Drive private suite" className="rounded-2xl border border-cyan-300/30 bg-cyan-300/[0.08] p-5 shadow-2xl shadow-cyan-400/5 sm:p-7"><p className="text-xs font-bold uppercase tracking-[0.15em] text-cyan-200">After / Zo Drive</p><h3 className="mt-2 text-2xl font-semibold text-cyan-50">One private system</h3><ul className="mt-6 divide-y divide-cyan-200/15">{zoFeatures.map(([name, cost]) => <li className="flex items-center justify-between gap-4 py-3.5" key={name}><span className="font-semibold text-cyan-50">{name}</span><span className="shrink-0 text-sm font-semibold text-cyan-200">{cost}</span></li>)}</ul><div className="mt-6 rounded-xl bg-cyan-950/70 px-4 py-4"><p className="text-xs font-bold uppercase tracking-[0.15em] text-cyan-100/70">Additional SaaS cost</p><p className="mt-2 text-3xl font-semibold tracking-tight text-cyan-50">US$0 <span className="text-lg font-medium text-cyan-100/70">extra / feature</span></p><p className="mt-2 text-sm leading-6 text-cyan-100/70">Included with Zo Drive on your Zo Computer.</p></div></article></div></div></section>;
 }
 
 function ZoDriveClosingCta() {
@@ -2437,6 +2473,18 @@ async function getZominAiDownloadStatus(signal?: AbortSignal): Promise<ZominAiDo
   return { detail: `${body.model} is ready on your Zo Computer.`, downloadedBytes: 1, expectedBytes: 1, progress: 1, state: "ready", updatedAt: new Date().toISOString() };
 }
 
+async function getZominAiInstallation(signal?: AbortSignal): Promise<ZominAiInstallation> {
+  const response = await fetch(`${zominAiGatewayUrl()}/installation`, { headers: { Accept: "application/json" }, signal });
+  if (!response.ok) throw new Error(`Installation service returned ${response.status}`);
+  return await response.json() as ZominAiInstallation;
+}
+
+async function updateZominAiInstallation(method: "DELETE" | "POST", version: string): Promise<void> {
+  const response = await fetch(`${zominAiGatewayUrl()}/installation`, { body: JSON.stringify({ version }), headers: { Accept: "application/json", "Content-Type": "application/json" }, method });
+  if (response.ok) return;
+  throw await zominAiResponseError(response);
+}
+
 async function verifyZominAiInstall(settings: ZominAiSettings): Promise<ZominAiVerification> {
   const healthUrl = zominAiHealthUrl(settings.endpoint);
   if (!healthUrl) {
@@ -2749,9 +2797,12 @@ function ZominAiChatDrawer({ client, connection, isOpen, onClose, onConnectionCh
   </aside>;
 }
 
-function ZominAiWorkspace({ initialPane = "verify" }: { initialPane?: ZominAiPane }) {
+function ZominAiWorkspace({ initialPane = "install" }: { initialPane?: ZominAiPane }) {
   const [activePane, setActivePane] = useState<ZominAiPane>(initialPane);
   const [settings, setSettings] = useState<ZominAiSettings>(readZominAiSettings);
+  const [installation, setInstallation] = useState<ZominAiInstallation | null>(null);
+  const [installationUnavailable, setInstallationUnavailable] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const [verification, setVerification] = useState<ZominAiVerification | null>(null);
   const [downloadStatus, setDownloadStatus] = useState<ZominAiDownloadStatus | null>(null);
   const [downloadStatusUnavailable, setDownloadStatusUnavailable] = useState(false);
@@ -2792,6 +2843,16 @@ function ZominAiWorkspace({ initialPane = "verify" }: { initialPane?: ZominAiPan
     };
   }, []);
 
+  const refreshInstallation = async () => {
+    try { setInstallation(await getZominAiInstallation()); setInstallationUnavailable(false); } catch { setInstallationUnavailable(true); }
+  };
+
+  useEffect(() => {
+    void refreshInstallation();
+    const interval = window.setInterval(() => void refreshInstallation(), 3_000);
+    return () => window.clearInterval(interval);
+  }, []);
+
   async function verify() {
     setVerifying(true);
     try {
@@ -2812,11 +2873,25 @@ function ZominAiWorkspace({ initialPane = "verify" }: { initialPane?: ZominAiPan
     toast.success("ZominAI browser settings removed");
   }
 
+  async function uninstallVersion() {
+    const version = installation?.model.version ?? defaultZominAiSettings.model;
+    setRemoving(true);
+    try {
+      await updateZominAiInstallation("DELETE", version);
+      setConfirmUninstall(false);
+      setVerification(null);
+      toast.success(`${version} removed from this Zo Computer`);
+      await refreshInstallation();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not remove the ZominAI model.");
+    } finally { setRemoving(false); }
+  }
+
   const panes: Array<{ description: string; icon: React.ReactNode; id: ZominAiPane; label: string }> = [
-    { id: "verify", label: "Verify install", description: "Check this browser and local runtime", icon: <ShieldCheck size={18} /> },
-    { id: "install", label: "Install ZominAI", description: "Set up Bonsai on this device", icon: <Download size={18} /> },
-    { id: "settings", label: "ZominAI settings", description: "Local runtime and model preferences", icon: <Settings2 size={18} /> },
-    { id: "uninstall", label: "Uninstall ZominAI", description: "Remove only browser-local settings", icon: <Trash2 size={18} /> }
+    { id: "verify", label: "Check runtime", description: "Confirm the active model is ready", icon: <ShieldCheck size={18} /> },
+    { id: "install", label: "Install or repair", description: "Set up the managed model version", icon: <Download size={18} /> },
+    { id: "settings", label: "Preferences", description: "View model location and set behaviour", icon: <Settings2 size={18} /> },
+    { id: "uninstall", label: "Remove version", description: "Remove one specified model version", icon: <Trash2 size={18} /> }
   ];
   return <div className="space-y-5">
     <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 via-cyan-950 to-slate-900 px-7 py-8 text-white shadow-sm md:px-9"><div className="absolute -right-20 -top-24 size-72 rounded-full bg-cyan-300/15 blur-3xl" /><div className="relative max-w-4xl"><span className="inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-cyan-200/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100"><img className="size-4 rounded object-cover" src={zominAiButtonUrl} alt="" /> Local Bonsai runtime</span><h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">Run ZominAI beside your Drive.</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">ZominAI stays on the device running the local model. When you ask about your Drive, authenticated read-only tools can supply supported file content and database results to this local runtime. Nothing is sent to a hosted model.</p><p className="mt-4 text-xs font-medium text-cyan-100/80">Inspired by Google Gemini.</p><nav aria-label="ZominAI resources" className="mt-6 grid gap-2 sm:grid-cols-2 xl:grid-cols-4"><a className="rounded-xl border border-cyan-100/20 bg-white/10 p-3 text-sm font-semibold text-cyan-50 transition hover:border-cyan-100/50 hover:bg-white/15" href="https://prismml.com/" rel="noreferrer" target="_blank">PrismML overview <ExternalLink className="ml-1 inline" size={14} /></a><a className="rounded-xl border border-cyan-100/20 bg-white/10 p-3 text-sm font-semibold text-cyan-50 transition hover:border-cyan-100/50 hover:bg-white/15" href="https://huggingface.co/prism-ml/Bonsai-27B-gguf" rel="noreferrer" target="_blank">Bonsai model &amp; licence <ExternalLink className="ml-1 inline" size={14} /></a><a className="rounded-xl border border-cyan-100/20 bg-white/10 p-3 text-sm font-semibold text-cyan-50 transition hover:border-cyan-100/50 hover:bg-white/15" href="https://github.com/ggml-org/llama.cpp/blob/master/docs/install.md" rel="noreferrer" target="_blank">Runtime installation docs <ExternalLink className="ml-1 inline" size={14} /></a><a className="rounded-xl border border-cyan-100/20 bg-cyan-200/20 p-3 text-sm font-semibold text-cyan-50 transition hover:border-cyan-100/50 hover:bg-white/15" href={zominAiDocsUrl()}>ZominAI documentation <ArrowUpRight className="ml-1 inline" size={14} /></a></nav></div></section>
@@ -2848,7 +2923,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
   const [section, setSection] = useState<DriveSection>(currentDriveSection);
   const canManageUserAccess = user.role === "super";
   const [driveTheme, setDriveTheme] = useState<DriveTheme>(readDriveTheme);
-  const [zominAiPane, setZominAiPane] = useState<ZominAiPane>("verify");
+  const [zominAiPane, setZominAiPane] = useState<ZominAiPane>("install");
   const [zominAiChatOpen, setZominAiChatOpen] = useState(false);
   const [zominAiChatSettings, setZominAiChatSettings] = useState<ZominAiSettings>(readZominAiSettings);
   const [zominAiConnection, setZominAiConnection] = useState<ZominAiConnection>({ state: "checking", detail: "Checking the local Bonsai runtime.", models: [] });
@@ -3861,66 +3936,18 @@ function ClusterDatabases({ client, search }: { client: DriveClient; search: str
   return (
     <div className="space-y-5">
       {!normalizedSearch && <>
-      <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 via-cyan-950 to-slate-900 px-7 py-8 text-white shadow-sm md:px-9">
-        <div className="absolute -right-16 -top-24 size-72 rounded-full bg-cyan-300/15 blur-3xl" />
-        <div className="relative max-w-3xl">
-          <span className="inline-flex items-center gap-2 rounded-full border border-cyan-100/20 bg-cyan-100/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100">
-            <Network size={14} /> Private folder sharing
-          </span>
-          <h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">
-            Create shared drives with people you trust.
-          </h2>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
-            Select the folders you are happy to expose, generate a one-time
-            pairing key for each, choose Viewer or Editor access, and send it
-            to the other Zo Drive owner. Everything else stays private.
-          </p>
-          <p className="mt-4 text-xs font-medium text-cyan-100/80">
-            Inspired by Synology NAS Drive.
-          </p>
-        </div>
-      </section>
-
-      <section className="grid gap-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(18rem,0.85fr)]">
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 bg-slate-50 px-5 py-5">
+      <section className="mx-auto max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 px-5 py-5 sm:px-6">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-700">
-                Shared Drive pairing
-              </p>
-              <h2 className="mt-1 text-xl font-semibold tracking-tight text-slate-900">
-                Invite someone or join their Drive
-              </h2>
-              <p className="mt-2 max-w-xl text-sm leading-6 text-slate-500">
-                You decide the folders they can access. Each selected folder
-                receives an independent, time-limited pairing key.
-              </p>
+              <h2 className="text-xl font-semibold tracking-tight text-slate-900">Share a folder, not your whole Drive.</h2>
+              <p className="mt-1 text-sm leading-6 text-slate-500">Pick a folder, choose access, then send one pairing key.</p>
             </div>
-            <span className="rounded-full bg-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600">
-              Private by default
-            </span>
+            <span className="rounded-full bg-cyan-50 px-3 py-1.5 text-xs font-bold text-cyan-800">Private by default</span>
           </div>
-          <div className="grid gap-4 p-5 sm:grid-cols-3">
-            <ClusterStep
-              number="1"
-              title="Select folders"
-              description="Choose the exact folders you are willing to share from My Drive."
-            />
-            <ClusterStep
-              number="2"
-              title="Send keys"
-              description="Each key works once and expires after 15 minutes if it is not used."
-            />
-            <ClusterStep
-              number="3"
-              title="Set access"
-              description="Viewers can download; Editors can work inside the approved folder."
-            />
-          </div>
-          <div className="border-t border-slate-100 p-5">
+          <div className="p-5 sm:p-6">
             <div
               aria-label="Shared Drive pairing mode"
-              className="flex rounded-xl bg-slate-100 p-1"
+              className="flex max-w-md rounded-xl bg-slate-100 p-1"
               role="tablist"
             >
               <button
@@ -3930,7 +3957,7 @@ function ClusterDatabases({ client, search }: { client: DriveClient; search: str
                 role="tab"
                 type="button"
               >
-                Invite someone
+                Share a folder
               </button>
               <button
                 aria-selected={pairMode === "join"}
@@ -3939,21 +3966,15 @@ function ClusterDatabases({ client, search }: { client: DriveClient; search: str
                 role="tab"
                 type="button"
               >
-                Join a shared Drive
+                Join a folder
               </button>
             </div>
             {pairMode === "invite" ? (
-              <div className="mt-5">
-                <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="mt-6">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <h3 className="text-sm font-semibold text-slate-900">
-                      Choose folders to share
-                    </h3>
-                    <p className="mt-1 text-sm leading-6 text-slate-500">
-                      Select one or more folders. A parent folder already
-                      includes every subfolder, so overlapping selections are
-                      prevented.
-                    </p>
+                    <h3 className="text-sm font-semibold text-slate-900">1. Choose folders</h3>
+                    <p className="mt-1 text-sm text-slate-500">A parent includes its subfolders.</p>
                   </div>
                   <span className="rounded-full bg-cyan-50 px-3 py-1 text-xs font-bold text-cyan-800">
                     {selectedFolders.length} selected
@@ -4010,21 +4031,16 @@ function ClusterDatabases({ client, search }: { client: DriveClient; search: str
                       })
                   )}
                 </div>
-                <div className="mt-4 grid gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2">
+                <div className="mt-5 flex flex-wrap items-end justify-between gap-4 border-t border-slate-100 pt-5">
                   <label className="text-sm font-semibold text-slate-700">
-                    Recipient label <span className="font-normal text-slate-400">optional</span>
-                    <input aria-label="Pairing recipient" className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100" maxLength={120} placeholder="e.g. Maya - Finance" value={recipient} onChange={(event) => setRecipient(event.target.value)} />
-                  </label>
-                  <label className="text-sm font-semibold text-slate-700">
-                    Folder access
-                    <select aria-label="Folder access role" className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100" value={inviteRole} onChange={(event) => setInviteRole(event.target.value as ClusterRole)}>
+                    2. Access
+                    <select aria-label="Folder access role" className="mt-1.5 block rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100" value={inviteRole} onChange={(event) => setInviteRole(event.target.value as ClusterRole)}>
                       <option value="viewer">Viewer - download only</option>
                       <option value="editor">Editor - upload and edit</option>
                     </select>
                   </label>
-                </div>
-                <button
-                  className="mt-4 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:bg-slate-300"
+                  <button
+                  className="rounded-lg bg-cyan-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-cyan-800 disabled:bg-slate-300"
                   disabled={
                     selectedFolders.length === 0 || invitationMutation.isPending
                   }
@@ -4034,16 +4050,18 @@ function ClusterDatabases({ client, search }: { client: DriveClient; search: str
                     ? "Creating keys…"
                     : `Create ${selectedFolders.length || ""} pairing ${selectedFolders.length === 1 ? "key" : "keys"}`}
                 </button>
+                </div>
+                <details className="mt-4 text-sm text-slate-500">
+                  <summary className="cursor-pointer font-semibold text-slate-600 hover:text-slate-900">Add a recipient label</summary>
+                  <label className="mt-3 block text-sm font-semibold text-slate-700">Recipient label <span className="font-normal text-slate-400">optional</span>
+                    <input aria-label="Pairing recipient" className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100" maxLength={120} placeholder="e.g. Maya - Finance" value={recipient} onChange={(event) => setRecipient(event.target.value)} />
+                  </label>
+                </details>
                 {createdInvites.length > 0 && (
-                  <div className="mt-4 space-y-3 rounded-xl border border-cyan-200 bg-cyan-50 p-4">
+                  <div className="mt-5 space-y-3 rounded-xl border border-cyan-200 bg-cyan-50 p-4">
                     <div>
-                      <p className="text-xs font-bold uppercase tracking-wide text-cyan-800">
-                        Send these once
-                      </p>
-                      <p className="mt-1 text-xs leading-5 text-cyan-900">
-                        Send each key with your Zo Drive URL. They expire in 15
-                        minutes and grant access only to the named folder.
-                      </p>
+                      <p className="text-sm font-semibold text-cyan-950">Send this to your collaborator</p>
+                      <p className="mt-1 text-xs leading-5 text-cyan-900">They need your Drive URL and the key below. Each key works once and expires in 15 minutes.</p>
                     </div>
                     <div className="rounded-lg border border-cyan-200 bg-white p-3">
                       <p className="text-xs font-bold uppercase tracking-wide text-cyan-800">Zo Drive URL</p>
@@ -4081,16 +4099,10 @@ function ClusterDatabases({ client, search }: { client: DriveClient; search: str
                 )}
               </div>
             ) : (
-              <div className="mt-5">
-                <h3 className="text-sm font-semibold text-slate-900">
-                  Join a folder someone shared with you
-                </h3>
-                <p className="mt-1 max-w-xl text-sm leading-6 text-slate-500">
-                  The other owner chooses what they share. Paste their Drive URL
-                  and the one-time key they sent; this does not expose any of
-                  your folders.
-                </p>
-                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+              <div className="mt-6">
+                <h3 className="text-sm font-semibold text-slate-900">Connect a folder shared with you</h3>
+                <p className="mt-1 text-sm leading-6 text-slate-500">Paste the two details you received. Your own folders remain private.</p>
+                <div className="mt-5 grid gap-4 sm:grid-cols-2">
                   <label className="text-sm font-semibold text-slate-700">
                     Other Zo Drive URL
                     <input
@@ -4112,7 +4124,7 @@ function ClusterDatabases({ client, search }: { client: DriveClient; search: str
                   </label>
                 </div>
                 <button
-                  className="mt-4 rounded-lg bg-cyan-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-cyan-800 disabled:bg-slate-300"
+                  className="mt-5 rounded-lg bg-cyan-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-cyan-800 disabled:bg-slate-300"
                   disabled={
                     !remoteUrl.trim() ||
                     !inviteToken.trim() ||
@@ -4127,31 +4139,10 @@ function ClusterDatabases({ client, search }: { client: DriveClient; search: str
               </div>
             )}
           </div>
-        </div>
-
-        <aside className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
-            How shared files behave
-          </p>
-          <div className="mt-4 space-y-4">
-            <ClusterBehaviour
-              title="Recursive scope"
-              description="A shared folder includes its current and future subfolders, while parent and sibling folders remain private."
-            />
-            <ClusterBehaviour
-              title="Recent activity"
-              description="Edits from either Zo Computer appear in Recent, ordered with the rest of your Drive activity."
-            />
-            <ClusterBehaviour
-              title="Shared with me"
-              description="Folders another Zo Computer exposes to you are grouped in Shared with me, separate from public share links."
-            />
-            <ClusterBehaviour
-              title="Role-based access"
-              description="Viewers can list and download files. Editors can also create, rename, and delete within the approved folder."
-            />
-          </div>
-        </aside>
+          <details className="border-t border-slate-100 px-5 py-4 text-sm text-slate-500 sm:px-6">
+            <summary className="cursor-pointer font-semibold text-slate-600 hover:text-slate-900">How Shared Drives work</summary>
+            <p className="mt-3 leading-6">A shared folder includes its current and future subfolders. Parent and sibling folders remain private. Viewers can download; Editors can create, rename and delete within the approved folder. Shared files appear in Recent and Shared with me.</p>
+          </details>
       </section>
       </>}
       {(visibleInvitations.length > 0 || visiblePeers.length > 0) && (
@@ -4361,30 +4352,6 @@ function ClusterDatabases({ client, search }: { client: DriveClient; search: str
       )}
     </div>
   );
-}
-
-function ClusterStep({
-  description,
-  number,
-  title,
-}: {
-  description: string;
-  number: string;
-  title: string;
-}) {
-  return (
-    <article className="rounded-xl border border-slate-200 bg-white p-4">
-      <span className="grid size-8 place-items-center rounded-lg bg-cyan-100 text-sm font-bold text-cyan-800">
-        {number}
-      </span>
-      <h3 className="mt-4 text-sm font-semibold text-slate-900">{title}</h3>
-      <p className="mt-1 text-xs leading-5 text-slate-500">{description}</p>
-    </article>
-  );
-}
-
-function ClusterBehaviour({ description, title }: { description: string; title: string }) {
-  return <div><h3 className="text-sm font-semibold text-slate-800">{title}</h3><p className="mt-1 text-sm leading-6 text-slate-500">{description}</p></div>;
 }
 
 function Databases({ client, search }: { client: DriveClient; search: string }) {
@@ -5183,6 +5150,7 @@ function StorageBreakdownDialog({ usage, onClose, onSetQuota }: { usage?: Storag
 }
 
 function ZoTransfer({ client, onCreated, search: globalSearch }: { client: DriveClient; onCreated: () => Promise<void>; search: string }) {
+  const [transferTab, setTransferTab] = useState<"transfer" | "active">("transfer");
   const [mode, setMode] = useState<"drive" | "upload">("drive");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [expiry, setExpiry] = useState("7d");
@@ -5227,7 +5195,15 @@ function ZoTransfer({ client, onCreated, search: globalSearch }: { client: Drive
   const working = createMutation.isPending || uploadMutation.isPending;
   const actionLabel = access === "passcode" ? "Create protected link" : "Create public link";
 
-  return <div className="space-y-6">
+  return <div className="zo-transfer-view space-y-6" data-tab={transferTab}>
+    <style>{`
+      .zo-transfer-view[data-tab="active"] > section:first-of-type { display: none; }
+      .zo-transfer-view[data-tab="transfer"] > section:nth-of-type(2) { display: none; }
+    `}</style>
+    <div aria-label="Zo Transfer views" className="flex max-w-md rounded-xl bg-slate-100 p-1" role="tablist">
+      <button aria-selected={transferTab === "transfer"} className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition ${transferTab === "transfer" ? "bg-white text-blue-700 shadow-sm" : "text-slate-500 hover:text-slate-800"}`} onClick={() => setTransferTab("transfer")} role="tab" type="button">Transfer To</button>
+      <button aria-selected={transferTab === "active"} className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition ${transferTab === "active" ? "bg-white text-blue-700 shadow-sm" : "text-slate-500 hover:text-slate-800"}`} onClick={() => setTransferTab("active")} role="tab" type="button">Active Transfers</button>
+    </div>
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="relative overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 px-7 py-9 text-white md:px-10"><div className="absolute -right-28 -top-32 size-80 rounded-full bg-cyan-400/15 blur-3xl" /><div className="relative"><span className="inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-cyan-200/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100"><Send size={14} /> Ready to send</span><h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">Send a file with Zo Transfer</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300 md:text-base">Upload a file or select one already in Zo Drive. Create a public or passcode-protected link, then revoke it whenever needed.</p><p className="mt-4 text-xs font-medium text-cyan-100/80">Inspired by WeTransfer.</p></div></div>
       <div className="grid gap-6 p-5 md:grid-cols-[minmax(0,1fr)_18rem] md:p-7">

@@ -3,6 +3,14 @@
 All notable changes to ZominAI are recorded here. ZominAI follows its own
 semantic-versioned release track, independent of the Zo Drive GUI and CLI.
 
+## v1.10.0 - 2026-07-24
+
+### Added
+
+- Added owner-only managed installation and removal for the explicitly selected
+  Bonsai model version.
+- Shows the private runtime model path separately from Zo Drive files and quota.
+
 ## v1.9.0 - 2026-07-23
 
 ### Added

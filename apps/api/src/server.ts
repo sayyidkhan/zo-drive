@@ -14,12 +14,14 @@ import { LocalFunctionStore } from "./functions/local-function-store.js";
 import { LocalClusterCache } from "./clusters/local-cluster-cache.js";
 import { loadServerConfig } from "./server-config.js";
 import { LocalDriveStorage } from "./storage/local-drive-storage.js";
+import { LocalZominAiModelManager } from "./zominai/local-zominai-model-manager.js";
 
 const dataRoot = requiredEnvironmentVariable("ZO_DRIVE_DATA_ROOT");
 const port = numberEnvironmentVariable("ZO_DRIVE_PORT", 43071);
 const allowedOrigin = process.env.ZO_DRIVE_ALLOWED_ORIGIN;
 const sessionSecret = process.env.ZO_DRIVE_SESSION_SECRET ?? developmentSessionSecret();
 const sessions = new SessionService(sessionSecret);
+const authStore = new LocalAuthStore({ root: dataRoot });
 const apiKeys = new LocalApiKeyStore({ root: dataRoot });
 const shareStore = new LocalShareStore({ root: dataRoot });
 const formStore = new LocalFormStore({ root: dataRoot });
@@ -29,6 +31,7 @@ const clusterCache = new LocalClusterCache({ root: dataRoot, maxBytes: positiveI
 const maxDatabaseImportBytes = positiveIntegerEnvironmentVariable("ZO_DRIVE_MAX_DATABASE_IMPORT_BYTES", Number.MAX_SAFE_INTEGER);
 const zominAiEndpoint = localHttpEndpoint(process.env.ZO_DRIVE_ZOMINAI_ENDPOINT ?? "http://127.0.0.1:57183");
 const zominAiModel = process.env.ZO_DRIVE_ZOMINAI_MODEL ?? "Bonsai-8B-Q1_0.gguf";
+const zominAiRuntimeRoot = process.env.ZOMINAI_RUNTIME_ROOT ?? "/root/.local/share/zominai";
 const webRoot = process.env.ZO_DRIVE_WEB_ROOT ?? resolve(dirname(fileURLToPath(import.meta.url)), "../../web/dist");
 const apiRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const config = await loadServerConfig(process.env.ZO_DRIVE_CONFIG_PATH ?? resolve(apiRoot, "config.json"));
@@ -38,7 +41,7 @@ const app = createApp({
   resolveUserId: async (request) => sessions.userIdFromRequest(request) ?? await apiKeys.userIdFromRequest(request),
   allowedOrigin,
   auth: {
-    store: new LocalAuthStore({ root: dataRoot }),
+    store: authStore,
     sessions,
     secureCookies: process.env.NODE_ENV === "production"
   },
@@ -56,7 +59,9 @@ const app = createApp({
   maxDatabaseImportBytes,
   zominAi: {
     endpoint: zominAiEndpoint,
-    model: zominAiModel
+    model: zominAiModel,
+    management: new LocalZominAiModelManager({ managerScript: resolve(apiRoot, "../../scripts/zominai-model-manager.sh"), runtimeRoot: zominAiRuntimeRoot }),
+    canManage: (userId) => authStore.isAccountOwner(userId)
   }
 });
 

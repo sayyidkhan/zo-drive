@@ -6,6 +6,7 @@ import { Readable } from "node:stream";
 import { createReadStream } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
+import type { ZominAiInstallationStatus } from "./zominai/local-zominai-model-manager.js";
 
 import { InvalidApiKeyRateLimiter } from "./auth/invalid-api-key-rate-limiter.js";
 import { LocalAuthStore } from "./auth/local-auth-store.js";
@@ -43,8 +44,10 @@ type CreateAppOptions = {
   maxDatabaseImportBytes?: number;
   trustProxy?: boolean;
   zominAi?: {
+    canManage?: (userId: string) => Promise<boolean>;
     endpoint: string;
     fetch?: typeof fetch;
+    management?: { install(version: string): Promise<void>; status(): Promise<ZominAiInstallationStatus>; uninstall(version: string): Promise<void> };
     model: string;
   };
 };
@@ -206,6 +209,7 @@ const zominAiChatSchema = z.object({
   tools: z.array(z.unknown()).max(10).optional()
 }).refine((value) => JSON.stringify(value).length <= 1_000_000, "ZominAI request is too large");
 const zominAiWarmupSchema = z.object({ model: z.string().trim().min(1).max(256).optional() });
+const zominAiModelVersionSchema = z.object({ version: z.string().trim().min(1).max(256) });
 
 export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys, invalidApiKeyRateLimiter = new InvalidApiKeyRateLimiter(), sharing, forms, databases = new LocalDatabaseStore(storage.root), databaseApiKeys = new LocalDatabaseApiKeyStore({ root: storage.root }), functions = new LocalFunctionStore(storage.root), clusters = new LocalClusterStore({ root: storage.root }), clusterCache = new LocalClusterCache({ root: storage.root, maxBytes: 1024 * 1024 * 1024 }), maxDatabaseImportBytes = Number.MAX_SAFE_INTEGER, trustProxy = false, zominAi }: CreateAppOptions) {
   const app = new Hono();
@@ -285,6 +289,29 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
       const body = await response.json() as { data?: Array<{ id?: unknown }> };
       return [...new Set((body.data ?? []).flatMap((item) => typeof item.id === "string" && item.id.trim() ? [item.id] : []))];
     };
+    const requireRuntimeManager = async (request: Request) => {
+      const userId = await requireUser(request, resolveAuthenticatedUser);
+      return userId && zominAi.canManage && await zominAi.canManage(userId) ? userId : null;
+    };
+    if (zominAi.management) {
+      app.get("/zominai/installation", async (context) => {
+        if (!(await requireUser(context.req.raw, resolveReadUser))) return unauthorized(context);
+        context.header("cache-control", "no-store");
+        return context.json(await zominAi.management!.status());
+      });
+      app.post("/zominai/installation", async (context) => {
+        if (!(await requireRuntimeManager(context.req.raw))) return context.json({ error: { code: "OWNER_REQUIRED", message: "Only the Zo Drive owner can install a ZominAI model." } }, 403);
+        const parsed = zominAiModelVersionSchema.safeParse(await context.req.json().catch(() => null));
+        if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Select the exact ZominAI model version to install." } }, 400);
+        try { await zominAi.management!.install(parsed.data.version); return context.json({ accepted: true, version: parsed.data.version }, 202); } catch (error) { return context.json({ error: { code: "ZOMINAI_INSTALL_FAILED", message: error instanceof Error ? error.message : "Could not start the ZominAI installation." } }, 500); }
+      });
+      app.delete("/zominai/installation", async (context) => {
+        if (!(await requireRuntimeManager(context.req.raw))) return context.json({ error: { code: "OWNER_REQUIRED", message: "Only the Zo Drive owner can remove a ZominAI model." } }, 403);
+        const parsed = zominAiModelVersionSchema.safeParse(await context.req.json().catch(() => null));
+        if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Specify the exact ZominAI model version to remove." } }, 400);
+        try { await zominAi.management!.uninstall(parsed.data.version); return context.body(null, 204); } catch (error) { return context.json({ error: { code: "ZOMINAI_UNINSTALL_FAILED", message: error instanceof Error ? error.message : "Could not remove the ZominAI model." } }, 500); }
+      });
+    }
 
     app.get("/zominai/time", async (context) => {
       if (!(await requireUser(context.req.raw, resolveReadUser))) return unauthorized(context);

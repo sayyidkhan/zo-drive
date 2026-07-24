@@ -72,6 +72,22 @@ describe("Zo Drive API", () => {
     expect(runtimeFetch).toHaveBeenCalledTimes(5);
   });
 
+  it("manages one explicitly selected ZominAI model version for the owner", async () => {
+    const root = await mkdtemp(join(tmpdir(), "zo-drive-zominai-installation-"));
+    roots.push(root);
+    const management = {
+      install: vi.fn().mockResolvedValue(undefined),
+      status: vi.fn().mockResolvedValue({ model: { fileName: "Bonsai-8B-Q1_0.gguf", installed: true, location: "/root/.local/share/zominai/models/Bonsai-8B-Q1_0.gguf", sizeBytes: 1_158_654_496, version: "Bonsai-8B-Q1_0.gguf" }, runtimeLocation: "/root/.local/share/zominai", state: "installed" } as const),
+      uninstall: vi.fn().mockResolvedValue(undefined)
+    };
+    const app = createApp({ storage: new LocalDriveStorage({ root }), resolveUserId: (request) => request.headers.get("x-test-user-id"), zominAi: { endpoint: "http://127.0.0.1:57183", model: "Bonsai-8B-Q1_0.gguf", management, canManage: async (userId) => userId === "owner" } });
+
+    await expect((await app.request("http://localhost/zominai/installation", { headers: { "x-test-user-id": "reader" } })).json()).resolves.toMatchObject({ model: { location: "/root/.local/share/zominai/models/Bonsai-8B-Q1_0.gguf", version: "Bonsai-8B-Q1_0.gguf" }, state: "installed" });
+    expect((await app.request("http://localhost/zominai/installation", { method: "POST", headers: { "content-type": "application/json", "x-test-user-id": "reader" }, body: JSON.stringify({ version: "Bonsai-8B-Q1_0.gguf" }) })).status).toBe(403);
+    expect((await app.request("http://localhost/zominai/installation", { method: "DELETE", headers: { "content-type": "application/json", "x-test-user-id": "owner" }, body: JSON.stringify({ version: "Bonsai-8B-Q1_0.gguf" }) })).status).toBe(204);
+    expect(management.uninstall).toHaveBeenCalledWith("Bonsai-8B-Q1_0.gguf");
+  });
+
   it("returns the authenticated Zo Computer clock without calling the model", async () => {
     const root = await mkdtemp(join(tmpdir(), "zo-drive-zominai-time-"));
     roots.push(root);

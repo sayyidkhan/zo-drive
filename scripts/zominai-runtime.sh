@@ -4,6 +4,9 @@ set -euo pipefail
 runtime_root="${ZOMINAI_RUNTIME_ROOT:-/root/.local/share/zominai}"
 server_bin="${ZOMINAI_SERVER_BIN:-${runtime_root}/releases/b10087/llama-b10087/llama-server}"
 model="${runtime_root}/models/Bonsai-8B-Q1_0.gguf"
+disabled="${runtime_root}/state/disabled"
+
+while [[ -f "${disabled}" ]]; do sleep 2; done
 
 if [[ ! -x "${server_bin}" ]]; then
   echo "ZominAI runtime is not installed: ${server_bin} is missing" >&2

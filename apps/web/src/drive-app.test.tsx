@@ -216,9 +216,9 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "Private local AI for your Drive." })).toBeInTheDocument();
-      expect(screen.getByText("ZominAI documentation · v1.9.0")).toBeInTheDocument();
+      expect(screen.getByText("ZominAI documentation · v1.10.0")).toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "ZominAI" })[0]).toHaveAttribute("aria-current", "page");
-      expect(screen.getByRole("heading", { name: "ZominAI version 1.9.0" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "ZominAI version 1.10.0" })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "ZominAI changelog" })).toBeInTheDocument();
 
       cleanup();
@@ -226,7 +226,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "ZominAI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.9.0")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.10.0")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&product=zominai"));
 
       cleanup();
@@ -662,19 +662,19 @@ describe("DriveApp", () => {
     expect(screen.getByRole("link", { name: /PrismML overview/ })).toHaveAttribute("href", "https://prismml.com/");
     expect(screen.getByRole("link", { name: /Bonsai model & licence/ })).toHaveAttribute("href", "https://huggingface.co/prism-ml/Bonsai-27B-gguf");
     expect(screen.getByRole("link", { name: /Runtime installation docs/ })).toHaveAttribute("href", "https://github.com/ggml-org/llama.cpp/blob/master/docs/install.md");
-    expect(screen.getByRole("button", { name: "ZominAI menu: Verify install" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "ZominAI menu: Check runtime" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "ZominAI menu: Talk to ZominAI" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "ZominAI menu: Install ZominAI" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "ZominAI menu: ZominAI settings" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "ZominAI menu: Uninstall ZominAI" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "ZominAI menu: Install ZominAI" }));
+    expect(screen.getByRole("button", { name: "ZominAI menu: Install or repair" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "ZominAI menu: Preferences" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "ZominAI menu: Remove version" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "ZominAI menu: Install or repair" }));
     expect(screen.getByText("Managed runtime")).toBeInTheDocument();
     expect(screen.getByText(/browser does not need WebGPU/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Bonsai 8B model" })).toHaveAttribute("href", "https://huggingface.co/prism-ml/Bonsai-8B-gguf");
     expect(screen.getByRole("link", { name: /PrismML overview/ })).toHaveAttribute("href", "https://prismml.com/");
     expect(screen.getByRole("link", { name: /Bonsai model & licence/ })).toHaveAttribute("href", "https://huggingface.co/prism-ml/Bonsai-27B-gguf");
     expect(screen.getByRole("link", { name: /Runtime installation docs/ })).toHaveAttribute("href", "https://github.com/ggml-org/llama.cpp/blob/master/docs/install.md");
-    fireEvent.click(screen.getByRole("button", { name: "ZominAI menu: ZominAI settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "ZominAI menu: Preferences" }));
     const systemInstructions = screen.getByRole("textbox", { name: "ZominAI system instructions" });
     expect(systemInstructions).toHaveAttribute("maxLength", "2000");
     expect((systemInstructions as HTMLTextAreaElement).value).toContain("Answer directly");
@@ -682,7 +682,7 @@ describe("DriveApp", () => {
     expect(screen.getByText("28 / 2,000 characters")).toBeInTheDocument();
     fireEvent.change(screen.getByRole("textbox", { name: "ZominAI runtime address" }), { target: { value: "http://127.0.0.1:9000" } });
     await waitFor(() => expect(window.localStorage.getItem("zo-drive:zominai:v1")).toContain("Reply as a concise operator."));
-    fireEvent.click(screen.getByRole("button", { name: "ZominAI menu: Uninstall ZominAI" }));
+    fireEvent.click(screen.getByRole("button", { name: "ZominAI menu: Remove version" }));
     fireEvent.click(screen.getByRole("button", { name: "Uninstall ZominAI browser settings" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirm uninstall ZominAI" }));
     await waitFor(() => expect(window.localStorage.getItem("zo-drive:zominai:v1")).toBeNull());
@@ -738,10 +738,10 @@ describe("DriveApp", () => {
     fireEvent.click(screen.getByRole("button", { name: "Zo Shared Drives" }));
     expect(await screen.findByRole("heading", { name: "Zo Shared Drives" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Open upload menu" })).not.toBeInTheDocument();
-    expect(await screen.findByRole("heading", { name: "Create shared drives with people you trust." })).toBeInTheDocument();
-    expect(screen.getByText("Inspired by Synology NAS Drive.")).toBeInTheDocument();
-    expect(screen.getByText("Recursive scope")).toBeInTheDocument();
-    expect(screen.getByText("Shared with me")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Share a folder, not your whole Drive." })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Share a folder" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText("Private by default")).toBeInTheDocument();
+    expect(screen.getByText("How Shared Drives work")).toBeInTheDocument();
     expect(await screen.findByText("Shared by alice")).toBeInTheDocument();
     expect(screen.getByText("Read only")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Exposed folders" })).toBeInTheDocument();
@@ -754,11 +754,11 @@ describe("DriveApp", () => {
     fireEvent.click(await screen.findByLabelText("Share folder Notes"));
     fireEvent.click(screen.getByRole("button", { name: "Create 1 pairing key" }));
     await waitFor(() => expect(client.createClusterInvitation).toHaveBeenCalledWith({ folder: "Notes", role: "editor", recipient: null }));
-    expect(await screen.findByText("Send these once")).toBeInTheDocument();
+    expect(await screen.findByText("Send this to your collaborator")).toBeInTheDocument();
     expect(screen.getAllByText("Zo Drive URL").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByRole("button", { name: "Copy current Zo Drive URL" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("tab", { name: "Join a shared Drive" }));
-    expect(screen.getByText(/this does not expose any of your folders/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Join a folder" }));
+    expect(screen.getByText(/Your own folders remain private/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Zo Functions" }));
     expect(await screen.findByRole("heading", { name: "Zo Functions" })).toBeInTheDocument();
@@ -860,6 +860,14 @@ describe("DriveApp", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Search files" }), { target: { value: "" } });
     expect(screen.getByText("Send a file with Zo Transfer")).toBeInTheDocument();
     expect(screen.getByText("Payment-gated downloads are not enabled yet.")).toBeInTheDocument();
+    const transferViews = within(screen.getByRole("tablist", { name: "Zo Transfer views" }));
+    expect(transferViews.getByRole("tab", { name: "Transfer To" })).toHaveAttribute("aria-selected", "true");
+    fireEvent.click(transferViews.getByRole("tab", { name: "Active Transfers" }));
+    expect(await screen.findByRole("heading", { name: "Active transfers" })).toBeInTheDocument();
+    expect(screen.getByText("No active transfers yet.")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Send a file with Zo Transfer" })).not.toBeInTheDocument();
+    fireEvent.click(transferViews.getByRole("tab", { name: "Transfer To" }));
+    expect(await screen.findByText("Send a file with Zo Transfer")).toBeInTheDocument();
     await waitFor(() => expect(client.list).toHaveBeenCalledWith({}));
     fireEvent.click(screen.getByText("photo.jpg"));
     fireEvent.click(screen.getByRole("button", { name: "Create public link" }));

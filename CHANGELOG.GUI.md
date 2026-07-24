@@ -29,6 +29,13 @@ All notable changes to the Zo Drive browser experience are recorded here.
 - Added the interactive cobalt particle backdrop from `/landing-page-3` to the
   main landing hero.
 
+### Changed
+
+- Rebuilt Zo Shared Drives around one compact share-or-join workflow, moving
+  secondary access details out of the primary pairing path.
+- Consolidated Zo Transfer into `Transfer To` and `Active Transfers` views,
+  keeping source selection and link creation together.
+
 ## v1.42.17 - 2026-07-24
 
 ### Fixed
