@@ -294,11 +294,16 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.42.21";
+const GUI_VERSION = "1.42.22";
 const CLI_VERSION = "1.3.0";
 const ZOMINAI_VERSION = "1.10.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.42.22",
+    date: "2026-07-24",
+    changes: ["Refined the Zo Drive product-family heading on the landing page."],
+  },
   {
     version: "v1.42.21",
     date: "2026-07-24",
@@ -1270,67 +1275,6 @@ function OwnershipAdvantage() {
   return <section aria-label="The ownership advantage" className="bg-[#fcfaf6] py-20 sm:py-28"><div className="mx-auto max-w-7xl px-5 sm:px-8"><div className="grid gap-8 lg:grid-cols-[.38fr_1fr] lg:items-end"><p className="text-sm font-bold uppercase tracking-[0.15em] text-orange-500">The ownership advantage</p><h2 className="max-w-5xl text-4xl font-semibold leading-[0.98] tracking-[-0.06em] text-[#121512] sm:text-6xl lg:text-7xl">A cloud should increase your <span className="font-serif font-normal italic text-emerald-950">agency,</span> not your dependency.</h2></div><div className="mt-12 grid overflow-hidden rounded-[1.7rem] border border-[#ebe7df] bg-[#f4f1eb] sm:grid-cols-2 lg:grid-cols-4">{benefits.map((benefit) => <article className="min-h-64 border-b border-[#e4dfd6] p-6 last:border-b-0 sm:min-h-72 sm:border-b-0 sm:border-r sm:even:border-r-0 sm:p-9 lg:even:border-r lg:last:border-r-0" key={benefit.number}><div className="flex items-start justify-between gap-4"><p className="font-serif text-4xl italic text-orange-500">{benefit.number}</p><span className="grid size-11 place-items-center rounded-2xl bg-blue-100 text-blue-700">{benefit.icon}</span></div><h3 className="mt-12 text-xl font-semibold tracking-tight text-[#202220]">{benefit.title}</h3><p className="mt-4 max-w-sm text-sm leading-6 text-stone-600">{benefit.body}</p></article>)}</div></div></section>;
 }
 
-const remoteConfigureCommand = "zo-drive configure";
-const remoteUploadCommand = "zo-drive upload ./launch-plan.pdf --path Product/Launch";
-const remoteTerminalLoopMs = 8_600;
-
-function TerminalTypedCommand({ chars, cursor, segments }: { chars: number; cursor: boolean; segments: ReadonlyArray<{ className: string; text: string }> }) {
-  let remaining = chars;
-  return <><span className="text-slate-500">$ </span>{segments.map((segment) => {
-    const displayed = segment.text.slice(0, Math.max(0, remaining));
-    remaining -= segment.text.length;
-    return <span className={segment.className} key={segment.text}>{displayed}</span>;
-  })}{cursor && <span aria-hidden="true" className="ml-0.5 inline-block h-3.5 w-px animate-pulse bg-cyan-200 align-middle" />}</>;
-}
-
-function RemoteTerminalDemo() {
-  const [elapsed, setElapsed] = useState(0);
-
-  useEffect(() => {
-    if (typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      setElapsed(remoteTerminalLoopMs);
-      return;
-    }
-    let startedAt = performance.now();
-    const timer = window.setInterval(() => {
-      const next = performance.now() - startedAt;
-      if (next >= remoteTerminalLoopMs) {
-        startedAt = performance.now();
-        setElapsed(0);
-      } else {
-        setElapsed(next);
-      }
-    }, 40);
-    return () => window.clearInterval(timer);
-  }, []);
-
-  const configureStart = 500;
-  const configureEnd = configureStart + remoteConfigureCommand.length * 55;
-  const uploadStart = 3_150;
-  const uploadEnd = uploadStart + remoteUploadCommand.length * 38;
-  const configureChars = Math.min(remoteConfigureCommand.length, Math.max(0, Math.floor((elapsed - configureStart) / 55)));
-  const uploadChars = Math.min(remoteUploadCommand.length, Math.max(0, Math.floor((elapsed - uploadStart) / 38)));
-  const showUrl = elapsed >= configureEnd + 280;
-  const showSaved = elapsed >= configureEnd + 780;
-  const showUpload = elapsed >= uploadStart;
-  const showUploaded = elapsed >= uploadEnd + 320;
-  const showReady = elapsed >= uploadEnd + 820;
-
-  return <div aria-label="Animated remote CLI session" className="space-y-5 p-5 font-mono text-xs leading-7 sm:p-6" data-animated-terminal="true">
-    <span className="sr-only">zo-drive configure. Zo Drive URL: https://your-zo.example. Secure connection saved on this machine. zo-drive upload launch-plan.pdf to Product/Launch. Uploaded to your Zo Computer. Ready for the next job.</span>
-    <div aria-hidden="true">
-      <p className="overflow-hidden whitespace-nowrap text-slate-400"><TerminalTypedCommand chars={configureChars} cursor={elapsed >= configureStart && elapsed < configureEnd} segments={[{ text: "zo-drive", className: "text-cyan-300" }, { text: " configure", className: "text-slate-400" }]} /></p>
-      <p className={`mt-2 min-h-7 transition-opacity duration-300 ${showUrl ? "opacity-100" : "opacity-0"}`}>Zo Drive URL: <span className="text-white">https://your-zo.example</span></p>
-      <p className={`min-h-7 text-emerald-300 transition-opacity duration-300 ${showSaved ? "opacity-100" : "opacity-0"}`}>✓ Secure connection saved on this machine</p>
-    </div>
-    <div aria-hidden="true" className="border-t border-white/10 pt-5">
-      <p className={`overflow-hidden whitespace-nowrap text-slate-400 transition-opacity duration-200 ${showUpload ? "opacity-100" : "opacity-0"}`}><TerminalTypedCommand chars={uploadChars} cursor={elapsed >= uploadStart && elapsed < uploadEnd} segments={[{ text: "zo-drive", className: "text-cyan-300" }, { text: " upload ./launch-plan.pdf ", className: "text-slate-400" }, { text: "--path", className: "text-amber-300" }, { text: " Product/Launch", className: "text-slate-400" }]} /></p>
-      <p className={`mt-2 min-h-7 text-emerald-300 transition-opacity duration-300 ${showUploaded ? "opacity-100" : "opacity-0"}`}>✓ Uploaded to your Zo Computer</p>
-      <p className={`min-h-7 text-slate-400 transition-opacity duration-300 ${showReady ? "opacity-100" : "opacity-0"}`}>✓ Ready for the next job</p>
-    </div>
-  </div>;
-}
-
 function RemoteAccessSection() {
   return <section aria-label="Remote local-machine access" className="border-y border-slate-200 bg-[#f7faff] py-20 sm:py-24"><div className="mx-auto grid max-w-7xl gap-10 px-5 sm:px-8 lg:grid-cols-[.88fr_1.12fr] lg:items-center"><div><p className="text-sm font-bold uppercase tracking-[0.15em] text-blue-600">Remote machine access</p><h2 className="mt-3 max-w-xl text-4xl font-semibold leading-[0.98] tracking-[-0.06em] text-slate-950 sm:text-5xl">Work locally. <span className="font-serif font-normal italic text-blue-700">Keep Zo authoritative.</span></h2><p className="mt-5 max-w-xl text-base leading-7 text-slate-600">Connect the Zo Drive CLI on your local machine to your Zo Computer, then work against the same private folders, files and product data from your terminal. Zo remains the source of truth.</p><div className="mt-8 grid grid-cols-[1fr_auto_1fr] items-center gap-3"><div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><MonitorUp size={20} className="text-blue-600" /><p className="mt-4 text-sm font-semibold text-slate-900">Your local machine</p><p className="mt-1 text-xs leading-5 text-slate-500">Use the CLI where you already work.</p></div><span className="grid size-10 place-items-center rounded-full border border-cyan-200 bg-cyan-50 text-cyan-700"><Network size={18} /></span><div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><HardDrive size={20} className="text-blue-600" /><p className="mt-4 text-sm font-semibold text-slate-900">Your Zo Computer</p><p className="mt-1 text-xs leading-5 text-slate-500">Keeps the private Drive and data.</p></div></div><a className="mt-8 inline-flex items-center gap-1.5 text-sm font-bold text-blue-700 hover:text-blue-900" href={docsUrl("cli")}>Read the remote CLI guide <ArrowUpRight size={15} /></a></div><div className="overflow-hidden rounded-[1.6rem] border border-slate-800 bg-[#0b1f33] shadow-2xl shadow-slate-900/15"><div className="flex items-center justify-between border-b border-white/10 px-5 py-4"><span className="flex items-center gap-2 text-sm font-semibold text-white"><Terminal size={17} className="text-cyan-300" /> Remote Zo Drive connection</span><span className="rounded-full bg-cyan-300/10 px-2.5 py-1 text-xs font-semibold text-cyan-200">private</span></div><div className="zo-remote-terminal space-y-5 p-5 font-mono text-xs leading-7 sm:p-6"><div><p className="text-slate-400"><span className="text-slate-500">$ </span><span className="text-cyan-300">zo-drive</span> configure</p><p className="mt-2 text-slate-300">Zo Drive URL: <span className="text-white">https://your-zo.example</span></p><p className="text-emerald-300">✓ Secure connection saved on this machine</p></div><div className="border-t border-white/10 pt-5"><p className="text-slate-400"><span className="text-slate-500">$ </span><span className="text-cyan-300">zo-drive</span> upload ./launch-plan.pdf <span className="text-amber-300">--path</span> Product/Launch</p><p className="mt-2 text-emerald-300">✓ Uploaded to your Zo Computer</p><p className="text-slate-400">✓ Ready for the next job</p></div></div><div className="grid border-t border-white/10 text-xs sm:grid-cols-3"><div className="border-b border-white/10 px-5 py-4 sm:border-b-0 sm:border-r"><p className="font-bold uppercase tracking-[0.14em] text-slate-500">Configure once</p><p className="mt-2 font-semibold text-slate-200">Local device key</p></div><div className="border-b border-white/10 px-5 py-4 sm:border-b-0 sm:border-r"><p className="font-bold uppercase tracking-[0.14em] text-slate-500">Operate remotely</p><p className="mt-2 font-semibold text-slate-200">Files and workflows</p></div><div className="px-5 py-4"><p className="font-bold uppercase tracking-[0.14em] text-slate-500">Data stays on Zo</p><p className="mt-2 font-semibold text-slate-200">One private source</p></div></div></div></div></section>;
 }
@@ -1402,7 +1346,7 @@ function ProductSuite() {
   const selected = products[selectedIndex]!;
   const tone = selected.tone === "emerald" ? "from-emerald-950 to-[#103a35]" : selected.tone === "amber" ? "from-amber-950 to-[#49331d]" : selected.tone === "blue" ? "from-blue-950 to-[#1b3f71]" : "from-cyan-950 to-[#123c47]";
 
-  return <section aria-label="Zo Drive product suite" className="order-20 bg-[#101410] py-14 text-white sm:py-16" id="killer-features"><div className="mx-auto max-w-7xl px-5 sm:px-8"><div className="grid gap-6 border-b border-white/10 pb-8 lg:grid-cols-[1.2fr_.8fr] lg:items-end"><div><p className="text-sm font-bold uppercase tracking-[0.15em] text-emerald-200">The Zo Drive suite</p><h2 className="mt-3 text-4xl font-semibold leading-[.92] tracking-[-0.065em] sm:text-6xl">Six focused products.<span className="block font-serif font-normal italic text-emerald-200">One calm system.</span></h2></div><p className="max-w-xl text-sm leading-6 text-white/65">Move from publishing to delivery, automation, data, collaboration and AI without moving your work between vendors.</p></div><div className="mt-8 grid gap-6 lg:grid-cols-[.35fr_.65fr] lg:items-center"><div className="divide-y divide-white/10 border-y border-white/10 lg:self-center">{products.map((product, index) => <button aria-pressed={selectedIndex === index} aria-label={`Select ${product.name}`} className={`flex w-full items-center gap-4 px-0 py-3.5 text-left transition ${selectedIndex === index ? "text-emerald-200" : "text-white/65 hover:text-white"}`} key={product.name} onClick={() => setSelectedIndex(index)} type="button"><span className="w-6 font-mono text-xs font-semibold">{String(index + 1).padStart(2, "0")}</span><span className="flex-1 text-base font-semibold">{product.name}</span><span className="text-xs font-bold uppercase tracking-[.13em]">{product.verb}</span></button>)}</div><article className={`w-full overflow-hidden rounded-[1.5rem] bg-gradient-to-br ${tone} p-5 shadow-2xl shadow-black/20 sm:p-6`}><div className="flex items-start justify-between gap-5"><span className="grid size-11 place-items-center rounded-xl bg-white/10 text-emerald-200">{selected.icon}</span><span className="rounded-full border border-white/15 px-3 py-1 text-xs font-bold uppercase tracking-[.14em] text-white/70">{selected.verb}</span></div><p className="mt-6 text-sm font-bold uppercase tracking-[.15em] text-emerald-200">{selected.name}</p><h3 className="mt-3 max-w-2xl text-3xl font-semibold leading-[.98] tracking-[-.05em] sm:text-4xl">{selected.title}</h3><p className="mt-3 max-w-2xl text-sm leading-6 text-white/70">{selected.body}</p><div className="mt-5"><FeatureShowcase command={selected.command} file={selected.file} lines={selected.lines} product={selected.name} /></div><a className="mt-5 inline-flex items-center gap-2 text-sm font-bold uppercase tracking-[.13em] text-emerald-200 hover:text-white" href={selected.href}>{selected.cta} <ArrowUpRight size={16} /></a></article></div></div></section>;
+  return <section aria-label="Zo Drive product suite" className="order-20 bg-[#101410] py-14 text-white sm:py-16" id="killer-features"><div className="mx-auto max-w-7xl px-5 sm:px-8"><div className="grid gap-6 border-b border-white/10 pb-8 lg:grid-cols-[1.2fr_.8fr] lg:items-end"><div><p className="text-sm font-bold uppercase tracking-[0.15em] text-emerald-200">The Zo Drive product family</p><h2 className="mt-3 text-4xl font-semibold leading-[.92] tracking-[-0.065em] sm:text-6xl">One home.<span className="block font-serif font-normal italic text-emerald-200">Six focused tools.</span></h2></div><p className="max-w-xl text-sm leading-6 text-white/65">Move from publishing to delivery, automation, data, collaboration and AI without moving your work between vendors.</p></div><div className="mt-8 grid gap-6 lg:grid-cols-[.35fr_.65fr] lg:items-center"><div className="divide-y divide-white/10 border-y border-white/10 lg:self-center">{products.map((product, index) => <button aria-pressed={selectedIndex === index} aria-label={`Select ${product.name}`} className={`flex w-full items-center gap-4 px-0 py-3.5 text-left transition ${selectedIndex === index ? "text-emerald-200" : "text-white/65 hover:text-white"}`} key={product.name} onClick={() => setSelectedIndex(index)} type="button"><span className="w-6 font-mono text-xs font-semibold">{String(index + 1).padStart(2, "0")}</span><span className="flex-1 text-base font-semibold">{product.name}</span><span className="text-xs font-bold uppercase tracking-[.13em]">{product.verb}</span></button>)}</div><article className={`w-full overflow-hidden rounded-[1.5rem] bg-gradient-to-br ${tone} p-5 shadow-2xl shadow-black/20 sm:p-6`}><div className="flex items-start justify-between gap-5"><span className="grid size-11 place-items-center rounded-xl bg-white/10 text-emerald-200">{selected.icon}</span><span className="rounded-full border border-white/15 px-3 py-1 text-xs font-bold uppercase tracking-[.14em] text-white/70">{selected.verb}</span></div><p className="mt-6 text-sm font-bold uppercase tracking-[.15em] text-emerald-200">{selected.name}</p><h3 className="mt-3 max-w-2xl text-3xl font-semibold leading-[.98] tracking-[-.05em] sm:text-4xl">{selected.title}</h3><p className="mt-3 max-w-2xl text-sm leading-6 text-white/70">{selected.body}</p><div className="mt-5"><FeatureShowcase command={selected.command} file={selected.file} lines={selected.lines} product={selected.name} /></div><a className="mt-5 inline-flex items-center gap-2 text-sm font-bold uppercase tracking-[.13em] text-emerald-200 hover:text-white" href={selected.href}>{selected.cta} <ArrowUpRight size={16} /></a></article></div></div></section>;
 }
 
 type FeatureSurfaceTab = "gui" | "cli" | "cost";

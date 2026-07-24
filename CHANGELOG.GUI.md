@@ -2,6 +2,12 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.42.22 - 2026-07-24
+
+### Changed
+
+- Refined the Zo Drive product-family heading on the main landing page.
+
 ## v1.42.21 - 2026-07-24
 
 ### Added
