@@ -159,8 +159,8 @@ function ProductTile({ index, compact = false }: { index: number; compact?: bool
   </span>;
 }
 
-function useParticleField() {
-  const heroRef = useRef<HTMLElement>(null);
+export function useParticleField<T extends HTMLElement = HTMLElement>() {
+  const heroRef = useRef<T>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {

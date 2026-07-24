@@ -72,7 +72,7 @@ import { create } from "zustand";
 
 import { ZoDriveClient } from "@zo-drive/sdk";
 import type { AccountAccess, AccountMember, AccountRole, ApiKeyScope, AuthStatus, ClusterInvitation, ClusterMount, ClusterRole, DatabaseApiKey, DatabaseApiKeyScope, DatabaseEngine, DatabaseEngineId, DatabaseExecuteResult, DatabaseImportSettings, DatabaseRows, DriveApiKey, DriveDatabase, DriveFolder, DriveFunction, DriveFunctionRun, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, FunctionRuntime, FunctionVisibility, NativeFileType, PublicShare, PublishedForm, ShareAccess, StorageUsage } from "@zo-drive/types";
-import { LandingPageThree } from "./landing-page-three.js";
+import { LandingPageThree, useParticleField } from "./landing-page-three.js";
 import { LandingPageTwo } from "./landing-page-two.js";
 
 type DriveClient = Pick<ZoDriveClient, "createApiKey" | "createFolder" | "createNativeFile" | "createShare" | "delete" | "download" | "emptyTrash" | "getUsage" | "list" | "listApiKeys" | "listFolders" | "listFormResponses" | "listShares" | "listStarred" | "listTrash" | "permanentlyDeleteTrash" | "publishForm" | "rename" | "restoreTrash" | "revokeApiKey" | "revokeShare" | "saveNativeFile" | "setQuota" | "star" | "unstar" | "updateSharePasscode" | "upload"> & Partial<Pick<ZoDriveClient, "createClusterFolder" | "createClusterInvitation" | "createClusterMount" | "deleteClusterInvitation" | "deleteClusterMount" | "deleteClusterObject" | "deleteClusterPeer" | "downloadClusterObject" | "getClusterMountAccess" | "listClusterInvitations" | "listClusterMounts" | "listClusterObjects" | "listClusterPeers" | "renameClusterObject" | "updateClusterPeerRole" | "uploadClusterObject" | "createDatabase" | "createDatabaseApiKey" | "deleteDatabase" | "executeDatabase" | "exportDatabase" | "getDatabaseImportSettings" | "importDatabase" | "installDatabaseEngine" | "listDatabaseApiKeys" | "listDatabaseEngines" | "listDatabases" | "listDatabaseRows" | "listDatabaseTables" | "queryDatabase" | "revokeDatabaseApiKey" | "setDatabaseImportLimit" | "updateDatabaseEngine" | "createFunction" | "deleteFunction" | "listFunctions" | "listFunctionRuns" | "runFunction" | "updateFunction" | "deleteFolder" | "renameFolder">>;
@@ -292,11 +292,21 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.42.16";
+const GUI_VERSION = "1.42.18";
 const CLI_VERSION = "1.3.0";
 const ZOMINAI_VERSION = "1.9.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.42.18",
+    date: "2026-07-24",
+    changes: ["Added the interactive cobalt particle backdrop from /landing-page-3 to the main landing hero."],
+  },
+  {
+    version: "v1.42.17",
+    date: "2026-07-24",
+    changes: ["Restored visible custom tooltips for the collapsed desktop sidebar."],
+  },
   {
     version: "v1.42.16",
     date: "2026-07-23",
@@ -1138,6 +1148,8 @@ function LandingTheme() {
 }
 
 function LandingPage() {
+  const { heroRef, canvasRef } = useParticleField<HTMLDivElement>();
+
   useEffect(() => {
     const standaloneFunctions = Array.from(document.querySelectorAll<HTMLElement>("main > section")).find((section) => section.querySelector("h2")?.textContent?.includes("Automations that live beside your data."));
     standaloneFunctions?.classList.add("hidden");
@@ -1146,8 +1158,9 @@ function LandingPage() {
 
   return <main className="zo-landing-theme flex min-h-screen flex-col overflow-hidden bg-[#f7fafc] text-slate-900">
     <LandingTheme />
-    <div className="relative isolate">
+    <div className="relative isolate" ref={heroRef}>
       <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[43rem] overflow-hidden bg-[#ecf7ff]"><div className="absolute -left-36 -top-32 size-[34rem] rounded-full bg-sky-300/30 blur-3xl" /><div className="absolute right-[-8rem] top-24 size-[30rem] rounded-full bg-blue-300/35 blur-3xl" /></div>
+      <canvas aria-hidden="true" className="landing-particle-field pointer-events-none absolute inset-0 z-[-5] size-full opacity-70 sm:opacity-100" ref={canvasRef} />
       <header className="mx-auto flex max-w-7xl items-center justify-between px-5 py-5 sm:px-8">
         <DriveMark />
         <DriveModeSwitch guiHref={driveAppUrl()} mode="gui" />
