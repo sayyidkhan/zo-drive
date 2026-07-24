@@ -1,6 +1,6 @@
 # `drive-app.tsx` Responsibility Map
 
-Status: baseline captured before the first frontend leaf extraction on 2026-07-24.
+Status: living map, updated after the Functions and upload/storage extractions on 2026-07-24.
 
 ## Entry points and URL ownership
 
@@ -31,15 +31,15 @@ Line ranges describe the pre-extraction baseline and are navigation aids, not co
 | Authentication gate, lines 769-839 | `DriveGate`, loading/error states, `AuthScreen` | Auth query, login/register/logout mutations | `AuthClient`, React Query, `DriveScreen` | Medium: session cache invalidation and fallback behaviour must remain exact. |
 | Account and access, lines 841-960 | Profile/password/account deletion, member administration, rows, settings cards | Form state; profile/password/delete and member CRUD mutations | `AuthClient`, `UserAccessClient`, authenticated user roles | Medium: owner/demo protections and destructive confirmations are security-sensitive. |
 | Theme system, lines 961-1050 | Theme selection controls and generated theme CSS | Reads and writes `zo-drive:theme:v1` in local storage | `DriveTheme`, root DOM theme application in `DriveScreen` | Medium: UI is simple, but persistence and global styling are coupled to the shell. |
-| ZominAI domain helpers, lines 1051-1673 | Settings/session types, local chat persistence, endpoint validation, tool schemas, completion parsing and read-only Drive tool runner | Browser storage, fetch and stream parsing, abort signals | Authenticated `/zominai/*` gateway; read-only `DriveClient` methods | High: mixes domain logic, infrastructure and browser persistence; service extraction should precede UI movement. |
-| ZominAI chat UI, lines 1674-1959 | `ZominAiChat`, `ZominAiChatDrawer`, history/settings/context controls | Chat/session state, resize and media-query effects, local storage, polling | ZominAI helpers, local runtime gateway, Drive tool runner | High: large stateful component with streaming, cancellation and persistence side effects. |
-| ZominAI workspace, lines 1960-2080 | Install, settings, uninstall and verification panes; runtime status components | Installation polling, verification, settings persistence | Authenticated ZominAI endpoints, local storage, formatting helpers | Medium: panes have clear boundaries, but runtime lifecycle side effects need characterisation. |
+| ZominAI domain and infrastructure, formerly lines 1051-1673 | Composition imports typed services from `features/zomin-ai` | No persistence, stream parsing, tool execution or installation requests remain in `drive-app.tsx` | Authenticated `/zominai/*` gateway; narrow read-only tool client | Low: domain, persistence, transport, tools and installation each have an explicit module boundary. |
+| ZominAI chat UI, formerly lines 1674-1959 | Composition renders `ZominAiChatDrawer` | Drawer-local chat, warm-up, resize and history state | ZominAI services and `ZominAiToolClient` | Medium: stateful UI is isolated and directly backed by characterised service contracts. |
+| ZominAI workspace, formerly lines 1960-2080 | Composition renders `ZominAiWorkspace` | Workspace-local install, preferences and verification state | Installation service, browser configuration, leaf components | Low: runtime lifecycle and settings ownership are contained within the feature. |
 | Drive application shell, lines 2081-2709 | Navigation, global search, home/My Drive/starred/shared/trash/pastes dispatch, dialogs, upload orchestration and native-editor launch | Zustand path/view state; many queries, mutations, refs and browser effects | Most `DriveClient` file/share/trash/folder/form methods and every authenticated feature | Very high: primary orchestration boundary and current frontend dependency hub. Extract child features before reducing it. |
-| Functions, lines 2710-2812 | Workspace tabs, function list/editor/run/log views | Selected function/tab/editor state; function CRUD and run queries/mutations | Function client methods, URL builder, confirmations | Medium: recognisable feature boundary; presentational leaves are low risk, handlers are moderately coupled. |
+| Functions, formerly lines 2710-2812 | Composition delegates to `features/functions` | No function-local state remains in `drive-app.tsx` | Narrow `FunctionsClient` capability contract | Low: the app shell selects the feature; its hook and components own the workflow. |
 | Shared Drives, lines 2813-3527 | Shared/connected folder tabs, invitations, peers, mounts, remote browser, upload/download/rename/delete | Queries, mutations, file input refs and local selection state | Cluster client methods plus owner folder listing | High: permissions, invitation lifecycle and remote file operations share one 700-line component. |
 | Databases, lines 3528-4026 | Catalogue, instances, panels, import/export, table/data runner, connection keys and settings | URL-synchronised selection; engine/database/table queries and mutations | Database client methods, React Table, download APIs | High: several internal subdomains are visible and should move behind a feature module incrementally. |
 | Drive API keys, lines 4027-4125 | Scoped device-key creation, one-time secret display, active-key revocation | Form state; list/create/revoke mutations | API-key client methods, current origin | Medium: security-sensitive one-time display, but feature boundary is clear. |
-| Upload and storage usage, lines 4126-4322 | Upload drop-zone/progress, usage card and quota breakdown | Drag/drop callbacks and quota update callbacks supplied by shell | Browser `DataTransfer`, usage types, formatting | Low to medium: presentational components are leaves; upload orchestration remains in `DriveScreen`. |
+| Upload and storage usage, formerly lines 4126-4322 | Composition delegates to `features/upload` and `features/storage` | Upload orchestration and quota cache updates remain in `DriveScreen` | Browser `DataTransfer`, usage types, formatting | Low: presentation, traversal and estimation are isolated; the shell retains only cross-feature orchestration. |
 | Zo Transfer and file-list views, lines 4323-4606 | Transfer workflow, paste list, breadcrumbs, file/recent/trash entries, filters, empty state and sharing dialogs | Transfer selection/upload/share mutations; dialog-local state | File/share client methods, shell callbacks, formatting | Medium to high: list views are mostly prop-driven; transfer and sharing contain service calls. |
 | Public share and form pages, lines 4607-4725 | Shared download/paste, published forms, questions and submission | Public queries/mutations and passcode/form state | `SharedClient`, `PublicFormClient`, preview dialog | High: public URL, passcode, expiry and editable-share behaviour must remain stable. |
 | Preview and native editors, lines 4726-5281 | File preview, document/spreadsheet/presentation/paste/form editors and response/settings panels | Keyboard effects, editor state, autosave timer, preview object URLs | Native content schema, formula engine, save/rename/share/form callbacks | High: multiple editor products share one implementation area; split by native file type after tests isolate save/state behaviour. |
@@ -66,6 +66,35 @@ The intended direction is application composition to features to SDK/services. T
 
 None of these components owns routing, global state, service calls, persistence, authentication, authorisation or side effects.
 
+## Completed bounded slices
+
+### Functions
+
+- `features/functions/functions.tsx` is now composition only.
+- `use-functions-workspace.ts` owns queries, mutations, selection and editor state.
+- `functions-client.ts` defines the smallest SDK capability contract accepted by the feature.
+- Overview, editor, tabs and run history are presentational component modules.
+- The feature never imports `drive-app.tsx`, preserving the intended dependency direction.
+
+### Upload and storage
+
+- `features/upload` owns drag-and-drop traversal, upload types, the upload dialog and progress estimation.
+- `features/storage/storage-usage.tsx` owns usage and quota presentation and validation.
+- `DriveScreen` still coordinates uploads and updates the shared React Query quota cache, which is application-level work.
+
+### ZominAI
+
+- `zomin-ai-types.ts` contains the feature model rather than leaking it from the app shell.
+- `zomin-ai-chat-domain.ts` owns titles, compaction, context windows and metrics labels.
+- `zomin-ai-config.ts` and `zomin-ai-persistence.ts` own browser storage keys, validation and migration.
+- `zomin-ai-gateway.ts` owns endpoint validation, health/warm-up, SSE parsing, tool-call protocol and cancellation.
+- `zomin-ai-tool-runner.ts` adapts the smallest read-only Drive/database client contract.
+- `zomin-ai-installation-service.ts` owns runtime installation and verification requests.
+- `zomin-ai-chat-drawer.tsx` and `zomin-ai-workspace.tsx` own the feature UI.
+- Direct tests characterise context compaction, persistence hardening, endpoint validation, streaming metrics, tool follow-ups and abort propagation.
+
 ## Recommended next extraction
 
-Extract the Functions feature as the next bounded slice: move `Functions`, `FunctionRunRow`, `FunctionLogs` and `FunctionLogEntry` into `features/functions`, then move function API coordination into a focused hook. Existing tests already exercise editor, runs and logs tabs. Keep URL construction and client calls behaviour-identical, and do not combine this with Shared Drives, Databases, or API changes.
+Split Shared Drives next by introducing a narrow cluster client contract, a query/mutation hook and separate pairing, connected-folder and remote-browser views. Its permission and invitation lifecycle should be characterised before moving handlers.
+
+After Shared Drives, apply the same pattern to Databases. Leave native editors until save, autosave and object-URL lifecycle tests exist for each file type.

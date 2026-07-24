@@ -32,6 +32,64 @@ authentication, or workflow change.
 - Zo Shared Drives: remote folder mounts with a persistent, bounded on-demand LRU cache for opened files and folder listings; cached content is not copied into My Drive or charged to the recipient's quota
 - Account lifecycle design for keeping files or permanently removing everything in [the plan](docs/PLAN.md)
 
+## Architecture
+
+Zo Drive is a pnpm workspace with three user-facing layers and two shared
+packages:
+
+```text
+apps/web  ──┐
+            ├── packages/sdk ──> apps/api ──> configured data root
+apps/cli  ──┘                       │
+                                   └── local database and function runtimes
+
+packages/types defines the contracts shared by every layer.
+```
+
+- `apps/web` is the React 19 browser interface. It uses Vite, TypeScript,
+  Tailwind CSS, TanStack Query, TanStack Table, and Zustand.
+- `apps/cli` is the terminal interface for people, scripts, and automation.
+- `apps/api` is the Hono backend. It owns authentication, authorisation,
+  validation, storage operations, sharing, databases, functions, Shared Drives,
+  and the server-side ZominAI gateway.
+- `packages/sdk` is the typed API client used by the web app and CLI.
+- `packages/types` contains shared schemas and request/response types.
+
+The web app follows a feature-first dependency direction:
+
+```text
+application composition -> feature modules -> SDK/services -> shared types
+```
+
+Feature modules own their UI, local state, domain helpers, and the smallest
+client capability contract they need. Shared helpers must not import product
+features, and feature modules must not import `drive-app.tsx`.
+
+The current extracted web boundaries are:
+
+```text
+apps/web/src/
+  features/
+    functions/     # workspace UI, queries, mutations, run history, client contract
+    storage/       # usage and quota presentation
+    upload/        # dropped-file traversal, dialog, progress, upload types
+    zomin-ai/      # chat domain, persistence, gateway, tools, installation and UI
+    account/       # account presentation primitives
+    public-site/   # public documentation presentation
+    theme/         # theme contracts
+  shared/
+    components/    # reusable product-neutral UI
+    lib/           # reusable product-neutral utilities
+  drive-app.tsx    # route selection and application-level composition
+```
+
+`drive-app.tsx` still contains some legacy product areas while the migration is
+in progress. New work should extend an existing feature module or introduce a
+new feature boundary instead of adding another product workflow to the
+application shell. The living responsibility map and recommended extraction
+order are documented in
+[`docs/refactoring/drive-app-responsibility-map.md`](docs/refactoring/drive-app-responsibility-map.md).
+
 ## Storage layout
 
 Set `ZO_DRIVE_DATA_ROOT` to a directory outside this project. Do not use the repository root or add an `uploads` directory here.
@@ -366,7 +424,19 @@ pnpm typecheck
 pnpm build
 ```
 
-The test suite includes a full CLI → SDK → API → data-root flow: upload, list, download with byte verification, and delete.
+The test suite includes a full CLI → SDK → API → data-root flow: upload, list,
+download with byte verification, and delete. It also starts an isolated Redis
+runtime to verify Redis databases from long persistent data-root paths, so the
+full suite requires `redis-server` on `PATH`:
+
+```bash
+redis-server --version
+```
+
+If that executable is unavailable, the Redis integration test fails with
+`spawn redis-server ENOENT`; this is a missing host prerequisite rather than an
+application assertion failure. Typechecking and production builds do not
+require a running Redis service.
 
 ## Deployment note
 
