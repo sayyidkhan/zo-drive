@@ -2,6 +2,12 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.42.24 - 2026-07-24
+
+### Changed
+
+- Expanded the Zo Shared Drives sharing workspace to the full available width.
+
 ## v1.42.23 - 2026-07-24
 
 ### Changed

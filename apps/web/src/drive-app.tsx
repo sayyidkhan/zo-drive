@@ -3619,6 +3619,7 @@ function ClusterDatabases({ client, search }: { client: DriveClient; search: str
       client.updateClusterPeerRole &&
       client.uploadClusterObject,
   );
+  const [sharedDrivesTab, setSharedDrivesTab] = useState<"shared" | "connected">("shared");
   const [pairMode, setPairMode] = useState<"invite" | "join">("invite");
   const [selectedFolders, setSelectedFolders] = useState<string[]>([]);
   const [inviteRole, setInviteRole] = useState<ClusterRole>("editor");
@@ -3884,8 +3885,13 @@ function ClusterDatabases({ client, search }: { client: DriveClient; search: str
     );
   return (
     <div className="space-y-5">
+      <div aria-label="Zo Shared Drives views" className="flex max-w-md rounded-xl bg-slate-100 p-1" role="tablist">
+        <button aria-selected={sharedDrivesTab === "shared"} className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition ${sharedDrivesTab === "shared" ? "bg-white text-cyan-800 shadow-sm" : "text-slate-500 hover:text-slate-800"}`} onClick={() => setSharedDrivesTab("shared")} role="tab" type="button">Shared Folders</button>
+        <button aria-selected={sharedDrivesTab === "connected"} className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition ${sharedDrivesTab === "connected" ? "bg-white text-cyan-800 shadow-sm" : "text-slate-500 hover:text-slate-800"}`} onClick={() => setSharedDrivesTab("connected")} role="tab" type="button">Connected Folders</button>
+      </div>
+      {sharedDrivesTab === "shared" && <>
       {!normalizedSearch && <>
-      <section className="mx-auto max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <section className="w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 px-5 py-5 sm:px-6">
             <div>
               <h2 className="text-xl font-semibold tracking-tight text-slate-900">Share a folder, not your whole Drive.</h2>
@@ -4133,6 +4139,8 @@ function ClusterDatabases({ client, search }: { client: DriveClient; search: str
           }
         </section>
       )}
+      </>}
+      {sharedDrivesTab === "connected" && <>
       {normalizedSearch && <section aria-label="Shared Drive file search results" className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><header className="border-b border-slate-100 px-5 py-4"><h2 className="font-semibold text-slate-900">Matching shared files</h2><p className="mt-1 text-sm text-slate-500">Files found across every connected Shared Drive.</p></header>{searchObjectsQuery.isPending ? <p className="p-5 text-sm text-slate-500">Searching connected folders…</p> : matchingSharedFiles.length === 0 ? <p className="p-5 text-sm text-slate-500">No shared files match “{search.trim()}”.</p> : <div className="divide-y divide-slate-100">{matchingSharedFiles.map(({ mount, object }) => <button className="flex w-full items-center gap-3 px-5 py-4 text-left hover:bg-slate-50" key={`${mount.id}:${object.key}`} onClick={() => setOpenMount(mount.id)}><File size={17} className="shrink-0 text-slate-400" /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-800">{object.name}</span><span className="block truncate text-xs text-slate-500">{mount.folder} / {object.key}</span></span><span className="text-xs text-slate-400">{formatBytes(object.size)}</span></button>)}</div>}</section>}
       {visibleMounts.length > 0 && (
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -4299,6 +4307,7 @@ function ClusterDatabases({ client, search }: { client: DriveClient; search: str
           )}
         </section>
       )}
+      </>}
     </div>
   );
 }
