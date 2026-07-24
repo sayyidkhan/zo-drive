@@ -61,12 +61,14 @@ surface's user-facing documentation.
 ## Changelog rules
 
 - Keep `CHANGELOG.GUI.md`, `CHANGELOG.CLI.md`, and `CHANGELOG.ZOMINAI.md`
-  concise and user-facing.
-- Add entries under the relevant `Unreleased` heading while work is in
-  progress.
-- If one change affects both surfaces, record it in both changelogs and
-  release each track independently.
-- On release, move those entries into the relevant tagged section with the
-  release date.
-- Use `Added`, `Changed`, `Fixed`, `Deprecated`, `Removed`, and `Security`
-  headings where useful.
+  concise, user-facing, and milestone-based.
+- Add user-visible changes under the relevant `Unreleased` heading while work
+  is in progress. Combine related work into one release note; do not create a
+  changelog entry for every small copy, layout, or visual adjustment.
+- Release notes must describe the durable capability or meaningful product
+  outcome, not implementation steps. Keep detailed iteration history in Git.
+- If one change affects both surfaces, record it in both changelogs and release
+  each track independently.
+- On release, move the consolidated `Unreleased` summary into the relevant
+  tagged section with the release date. Use `Added`, `Changed`, `Fixed`,
+  `Deprecated`, `Removed`, and `Security` headings where useful.

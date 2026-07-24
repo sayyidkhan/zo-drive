@@ -294,683 +294,40 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.42.23";
+const GUI_VERSION = "1.42.26";
 const CLI_VERSION = "1.3.0";
 const ZOMINAI_VERSION = "1.10.0";
 
 const GUI_CHANGELOG = [
   {
-    version: "v1.42.23",
+    version: "v1.42.26",
     date: "2026-07-24",
-    changes: ["Clarified how the six-product family keeps work under one owner-controlled system."],
+    changes: ["Consolidated the release history into durable product milestones and removed repetitive visual-tweak notes."]
   },
   {
-    version: "v1.42.22",
+    version: "v1.42.25",
     date: "2026-07-24",
-    changes: ["Refined the Zo Drive product-family heading on the landing page."],
-  },
-  {
-    version: "v1.42.21",
-    date: "2026-07-24",
-    changes: ["Added a GitHub source-code action to the main landing hero."],
-  },
-  {
-    version: "v1.42.20",
-    date: "2026-07-24",
-    changes: ["Animated the remote-access terminal with typed commands, sequenced output, and a reduced-motion fallback."],
-  },
-  {
-    version: "v1.42.19",
-    date: "2026-07-24",
-    changes: ["Placed the particle field behind the main hero content and removed the redundant three-item access strip."],
-  },
-  {
-    version: "v1.42.18",
-    date: "2026-07-24",
-    changes: ["Added the interactive cobalt particle backdrop from /landing-page-3 to the main landing hero."],
-  },
-  {
-    version: "v1.42.17",
-    date: "2026-07-24",
-    changes: ["Restored visible custom tooltips for the collapsed desktop sidebar."],
-  },
-  {
-    version: "v1.42.16",
-    date: "2026-07-23",
-    changes: ["Streamlined /landing-page-3 into one cobalt-and-slate visual system without changing its content, layout, navigation or interactions."],
-  },
-  {
-    version: "v1.42.15",
-    date: "2026-07-23",
-    changes: ["Added a landing-page section explaining remote local-machine access to Zo Drive through the CLI."],
-  },
-  {
-    version: "v1.42.14",
-    date: "2026-07-23",
-    changes: ["Unified the main landing page into a consistent cobalt-and-slate visual system without changing its content or layout."],
-  },
-  {
-    version: "v1.42.13",
-    date: "2026-07-23",
-    changes: ["Simplified the landing-page My Drive preview with compact folders and built-in tool shortcuts."],
-  },
-  {
-    version: "v1.42.12",
-    date: "2026-07-23",
-    changes: ["Removed the redundant call to action beneath the landing-page SaaS comparison."],
-  },
-  {
-    version: "v1.42.11",
-    date: "2026-07-23",
-    changes: ["Redesigned the landing GUI and CLI comparison as one unified, balanced two-column workspace."],
-  },
-  {
-    version: "v1.42.10",
-    date: "2026-07-23",
-    changes: ["Updated the landing hero to Own the cloud. Keep the leverage. with ownership-focused supporting copy."],
-  },
-  {
-    version: "v1.42.9",
-    date: "2026-07-23",
-    changes: ["Reworked the landing workflow section to explain GUI and CLI capabilities, including the ZominAI browser-only boundary."],
-  },
-  {
-    version: "v1.42.8",
-    date: "2026-07-23",
-    changes: ["Compacted the landing-page product suite and vertically centred its product menu beside the selected stage."],
-  },
-  {
-    version: "v1.42.7",
-    date: "2026-07-23",
-    changes: ["Simplified the landing hero access label to GUI & CLI Access."],
-  },
-  {
-    version: "v1.42.6",
-    date: "2026-07-23",
-    changes: ["Restored the timed Zo Functions product tabs and added product-specific GUI previews for all six suite products."]
-  },
-  {
-    version: "v1.42.5",
-    date: "2026-07-23",
-    changes: ["Moved the ownership advantage panel directly below the landing-page hero."]
-  },
-  {
-    version: "v1.42.4",
-    date: "2026-07-23",
-    changes: ["Restored the dark six-product showcase and its Zo Functions GUI while keeping the redundant standalone preview hidden."]
-  },
-  {
-    version: "v1.42.3",
-    date: "2026-07-23",
-    changes: ["Moved the four Zo Drive edge messages into the numbered ownership panel, keeping every icon and adding a fourth card."]
-  },
-  {
-    version: "v1.42.2",
-    date: "2026-07-23",
-    changes: ["Replaced the four-card Zo Drive edge section with the numbered, icon-led ownership benefits and removed the redundant section."]
-  },
-  {
-    version: "v1.42.1",
-    date: "2026-07-23",
-    changes: ["Moved the Zo Drive identity and documentation bar to the bottom of the landing page after the closing call to action."]
+    changes: ["Completed the cobalt landing experience with an animated remote-access terminal, source link, and a clear six-product ownership story.", "Reworked Zo Shared Drives with nested folder views, a compact share-or-join workflow, full-width workspace, and a Zo Transfer-style collaboration header."]
   },
   {
     version: "v1.42.0",
     date: "2026-07-23",
-    changes: ["Rebuilt the six-product landing experience as one compact selectable suite while retaining each product's GUI, CLI, and cost comparison views."]
-  },
-  {
-    version: "v1.41.6",
-    date: "2026-07-23",
-    changes: ["Moved the landing-page call to action below the hero and the ownership-advantage section after the SaaS comparison."]
-  },
-  {
-    version: "v1.41.5",
-    date: "2026-07-23",
-    changes: ["Added an ownership-advantage section beneath the landing-page hero, explaining source control, deliberate sharing, and compounding workflows."]
-  },
-  {
-    version: "v1.41.4",
-    date: "2026-07-23",
-    changes: ["Added a closing call to action after the SaaS comparison, with direct Drive access and a link back to the product walkthroughs."]
-  },
-  {
-    version: "v1.41.3",
-    date: "2026-07-23",
-    changes: ["Simplified each Zo Drive comparison-row price to US$0 so the itemised cost remains clear on every screen width."]
-  },
-  {
-    version: "v1.41.2",
-    date: "2026-07-23",
-    changes: ["Added itemised monthly SaaS prices beside each six-product comparison row and showed US$0 for every matching Zo Drive feature."]
-  },
-  {
-    version: "v1.41.1",
-    date: "2026-07-23",
-    changes: ["Replaced the landing-page SaaS comparison with the six-subscription versus one-private-suite story, including the US$104+ published-price comparison."]
-  },
-  {
-    version: "v1.41.0",
-    date: "2026-07-23",
-    changes: ["Added a separate Neumorphic landing-page concept at /landing-page-2 for testing the six-product Zo Drive story without replacing the current landing page."]
-  },
-  {
-    version: "v1.40.1",
-    date: "2026-07-23",
-    changes: ["Reframed the landing-page conclusion as a direct two-column comparison of six fragmented SaaS products versus the six integrated Zo Drive features."]
-  },
-  {
-    version: "v1.40.0",
-    date: "2026-07-23",
-    changes: ["Made ZominAI reliably inspect the current recursive Drive inventory before answering file ranking, comparison, and aggregate questions.", "Added computed largest, smallest, newest, oldest, and total-size summaries so the local model answers from exact metadata instead of guessing."]
-  },
-  {
-    version: "v1.39.2",
-    date: "2026-07-23",
-    changes: ["Corrected the Zo Transfer comparison to show WeTransfer Ultimate's current US$25 monthly price and the matching monthly saving."]
-  },
-  {
-    version: "v1.39.1",
-    date: "2026-07-23",
-    changes: ["Made the ZominAI Pegasus more prominent in the empty chat state."]
-  },
-  {
-    version: "v1.39.0",
-    date: "2026-07-23",
-    changes: ["Opened the ZominAI drawer immediately and showed a rotating Pegasus warm-up bubble while the selected local model becomes ready.", "Kept the chat composer locked until the real one-token model warm-up succeeds, with a clear retry state when it fails."]
-  },
-  {
-    version: "v1.38.3",
-    date: "2026-07-23",
-    changes: ["Applied the Google red, yellow, green, and blue palette throughout the selected controls, workspace rail, and navigation instead of using it only as decoration.", "Made Shared Drive files open directly from Recent and Shared with me instead of routing to the Shared Drives management screen."]
-  },
-  {
-    version: "v1.38.2",
-    date: "2026-07-23",
-    changes: ["Reintroduced Google Drive as a dark, four-colour Google theme inspired by Gemini's red, yellow, green, and blue visual language."]
-  },
-  {
-    version: "v1.38.1",
-    date: "2026-07-22",
-    changes: ["Replaced the near-duplicate Google Drive option with the distinct ZominAI Drive cyan theme."]
+    changes: ["Added the selectable six-product suite, ownership comparison, remote CLI access guidance, and product walkthroughs to the landing page."]
   },
   {
     version: "v1.38.0",
     date: "2026-07-22",
-    changes: ["Added a browser-local Google Drive-inspired theme with familiar white surfaces, Google-blue actions, and pale-blue selection states."]
-  },
-  {
-    version: "v1.37.0",
-    date: "2026-07-22",
-    changes: ["Added a bounded on-demand Shared Drive cache so previously opened remote files and folder trees remain available while a source Zo is offline.", "Added authenticated Zo Computer time answers and reliable follow-up context to ZominAI.", "Added end-to-end Stop generating control and complete TPS metadata beside response time."]
-  },
-  {
-    version: "v1.36.0",
-    date: "2026-07-22",
-    changes: ["Added the current Zo Drive URL and a copy action to the shared-folder pairing-key delivery panel."]
-  },
-  {
-    version: "v1.35.0",
-    date: "2026-07-22",
-    changes: ["Added folder rename and Trash controls that preserve nested files, Drive metadata, and shared-file links."]
-  },
-  {
-    version: "v1.34.0",
-    date: "2026-07-22",
-    changes: ["Added one public demo account with visible sign-in credentials, enforced regular read-only access, and clear exposure warnings in User access."]
-  },
-  {
-    version: "v1.33.0",
-    date: "2026-07-22",
-    changes: ["Added a bounded browser-local system-instructions editor for ZominAI.", "Added runtime-reported token speed beside completed response time.", "Made Zo Drive file-count questions reliably use authenticated read-only storage data."]
-  },
-  {
-    version: "v1.32.0",
-    date: "2026-07-22",
-    changes: ["Replaced the ZominAI chat subtitle with a persistent model selector populated from models loaded by the private runtime."]
-  },
-  {
-    version: "v1.31.0",
-    date: "2026-07-22",
-    changes: ["Added one-click retry for failed ZominAI replies without duplicating the user's prompt.", "Kept the ZominAI header, context meter, and composer fixed while the conversation pane scrolls independently.", "Made the main search field filter Zo Transfer, Functions, Databases, and Shared Drives, including files across every connected Shared Drive.", "Limited the Drive Upload button to Recent, My Drive, Starred, Shared with others, and Trash."]
-  },
-  {
-    version: "v1.30.0",
-    date: "2026-07-22",
-    changes: ["Streamed ZominAI responses into the chat as they are generated, added live and completed elapsed-time feedback, and fixed Drive tool follow-up requests that previously failed with HTTP 400."]
-  },
-  {
-    version: "v1.29.2",
-    date: "2026-07-22",
-    changes: ["Simplified ZominAI setup around the managed Zo Computer runtime and removed browser WebGPU and disk-space checks that do not affect server inference."]
-  },
-  {
-    version: "v1.29.1",
-    date: "2026-07-22",
-    changes: ["Added a Refresh connection control to the ZominAI drawer and corrected the storage-question request shape so the local runtime can answer it."]
-  },
-  {
-    version: "v1.29.0",
-    date: "2026-07-22",
-    changes: ["Added a ZominAI storage-usage tool so chat can answer machine capacity, free space, and Zo Drive allocation questions from the current account."]
-  },
-  {
-    version: "v1.28.1",
-    date: "2026-07-22",
-    changes: ["Kept the ZominAI chat transcript and composer aligned to the full drawer height, preventing empty chats from leaving unused space below the composer."]
-  },
-  {
-    version: "v1.28.0",
-    date: "2026-07-22",
-    changes: ["Added Zo's built-in Light, Dark, and System theme choices alongside the existing Zo Drive and Zo Computer appearances."]
-  },
-  {
-    version: "v1.27.0",
-    date: "2026-07-22",
-    changes: ["Added a browser-local Theme page with the existing Zo Drive appearance and a Zo Computer brand theme."]
-  },
-  {
-    version: "v1.26.2",
-    date: "2026-07-22",
-    changes: ["Restricted the User access menu and workspace to super users only."]
-  },
-  {
-    version: "v1.26.1",
-    date: "2026-07-22",
-    changes: ["Allowed read-only account members to use explicitly read-only database queries and runtime requests."]
-  },
-  {
-    version: "v1.26.0",
-    date: "2026-07-22",
-    changes: ["Added User access in the account menu, with individual member sign-ins, read-only or read & write Drive access, super-user access management, and permanent protection for the original owner."]
-  },
-  {
-    version: "v1.25.0",
-    date: "2026-07-22",
-    changes: ["Routed ZominAI through the authenticated Zo Drive gateway so signed-in web, iPhone, and Android clients share the private Bonsai 8B runtime on the Zo Computer."]
-  },
-  {
-    version: "v1.24.6",
-    date: "2026-07-22",
-    changes: ["Moved release history out of the documentation flow into a dedicated Releases route while preserving old changelog links."]
-  },
-  {
-    version: "v1.24.5",
-    date: "2026-07-22",
-    changes: ["Updated the CLI guide for terminal CRUD support across Zo Paste, Zo Transfer, Zo Shared Drives, Zo Databases, and Zo Functions."]
-  },
-  {
-    version: "v1.24.4",
-    date: "2026-07-22",
-    changes: ["Grouped the GUI documentation list menu into Zo Drive, Zo Originals, and More from Zo."]
-  },
-  {
-    version: "v1.24.3",
-    date: "2026-07-22",
-    changes: ["Expanded GUI documentation to cover file organisation, Zo Paste, Zo Transfer, Zo Shared Drives, Zo Databases, Zo Functions, and ZominAI."]
-  },
-  {
-    version: "v1.24.2",
-    date: "2026-07-22",
-    changes: ["Separated documentation products from Zo Drive modes: ZominAI is now a product, while GUI and CLI remain the two Zo Drive modes."]
-  },
-  {
-    version: "v1.24.1",
-    date: "2026-07-22",
-    changes: ["Added a dedicated ZominAI documentation and changelog experience, with independent ZominAI versioning."]
-  },
-  {
-    version: "v1.24.0",
-    date: "2026-07-22",
-    changes: ["Made ZominAI history overlay the chat, added automatic titles with rename and delete controls, and added timestamps, context usage, and local context compaction."]
-  },
-  {
-    version: "v1.23.9",
-    date: "2026-07-22",
-    changes: ["Added a live ZominAI connection indicator with clear connected, checking, and disconnected states."]
-  },
-  {
-    version: "v1.23.8",
-    date: "2026-07-22",
-    changes: ["Kept file actions visible in Drive, Starred, Recent, and Zo Paste lists, and moved Trash restore and delete actions into a dedicated right-aligned column."]
-  },
-  {
-    version: "v1.23.7",
-    date: "2026-07-22",
-    changes: ["Removed the duplicate View your databases action from the database catalogue hero."]
-  },
-  {
-    version: "v1.23.6",
-    date: "2026-07-22",
-    changes: ["Moved Function Editor save and delete controls to a right-aligned footer."]
-  },
-  {
-    version: "v1.23.5",
-    date: "2026-07-22",
-    changes: ["Removed the duplicate Zo Paste creation button from its hero panel."]
-  },
-  {
-    version: "v1.23.4",
-    date: "2026-07-22",
-    changes: ["Added Synology NAS Drive as the inspiration for Zo Shared Drives."]
-  },
-  {
-    version: "v1.23.3",
-    date: "2026-07-22",
-    changes: ["Made desktop ZominAI resizing track the pointer smoothly and refined the chat boundary to a single, app-consistent divider.", "Added a clear ZominAI pronunciation cue and credited Google Gemini as the inspiration for its local-AI workspace.", "Reorganised Zo Functions into dedicated Editor, Function runs, and Logs tabs."]
-  },
-  {
-    version: "v1.23.2",
-    date: "2026-07-22",
-    changes: ["Cleaned up Zo Databases catalogue actions with aligned full-width primary controls and compact update buttons."]
-  },
-  {
-    version: "v1.23.0",
-    date: "2026-07-22",
-    changes: ["Connected ZominAI to read-only Drive and database tools, so the local model can search files, read supported content, inspect schemas, and run read-only queries."]
-  },
-  {
-    version: "v1.22.0",
-    date: "2026-07-22",
-    changes: ["Removed the duplicate full-page Talk to ZominAI screen and made the desktop chat drawer resizable, with the selected width remembered in the browser."]
-  },
-  {
-    version: "v1.21.6",
-    date: "2026-07-22",
-    changes: ["Aligned Upload directly beside the list and grid controls in the dashboard when ZominAI chat is open."]
-  },
-  {
-    version: "v1.21.5",
-    date: "2026-07-22",
-    changes: ["Removed the forced desktop sidebar scrollbar, tightened its menu spacing, and kept the storage summary at the bottom when room allows."]
-  },
-  {
-    version: "v1.21.4",
-    date: "2026-07-22",
-    changes: ["Kept the Drive workspace within the browser viewport so navigation, file work, and ZominAI stay visible, with independent pane scrolling. When chat is open, Upload now sits beside the dashboard controls instead of floating over content."]
-  },
-  {
-    version: "v1.21.3",
-    date: "2026-07-22",
-    changes: ["Reworked the ZominAI drawer into a cleaner full-width chat with an on-demand History panel, and kept the Upload action aligned with the Drive workspace when chat is open."]
-  },
-  {
-    version: "v1.21.2",
-    date: "2026-07-21",
-    changes: ["Moved ZominAI into a right-side chat drawer with browser-local conversation history, new chats, and runtime-aware open and close behaviour.", "Connected Shared Drive folders now refresh into Recent and Shared with me, with the owner and effective Read only or Read & write access shown on each shared file."]
-  },
-  {
-    version: "v1.20.1",
-    date: "2026-07-21",
-    changes: ["Reworked shared-link cards so mobile file details and actions stay clear, aligned, and within the viewport."]
-  },
-  {
-    version: "v1.20.0",
-    date: "2026-07-21",
-    changes: ["Added a private Talk to ZominAI workspace that sends messages only to the configured local Bonsai runtime and keeps chat history in the open browser tab."]
-  },
-  {
-    version: "v1.19.2",
-    date: "2026-07-21",
-    changes: ["Made each Recent filter fill half of the filter bar for a balanced phone layout."]
-  },
-  {
-    version: "v1.19.1",
-    date: "2026-07-21",
-    changes: ["Placed the advanced search settings control beside the search field on phone and desktop layouts."]
-  },
-  {
-    version: "v1.19.0",
-    date: "2026-07-21",
-    changes: ["Added a persistent list of folders exposed through Shared Drives, with cancellation for unused pairing keys and revocation for active access.", "Moved PrismML, Bonsai model, and runtime documentation into the top ZominAI card so the resources are always available."]
-  },
-  {
-    version: "v1.18.2",
-    date: "2026-07-21",
-    changes: ["Kept the mobile header actions together on the right, with ZominAI beside Settings and overflow beside sign out."]
-  },
-  {
-    version: "v1.18.1",
-    date: "2026-07-21",
-    changes: ["Made the private Drive workspace phone-friendly with a slide-out navigation drawer, a dedicated mobile search row, compact touch layouts, and always-available file actions."]
-  },
-  {
-    version: "v1.18.0",
-    date: "2026-07-21",
-    changes: ["Added Viewer and Editor roles for shared folders, owner-managed permission changes and revocation, and live access checks before write controls are shown."]
-  },
-  {
-    version: "v1.17.0",
-    date: "2026-07-21",
-    changes: ["Added persistent local ZominAI download status, so model preparation continues after leaving Zo Drive and progress is visible on return."]
-  },
-  {
-    version: "v1.16.2",
-    date: "2026-07-21",
-    changes: ["Added ZominAI model, runtime, and original-project links with a clearer local-model privacy explanation."]
-  },
-  {
-    version: "v1.16.1",
-    date: "2026-07-21",
-    changes: ["Fixed ZominAI local setup with a dedicated high-numbered port, a supported Mac runtime command, and clearer runtime verification errors."]
-  },
-  {
-    version: "v1.16.0",
-    date: "2026-07-21",
-    changes: ["Added ZominAI settings with local-runtime verification, install guidance, local connection preferences, and browser-local removal."]
-  },
-  {
-    version: "v1.15.0",
-    date: "2026-07-21",
-    changes: ["Added a ZominAI entry button to the private Zo Drive header."]
-  },
-  {
-    version: "v1.14.0",
-    date: "2026-07-21",
-    changes: ["Opened each database in its own full-width workspace, with a back action to the database overview."]
-  },
-  {
-    version: "v1.13.0",
-    date: "2026-07-21",
-    changes: [
-      "Made Shared Drives pairing clearer: choose approved Drive folders before generating one-time pairing keys, or join folders another owner has shared with you.",
-      "Added clearer spacing between the database view switcher and the instances workspace."
-    ]
-  },
-  {
-    version: "v1.12.5",
-    date: "21 July 2026",
-    changes: ["Made the sidebar count active Drive files only, excluding folders, Trash, databases, functions, and internal data."]
-  },
-  {
-    version: "v1.12.4",
-    date: "21 July 2026",
-    changes: ["Added a direct logout icon in the authenticated Drive header."]
-  },
-  {
-    version: "v1.12.3",
-    date: "21 July 2026",
-    changes: ["Kept the landing page and documentation public, with sign-in only when opening the private Drive workspace."]
-  },
-  {
-    version: "v1.12.2",
-    date: "21 July 2026",
-    changes: ["Expanded Redis record previews to show each key's type and value."]
-  },
-  {
-    version: "v1.12.1",
-    date: "21 July 2026",
-    changes: ["Added a clear in-app database deletion confirmation and record previews for native database engines."]
-  },
-  {
-    version: "v1.12.0",
-    date: "21 July 2026",
-    changes: ["Added native in-Drive run workspaces for every installed database engine, alongside their scoped HTTPS connections."]
-  },
-  {
-    version: "v1.11.2",
-    date: "21 July 2026",
-    changes: ["Simplified the Zo Databases catalogue footer."]
-  },
-  {
-    version: "v1.11.1",
-    date: "21 July 2026",
-    changes: ["Added clearer separation between the Zo Databases view tabs and catalogue workspace."]
-  },
-  {
-    version: "v1.11.0",
-    date: "21 July 2026",
-    changes: ["Completed Zo Cluster Storage: one-time folder pairing, server-held peer credentials, recursive two-way file operations, disconnect/revocation, and shared-folder activity in Recent and Shared with me."]
-  },
-  {
-    version: "v1.10.1",
-    date: "21 July 2026",
-    changes: ["Fixed Redis installation on long Zo data-root paths by using a short private runtime socket while keeping database data persistent in Drive storage."]
+    changes: ["Added Shared Drive offline cache, folder lifecycle controls, User access roles, browser themes, and the ZominAI workspace with read-only Drive tools."]
   },
   {
     version: "v1.10.0",
-    date: "21 July 2026",
-    changes: ["Added real persistent runtimes for every database engine, with versioned installation and updates.", "Added database creation and scoped HTTPS execution for DuckDB, libSQL, PGlite, LanceDB, LevelDB, Redis, and Kuzu without fake data previews.", "Added Function Logs, editable Zo Paste links, complete storage accounting, and the Zo Cluster Databases workspace from the previously pending build."]
-  },
-  {
-    version: "v1.7.3",
-    date: "21 July 2026",
-    changes: ["Added a direct crontab.guru helper link beside the UTC cron schedule field in Zo Functions."]
-  },
-  {
-    version: "v1.7.2",
-    date: "21 July 2026",
-    changes: ["Made public Function URLs and POST input parameters visible directly in the function editor, including the pre-save activation state."]
-  },
-  {
-    version: "v1.7.1",
-    date: "21 July 2026",
-    changes: ["Placed the Zo Functions and Zo Databases cards side by side in the landing-page feature panel."]
-  },
-  {
-    version: "v1.7.0",
-    date: "20 July 2026",
-    changes: ["Made every catalogued database engine installable per Drive and added Redis plus Kuzu. SQLite remains the first engine with an interactive workspace; the rest are clearly marked as installed while their workspaces are built."]
-  },
-  {
-    version: "v1.6.0",
-    date: "21 July 2026",
-    changes: ["Added Zo Functions: owner-scoped JavaScript and Python handlers with private or public invocation, UTC cron schedules, manual runs, execution history, and dedicated landing-page launch points."]
-  },
-  {
-    version: "v1.5.0",
-    date: "20 July 2026",
-    changes: ["Added an install-first SQLite workflow. Install the engine before opening its workspace, creating databases, importing files, or running SQL."]
-  },
-  {
-    version: "v1.4.3",
-    date: "20 July 2026",
-    changes: ["Restyled the Zo Databases catalog with the same high-contrast hero and workspace composition as Zo Transfer."]
-  },
-  {
-    version: "v1.4.2",
-    date: "20 July 2026",
-    changes: ["Added Zo Databases to the Zo Drive SaaS Killer Features panel on the landing page."]
-  },
-  {
-    version: "v1.4.1",
-    date: "20 July 2026",
-    changes: ["Restored visible hover and keyboard-focus labels for every collapsed sidebar icon."]
-  },
-  {
-    version: "v1.4.0",
-    date: "20 July 2026",
-    changes: ["Added an open-source lightweight database catalog with SQLite available now and clearly labelled planned engines.", "Added configurable import limits for SQLite database files."]
-  },
-  {
-    version: "v1.3.1",
-    date: "20 July 2026",
-    changes: ["Added a copyable Zo Drive URL to API Keys for quickly connecting local machines and automations."]
-  },
-  {
-    version: "v1.3.0",
-    date: "20 July 2026",
-    changes: ["Added database-scoped API credentials, a copyable HTTPS endpoint, and backend connection examples for SQLite databases."]
-  },
-  {
-    version: "v1.2.0",
-    date: "20 July 2026",
-    changes: ["Added Database Engines: create private SQLite databases, browse tables and rows, and run SQL in the Zo Drive workspace."]
-  },
-  {
-    version: "v1.1.5",
-    date: "20 July 2026",
-    changes: ["Updated the browser CLI guide with file checks, server-side moves, and Trash-backed removal."]
-  },
-  {
-    version: "v1.1.4",
-    date: "20 July 2026",
-    changes: ["Simplified CLI connection guidance to use one interactive configuration command."]
-  },
-  {
-    version: "v1.1.3",
-    date: "20 July 2026",
-    changes: ["Added a Documentation link to the top-right account menu."]
-  },
-  {
-    version: "v1.1.2",
-    date: "20 July 2026",
-    changes: ["Expanded Profile & controls to fill the available Drive workspace width."]
-  },
-  {
-    version: "v1.1.1",
-    date: "20 July 2026",
-    changes: ["Moved Profile & controls into the full-width Drive workspace and aligned its layout with API Keys."]
-  },
-  {
-    version: "v1.1.0",
-    date: "20 July 2026",
-    changes: ["Restored the Profile & controls screen for managing the owner username, password, drive details, and account deletion."]
-  },
-  {
-    version: "v1.0.0",
-    date: "20 July 2026",
-    changes: ["Removed the Profile & controls screen. API Keys is now the sole account-management workspace, with sign-out retained in the account menu."]
-  },
-  {
-    version: "v0.3.2",
-    date: "20 July 2026",
-    changes: ["Removed file list and grid controls from API Keys, and expanded the device-key workspace to the full Drive content width."]
-  },
-  {
-    version: "v0.3.1",
-    date: "20 July 2026",
-    changes: ["Moved API Keys from the primary sidebar into the account menu, keeping device-access controls available without cluttering the Drive workspace."]
+    date: "2026-07-21",
+    changes: ["Added persistent Zo Database runtimes and workspaces, scoped HTTPS access, Zo Functions, Zo Paste links, and Shared Drive pairing and permissions."]
   },
   {
     version: "v0.3.0",
-    date: "20 July 2026",
-    changes: ["Added the API Keys workspace for creating, reviewing, copying, and revoking per-device keys.", "Keys are one-time visible, scoped, expiry-aware, and stored as hashes by Zo Drive."]
-  },
-  {
-    version: "v0.2.3",
-    date: "20 July 2026",
-    changes: ["Made the Storage breakdown dialog fit the viewport with a scrollable content area."]
-  },
-  {
-    version: "v0.2.2",
-    date: "20 July 2026",
-    changes: ["Added a visible Landing page link to the documentation header."]
-  },
-  {
-    version: "v0.2.1",
-    date: "20 July 2026",
-    changes: ["Added this in-product GUI changelog so browser users can review releases without opening the repository."]
-  },
-  {
-    version: "v0.2.0",
-    date: "20 July 2026",
-    changes: ["Added the independent GUI release track and visible GUI version.", "Moved the landing-page action into the account menu while keeping the Zo Drive brand as the home link."]
-  },
-  {
-    version: "v0.1.2",
-    date: "20 July 2026",
-    changes: ["Added navigation from the signed-in Drive back to the landing page."]
+    date: "2026-07-20",
+    changes: ["Added scoped, revocable, expiry-aware device credentials in the API Keys workspace."]
   }
 ];
 
@@ -978,115 +335,50 @@ const CLI_CHANGELOG = [
   {
     version: "v1.3.0",
     date: "2026-07-22",
-    changes: ["Added Zo Originals command families for Zo Paste, Zo Transfer, Zo Shared Drives, Zo Databases, and Zo Functions, including CRUD operations and JSON output for automation."]
-  },
-  {
-    version: "v1.2.2",
-    date: "2026-07-22",
-    changes: ["Expanded CLI documentation with file operations, dry runs, health and capacity checks, script automation, and the boundary with GUI-managed product workspaces."]
+    changes: ["Added terminal command families for Zo Paste, Zo Transfer, Zo Shared Drives, Zo Databases, and Zo Functions, with CRUD operations and JSON output for automation."]
   },
   {
     version: "v1.2.0",
-    date: "20 July 2026",
-    changes: ["Added zo-drive health for API, authenticated access, storage, and filesystem checks.", "Added zo-drive exists for scriptable file checks and zo-drive stat for file metadata.", "Added server-side zo-drive mv and Trash-backed zo-drive rm commands."]
+    date: "2026-07-20",
+    changes: ["Added familiar Drive file operations, dry runs, progress reporting, file inspection, server-side copy and move, Trash-backed removal, and health checks."]
   },
   {
     version: "v1.1.0",
-    date: "20 July 2026",
-    changes: ["Made zo-drive configure interactive: it now securely asks for the Drive URL and device API key, then stores the connection locally."]
+    date: "2026-07-20",
+    changes: ["Added secure interactive configuration for the Zo Drive URL and a scoped device API key, stored with owner-only permissions."]
   },
   {
     version: "v1.0.0",
-    date: "20 July 2026",
-    changes: ["Replaced password-based terminal login with scoped per-device API keys.", "Added secure local configuration at ~/.config/zo-drive/config.json with owner-only permissions."]
-  },
-  {
-    version: "v0.1.3",
-    date: "20 July 2026",
-    changes: ["Added an independent CLI release track and zo-drive --version.", "Added installation, local-to-Zo connection, and update guidance."]
-  },
-  {
-    version: "v0.1.1",
-    date: "20 July 2026",
-    changes: ["Documented connecting a local computer to Zo Drive."]
-  },
-  {
-    version: "v0.1.0",
-    date: "20 July 2026",
-    changes: ["Documented installation, cloud connection, and CLI update workflows."]
+    date: "2026-07-20",
+    changes: ["Replaced password-based terminal login with scoped, revocable per-device API keys."]
   }
 ];
 
 const ZOMINAI_CHANGELOG = [
   {
+    version: "v1.10.0",
+    date: "2026-07-24",
+    changes: ["Added owner-only managed installation and removal for the selected Bonsai model version, stored outside Drive quota."]
+  },
+  {
     version: "v1.9.0",
     date: "2026-07-23",
-    changes: ["Added deterministic recursive Drive inventory retrieval for file ranking, comparison, listing, and aggregate questions.", "Added exact largest, smallest, newest, oldest, file-count, and total-size summaries plus sortable bounded file metadata for more reliable local-model answers."]
-  },
-  {
-    version: "v1.8.0",
-    date: "2026-07-23",
-    changes: ["Added an authenticated one-token warm-up request when chat opens so the selected local model is ready before the first user message.", "Added rotating rainbow Pegasus warm-up messages, an explicit Ready state, and retryable warm-up failures."]
-  },
-  {
-    version: "v1.7.1",
-    date: "2026-07-23",
-    changes: ["Kept slow local-model requests alive through Zo's HTTP edge from the moment chat starts until the first token arrives.", "Forwarded runtime failures inside the open stream so failed turns stay retryable.", "Skipped the full Drive tool schema for ordinary conversation while preserving authenticated tools for Drive and machine-data prompts."]
+    changes: ["Added deterministic recursive Drive inventory summaries and model warm-up with explicit ready and retry states."]
   },
   {
     version: "v1.7.0",
     date: "2026-07-22",
-    changes: ["Added an authenticated current-time tool so machine date, time, day, and timezone questions use the Zo Computer clock.", "Added end-to-end response cancellation that stops browser streaming, the gateway request, and local model generation while keeping the turn retryable.", "Made every completed response show runtime TPS, a labelled estimate when runtime timings are absent, or an explicit unavailable state for older history.", "Improved follow-up handling so recent conversation context remains authoritative."]
-  },
-  {
-    version: "v1.6.0",
-    date: "2026-07-22",
-    changes: ["Added custom system instructions with a 2,000-character limit and immutable privacy and read-only safeguards.", "Added accurate tokens-per-second metrics from the local runtime.", "Made file-count questions reliably use the authenticated Zo Drive storage tool without requiring MCP."]
+    changes: ["Added authenticated time and Drive tools, streaming cancellation, reliable follow-up context, response-speed metadata, and retryable runtime failures."]
   },
   {
     version: "v1.5.0",
     date: "2026-07-22",
-    changes: ["Added runtime-backed model discovery and a persistent chat-header selector so each message can use any model loaded by the private ZominAI runtime."]
-  },
-  {
-    version: "v1.4.0",
-    date: "2026-07-22",
-    changes: ["Added a Try again action that resends the original prompt after a failed reply, replaces the error in place, and keeps failed error text out of future model context."]
-  },
-  {
-    version: "v1.3.0",
-    date: "2026-07-22",
-    changes: ["Added streamed local responses with live elapsed time and per-response completion time.", "Fixed Drive tool follow-ups by preserving the required function-call type.", "Reduced storage-question latency by omitting redundant tool definitions after storage data is already available."]
-  },
-  {
-    version: "v1.2.2",
-    date: "2026-07-22",
-    changes: ["Added a supervised private Bonsai 8B runtime launcher for Zo Computer and streamlined setup around its server-side health check."]
-  },
-  {
-    version: "v1.2.1",
-    date: "2026-07-22",
-    changes: ["Retrieved storage usage before asking the local runtime to respond, avoiding an unsupported forced-function request.", "Added an on-demand connection refresh control in the ZominAI chat header."]
-  },
-  {
-    version: "v1.2.0",
-    date: "2026-07-22",
-    changes: ["Added a read-only storage-usage tool for machine capacity, free space, and Zo Drive quota questions."]
-  },
-  {
-    version: "v1.1.0",
-    date: "2026-07-22",
-    changes: ["Moved the default inference runtime to Bonsai 8B on the Zo Computer.", "Added an authenticated Zo Drive gateway so signed-in web, iPhone, and Android clients use the same private runtime without exposing its local port."]
-  },
-  {
-    version: "v1.0.1",
-    date: "2026-07-22",
-    changes: ["Moved ZominAI into its own documentation product selector, separate from Zo Drive's GUI and CLI modes."]
+    changes: ["Added runtime-backed model selection, bounded custom system instructions, and authenticated read-only storage and file-count answers."]
   },
   {
     version: "v1.0.0",
     date: "2026-07-22",
-    changes: ["Established ZominAI as an independently versioned local-AI product, with its own public guide and changelog.", "Documented the local Bonsai runtime, read-only Drive tools, live connection status, private chat history, and local context controls."]
+    changes: ["Established the private local-AI product with a Bonsai runtime, browser-local chat history, and read-only Drive context."]
   }
 ];
 
