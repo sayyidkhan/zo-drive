@@ -292,11 +292,16 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.42.18";
+const GUI_VERSION = "1.42.19";
 const CLI_VERSION = "1.3.0";
 const ZOMINAI_VERSION = "1.9.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.42.19",
+    date: "2026-07-24",
+    changes: ["Placed the particle field behind the main hero content and removed the redundant three-item access strip."],
+  },
   {
     version: "v1.42.18",
     date: "2026-07-24",
@@ -1160,13 +1165,13 @@ function LandingPage() {
     <LandingTheme />
     <div className="relative isolate" ref={heroRef}>
       <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[43rem] overflow-hidden bg-[#ecf7ff]"><div className="absolute -left-36 -top-32 size-[34rem] rounded-full bg-sky-300/30 blur-3xl" /><div className="absolute right-[-8rem] top-24 size-[30rem] rounded-full bg-blue-300/35 blur-3xl" /></div>
-      <canvas aria-hidden="true" className="landing-particle-field pointer-events-none absolute inset-0 z-[-5] size-full opacity-70 sm:opacity-100" ref={canvasRef} />
-      <header className="mx-auto flex max-w-7xl items-center justify-between px-5 py-5 sm:px-8">
+      <canvas aria-hidden="true" className="landing-particle-field pointer-events-none absolute inset-0 z-0 size-full opacity-70 sm:opacity-100" ref={canvasRef} />
+      <header className="relative z-10 mx-auto flex max-w-7xl items-center justify-between px-5 py-5 sm:px-8">
         <DriveMark />
         <DriveModeSwitch guiHref={driveAppUrl()} mode="gui" />
       </header>
 
-      <section className="mx-auto grid max-w-7xl items-center gap-12 px-5 pb-20 pt-16 sm:px-8 lg:grid-cols-[1.05fr_.95fr] lg:pb-32 lg:pt-24">
+      <section className="relative z-10 mx-auto grid max-w-7xl items-center gap-12 px-5 pb-20 pt-16 sm:px-8 lg:grid-cols-[1.05fr_.95fr] lg:pb-32 lg:pt-24">
         <div>
           <span className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white/75 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.14em] text-sky-800"><Cloud size={14} /> Decentralised cloud, on your Zo</span>
           <h1 className="mt-6 max-w-3xl text-5xl font-semibold leading-[1.02] tracking-[-0.05em] text-slate-950 sm:text-6xl lg:text-7xl">Own the <span className="font-serif font-normal italic text-emerald-950">cloud.</span><br />Keep the <span className="text-orange-500">leverage.</span></h1>
@@ -1175,7 +1180,6 @@ function LandingPage() {
             <a className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:bg-blue-700" href={loginUrl()}><HardDrive size={18} /> Sign in to Zo Drive</a>
             <a className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50" href={docsUrl()}>Read the docs <ArrowUpRight size={17} /></a>
           </div>
-          <div className="mt-10 flex flex-wrap gap-x-6 gap-y-3 text-sm font-medium text-slate-600"><span className="inline-flex items-center gap-2"><Check size={16} className="text-blue-600" /> Data stays on your Zo</span><span className="inline-flex items-center gap-2"><Check size={16} className="text-blue-600" /> Folder-preserving uploads</span><span className="inline-flex items-center gap-2"><Check size={16} className="text-blue-600" /> GUI &amp; CLI Access</span></div>
         </div>
 
         <div className="relative mx-auto w-full max-w-xl">

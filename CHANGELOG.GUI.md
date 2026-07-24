@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.42.19 - 2026-07-24
+
+### Changed
+
+- Placed the interactive particle field behind the main hero content.
+- Removed the redundant three-item access strip beneath the hero actions.
+
 ## v1.42.18 - 2026-07-24
 
 ### Added
