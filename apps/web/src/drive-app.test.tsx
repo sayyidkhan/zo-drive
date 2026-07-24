@@ -443,12 +443,13 @@ describe("DriveApp", () => {
     expect(screen.getByTestId("header-actions")).toContainElement(screen.getByRole("button", { name: "Account menu" }));
     expect(screen.getByTestId("header-actions")).toContainElement(screen.getByRole("button", { name: "Sign out" }));
     expect(screen.getByTestId("drive-workspace")).toHaveClass("h-dvh", "overflow-hidden");
-    expect(document.getElementById("drive-navigation")).toHaveClass("md:overflow-hidden");
+    expect(document.getElementById("drive-navigation")).toHaveClass("md:overflow-y-auto");
     expect(screen.getByTestId("storage-card")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add photo.jpg to Starred" })).not.toHaveClass("md:opacity-0");
     expect(screen.getByRole("button", { name: "Share photo.jpg" })).not.toHaveClass("md:opacity-0");
     expect(screen.getByRole("button", { name: "Move photo.jpg to Trash" })).not.toHaveClass("md:opacity-0");
     fireEvent.click(screen.getByRole("button", { name: "Collapse navigation" }));
+    expect(document.getElementById("drive-navigation")).toHaveClass("md:overflow-visible");
     expect(screen.getByRole("button", { name: "New" })).toHaveAttribute("title", "New");
     expect(screen.getByRole("button", { name: "My Drive" })).toHaveAttribute("title", "My Drive");
     expect(screen.getByRole("button", { name: "Zo Databases" })).toHaveAttribute("title", "Zo Databases");

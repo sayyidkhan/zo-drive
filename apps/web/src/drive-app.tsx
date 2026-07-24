@@ -3249,7 +3249,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
 
       <div className="flex min-h-0 min-w-0 max-w-full flex-1">
         {sidebarOpen && <button aria-label="Close navigation" className="fixed inset-0 z-30 bg-slate-950/25 md:hidden" onClick={() => setSidebarOpen(false)} />}
-        <aside id="drive-navigation" className={`${sidebarOpen ? "w-72 translate-x-0 overflow-y-auto px-3" : "w-16 -translate-x-full overflow-visible px-1.5 md:translate-x-0"} fixed inset-y-0 left-0 z-40 min-h-0 shrink-0 border-r border-slate-200 bg-white py-5 shadow-xl transition-[width,padding,transform] duration-200 md:static md:z-auto md:flex md:flex-col md:overflow-hidden md:shadow-none ${sidebarOpen ? "md:w-64" : "md:w-16"}`}>
+        <aside id="drive-navigation" className={`${sidebarOpen ? "w-72 translate-x-0 overflow-y-auto px-3 md:overflow-y-auto" : "w-16 -translate-x-full overflow-visible px-1.5 md:translate-x-0 md:overflow-visible"} fixed inset-y-0 left-0 z-40 min-h-0 shrink-0 border-r border-slate-200 bg-white py-5 shadow-xl transition-[width,padding,transform] duration-200 md:static md:z-auto md:flex md:flex-col md:shadow-none ${sidebarOpen ? "md:w-64" : "md:w-16"}`}>
           <div className={`flex gap-2 ${sidebarOpen ? "items-center" : "flex-col items-center"}`}>
           {sidebarOpen ? <div className="relative flex-1">
             <button aria-expanded={newMenuOpen} className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700" onClick={() => setNewMenuOpen((open) => !open)}>
