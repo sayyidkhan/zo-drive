@@ -79,6 +79,11 @@ import { createDriveUrls, normalizeAppBasePath } from "./app-urls.js";
 import { formatBytes, formatDuration, formatRecentActivity, formatTrashExpiry, recentFileLocation, ttlToDate } from "./drive-formatting.js";
 import { CLI_CHANGELOG, CLI_VERSION, GUI_CHANGELOG, GUI_VERSION, ZOMINAI_CHANGELOG, ZOMINAI_VERSION } from "./release-history.js";
 import { formulaDisplay } from "./spreadsheet-formulas.js";
+import { SettingsCard } from "./features/account/components/settings-card.js";
+import { FunctionWorkspaceTabs, type FunctionWorkspaceTab } from "./features/functions/components/function-workspace-tabs.js";
+import { CodeBlock } from "./features/public-site/components/code-block.js";
+import { ZominAiCheck } from "./features/zomin-ai/components/zomin-ai-check.js";
+import { EmptyState } from "./shared/components/empty-state.js";
 
 export { formulaDisplay };
 
@@ -91,7 +96,6 @@ type ViewMode = "grid" | "list";
 type DriveSection = "api-keys" | "cluster-databases" | "databases" | "functions" | "home" | "my-drive" | "pastes" | "profile" | "shared" | "starred" | "theme" | "transfer" | "trash" | "user-access" | "zominai";
 type DatabasePanel = "data" | "run" | "sql" | "access";
 type DatabaseView = "catalog" | "instances";
-type FunctionWorkspaceTab = "editor" | "runs" | "logs";
 type AdvancedFileType = "document" | "spreadsheet" | "presentation" | "form" | "paste" | "image" | "video" | "audio" | "pdf" | "other";
 type AdvancedFilters = {
   contentQuery: string;
@@ -762,10 +766,6 @@ function ZominAiDocsChangelogPage() {
   return <main className="min-h-screen bg-[#f7fcfd] text-slate-900"><header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/90 backdrop-blur"><div className="mx-auto flex max-w-7xl items-center gap-3 px-5 py-4 sm:px-8"><DriveMark compact /><a className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-950" href={landingUrl()}><ArrowLeft size={16} /> Landing page</a><a className="ml-auto inline-flex items-center gap-2 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm font-semibold text-cyan-800 shadow-sm transition hover:bg-cyan-100" href={zominAiDocsUrl()}><ArrowLeft size={16} /> Documentation</a></div></header><div className="mx-auto grid max-w-7xl gap-12 px-5 py-14 sm:px-8 lg:grid-cols-[14rem_minmax(0,1fr)] lg:py-20"><aside className="hidden lg:block"><div className="sticky top-24"><p className="mb-3 px-3 text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Product</p><ZominAiDocsModeSwitch page="changelog" /><nav className="mt-7 space-y-1 text-sm"><p className="mb-3 px-3 text-xs font-bold uppercase tracking-[0.14em] text-slate-400">ZominAI</p><a className="block rounded-lg px-3 py-2 font-semibold text-slate-600 hover:bg-cyan-50 hover:text-cyan-800" href={zominAiDocsUrl()}>Guide</a><a aria-current="page" className="block rounded-lg bg-cyan-50 px-3 py-2 font-semibold text-cyan-800" href={zominAiDocsUrl("changelog")}>Changelog</a></nav></div></aside><div className="min-w-0"><div className="mb-7 lg:hidden"><p className="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Product</p><ZominAiDocsModeSwitch page="changelog" /></div><div className="flex flex-wrap items-center gap-3 text-cyan-800"><span className="grid size-11 place-items-center rounded-xl bg-cyan-100"><ScrollText size={22} /></span><p className="text-sm font-bold uppercase tracking-[0.15em]">Release history</p><span className="rounded-full bg-cyan-50 px-3 py-1 text-xs font-bold">Latest: v{ZOMINAI_VERSION}</span></div><h1 className="mt-6 text-4xl font-semibold tracking-[-0.04em] text-slate-950 sm:text-5xl">ZominAI changelog</h1><p className="mt-5 max-w-3xl text-lg leading-8 text-slate-600">A chronological record of ZominAI releases. The latest version is shown first.</p><div className="mt-10 space-y-4">{ZOMINAI_CHANGELOG.map((release) => <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm" key={release.version}><div className="flex flex-wrap items-baseline justify-between gap-2"><h2 className="text-xl font-semibold text-slate-950">ZominAI {release.version}</h2><p className="text-sm font-medium text-slate-500">{release.date}</p></div><ul className="mt-5 space-y-3 text-sm leading-6 text-slate-600">{release.changes.map((change) => <li className="flex gap-3" key={change}><span className="mt-2.5 size-1.5 shrink-0 rounded-full bg-cyan-600" /><span>{change}</span></li>)}</ul></article>)}</div></div></div></main>;
 }
 
-function CodeBlock({ code, label }: { code: string; label: string }) {
-  return <section className="overflow-hidden rounded-xl border border-slate-800 bg-slate-950"><header className="flex items-center justify-between border-b border-white/10 px-4 py-3"><span className="text-xs font-semibold text-slate-300">{label}</span><Code2 size={16} className="text-cyan-300" /></header><pre className="overflow-x-auto p-4 text-xs leading-6 text-slate-200 sm:text-sm"><code>{code}</code></pre></section>;
-}
-
 function DriveGate({ client, authClient, fallback }: { client: DriveClient; authClient: AuthClient; fallback?: React.ReactNode }) {
   const queryClient = useQueryClient();
   const authQuery = useQuery({ queryKey: ["auth-status"], queryFn: () => authClient.getAuthStatus(), retry: false });
@@ -944,10 +944,6 @@ function UserAccessRow({ currentUser, member, onDelete, onUpdate, pending }: { c
   const protectedOwner = member.isOwner;
   const accessProtected = protectedOwner || member.isDemo;
   return <div className="grid gap-3 border-b border-slate-100 px-4 py-4 last:border-b-0 md:grid-cols-[minmax(9rem,1.35fr)_9rem_9rem_5.5rem] md:items-center"><div className="min-w-0"><p className="truncate font-medium text-slate-800">{member.username} {member.isDemo && <span className="ml-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700">Demo</span>} {member.id === currentUser.id && <span className="text-slate-400">(you)</span>}</p><p className="mt-1 text-xs text-slate-400">{protectedOwner ? "Original owner · permanently protected" : member.isDemo ? "Public credentials · access permanently read only" : `Created ${new Date(member.createdAt).toLocaleDateString()}`}</p></div><label className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400 md:text-[0px]"><span className="md:hidden">Access</span><select aria-label={`${member.username} access`} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 md:mt-0" disabled={accessProtected || pending} onChange={(event) => onUpdate({ access: event.target.value as AccountAccess })} value={member.access}><option value="read">Read only</option><option value="write">Read & write</option></select></label><label className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-400 md:text-[0px]"><span className="md:hidden">Role</span><select aria-label={`${member.username} role`} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 md:mt-0" disabled={accessProtected || pending} onChange={(event) => onUpdate({ role: event.target.value as AccountRole })} value={member.role}><option value="regular">Regular</option><option value="super">Super</option></select></label><div className="flex justify-end"><button aria-label={`Remove ${member.username}`} className="rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:text-slate-200" disabled={protectedOwner || pending} onClick={() => { if (window.confirm(`Remove ${member.username}'s access to this Drive?`)) onDelete(); }} title={protectedOwner ? "The original owner cannot be removed" : "Remove user"} type="button"><Trash2 size={18} /></button></div></div>;
-}
-
-function SettingsCard({ children, description, danger = false, icon, title }: { children: React.ReactNode; description: string; danger?: boolean; icon: React.ReactNode; title: string }) {
-  return <section className={`rounded-xl border bg-white p-5 shadow-sm ${danger ? "border-red-200" : "border-slate-200"}`}><div className={`flex items-start gap-3 ${danger ? "text-red-600" : "text-blue-600"}`}><span className="rounded-lg bg-current/10 p-2">{icon}</span><div><h2 className="font-semibold text-slate-900">{title}</h2><p className="mt-1 text-sm leading-5 text-slate-500">{description}</p></div></div><div className="mt-5">{children}</div></section>;
 }
 
 const driveThemeStorageKey = "zo-drive:theme:v1";
@@ -2066,10 +2062,6 @@ function ZominAiWorkspace({ initialPane = "install" }: { initialPane?: ZominAiPa
   </div>;
 }
 
-function ZominAiCheck({ label, result }: { label: string; result: { detail: string; ready: boolean } }) {
-  return <div className={`flex items-start gap-3 rounded-xl border p-4 ${result.ready ? "border-emerald-200 bg-emerald-50/60" : "border-amber-200 bg-amber-50/70"}`}><span className={`mt-0.5 grid size-7 shrink-0 place-items-center rounded-full ${result.ready ? "bg-emerald-600 text-white" : "bg-amber-100 text-amber-700"}`}>{result.ready ? <Check size={16} /> : <Info size={16} />}</span><div><p className="text-sm font-semibold text-slate-900">{label}</p><p className="mt-0.5 text-sm leading-5 text-slate-600">{result.detail}</p></div></div>;
-}
-
 function ZominAiDownloadProgress({ status, unavailable }: { status: ZominAiDownloadStatus | null; unavailable: boolean }) {
   if (unavailable) return <div className="mt-6 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-500">Local download progress is available when this Zo Drive page is open on the device running ZominAI.</div>;
   if (!status) return <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">Checking the local ZominAI download status…</div>;
@@ -2705,15 +2697,6 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
       {uploads.length > 0 && <UploadProgress uploads={uploads} />}
     </main>
   );
-}
-
-function FunctionWorkspaceTabs({ activeTab, disabled, onChange }: { activeTab: FunctionWorkspaceTab; disabled: boolean; onChange: (tab: FunctionWorkspaceTab) => void }) {
-  const tabs: Array<{ id: FunctionWorkspaceTab; label: string }> = [
-    { id: "editor", label: "Editor" },
-    { id: "runs", label: "Function runs" },
-    { id: "logs", label: "Logs" }
-  ];
-  return <nav aria-label="Function workspace views" className="border-b border-slate-100 bg-white px-5 pt-4"><div className="flex gap-1 overflow-x-auto" role="tablist">{tabs.map((tab) => <button aria-controls={`function-${tab.id}-panel`} aria-selected={activeTab === tab.id} className={`shrink-0 rounded-t-lg border-b-2 px-3 py-2.5 text-sm font-semibold transition ${activeTab === tab.id ? "border-blue-600 bg-blue-50 text-blue-700" : "border-transparent text-slate-500 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-800"} disabled:cursor-not-allowed disabled:text-slate-300`} disabled={disabled && tab.id !== "editor"} key={tab.id} onClick={() => onChange(tab.id)} role="tab" type="button">{tab.label}</button>)}</div></nav>;
 }
 
 function Functions({ client, search }: { client: DriveClient; search: string }) {
@@ -4534,10 +4517,6 @@ function TrashEntries({ items, onRestore, onPermanentlyDelete }: { items: DriveT
       ))}
     </div>
   );
-}
-
-function EmptyState({ title, description, action, onAction }: { title: string; description?: string; action: string; onAction: () => void }) {
-  return <div className="grid min-h-72 place-items-center rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center"><div><span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-blue-50 text-blue-600"><Cloud size={24} /></span><h2 className="mt-4 font-semibold text-slate-800">{title}</h2>{description && <p className="mt-2 max-w-sm text-sm text-slate-500">{description}</p>}<button className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700" onClick={onAction}>{action}</button></div></div>;
 }
 
 function FolderDialog({ folderName, onCancel, onCreate, onNameChange }: { folderName: string; onCancel: () => void; onCreate: () => void; onNameChange: (name: string) => void }) {
