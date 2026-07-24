@@ -2,7 +2,12 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
-## Unreleased
+## v1.25.0 - 2026-07-22
+
+### Added
+
+- Route authenticated ZominAI web and mobile chats through Zo Drive to the
+  private Bonsai 8B runtime on the Zo Computer.
 
 ### Fixed
 

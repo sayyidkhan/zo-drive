@@ -38,6 +38,34 @@ describe("Zo Drive API", () => {
     await expect(response.json()).resolves.toEqual({ status: "ok" });
   });
 
+  it("reports the deployed release tracks without requiring a user", async () => {
+    const root = await mkdtemp(join(tmpdir(), "zo-drive-version-"));
+    roots.push(root);
+    const app = createApp({ storage: new LocalDriveStorage({ root }), resolveUserId: () => null, release: { api: "0.5.0", gui: "1.25.0", revision: "abc123", zominai: "1.1.0" } });
+    await expect((await app.request("http://localhost/version")).json()).resolves.toEqual({ status: "ok", release: { api: "0.5.0", gui: "1.25.0", revision: "abc123", zominai: "1.1.0" } });
+  });
+
+  it("proxies authenticated ZominAI requests to the private Bonsai runtime with a fixed model", async () => {
+    const root = await mkdtemp(join(tmpdir(), "zo-drive-zominai-"));
+    roots.push(root);
+    const runtimeFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (input.toString().endsWith("/v1/models")) return new Response(JSON.stringify({ data: [{ id: "Bonsai-8B-Q1_0.gguf" }] }));
+      expect(JSON.parse(String(init?.body))).toMatchObject({ model: "Bonsai-8B-Q1_0.gguf", stream: false });
+      return new Response(JSON.stringify({ choices: [{ message: { content: "Private answer" } }] }));
+    });
+    const app = createApp({
+      storage: new LocalDriveStorage({ root }),
+      resolveUserId: (request) => request.headers.get("x-test-user-id"),
+      zominAi: { endpoint: "http://127.0.0.1:57183", fetch: runtimeFetch, model: "Bonsai-8B-Q1_0.gguf" }
+    });
+
+    expect((await app.request("http://localhost/zominai/health")).status).toBe(401);
+    await expect((await app.request("http://localhost/zominai/health", { headers: { "x-test-user-id": "alice" } })).json()).resolves.toEqual({ model: "Bonsai-8B-Q1_0.gguf", status: "ready" });
+    const response = await app.request("http://localhost/zominai/chat", { method: "POST", headers: { "content-type": "application/json", "x-test-user-id": "alice" }, body: JSON.stringify({ messages: [{ content: "Summarise my Drive", role: "user" }] }) });
+    await expect(response.json()).resolves.toMatchObject({ choices: [{ message: { content: "Private answer" } }] });
+    expect(runtimeFetch).toHaveBeenCalledTimes(2);
+  });
+
   it("requires an authenticated user for drive operations", async () => {
     const app = await createTestApp();
 
