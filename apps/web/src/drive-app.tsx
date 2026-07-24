@@ -75,6 +75,12 @@ import { ZoDriveClient } from "@zo-drive/sdk";
 import type { AccountAccess, AccountMember, AccountRole, ApiKeyScope, AuthStatus, ClusterInvitation, ClusterMount, ClusterRole, DatabaseApiKey, DatabaseApiKeyScope, DatabaseEngine, DatabaseEngineId, DatabaseExecuteResult, DatabaseImportSettings, DatabaseRows, DriveApiKey, DriveDatabase, DriveFolder, DriveFunction, DriveFunctionRun, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, FunctionRuntime, FunctionVisibility, NativeFileType, PublicShare, PublishedForm, ShareAccess, StorageUsage } from "@zo-drive/types";
 import { LandingPageThree, useParticleField } from "./landing-page-three.js";
 import { LandingPageTwo } from "./landing-page-two.js";
+import { createDriveUrls, normalizeAppBasePath } from "./app-urls.js";
+import { formatBytes, formatDuration, formatRecentActivity, formatTrashExpiry, recentFileLocation, ttlToDate } from "./drive-formatting.js";
+import { CLI_CHANGELOG, CLI_VERSION, GUI_CHANGELOG, GUI_VERSION, ZOMINAI_CHANGELOG, ZOMINAI_VERSION } from "./release-history.js";
+import { formulaDisplay } from "./spreadsheet-formulas.js";
+
+export { formulaDisplay };
 
 type DriveClient = Pick<ZoDriveClient, "createApiKey" | "createFolder" | "createNativeFile" | "createShare" | "delete" | "download" | "emptyTrash" | "getUsage" | "list" | "listApiKeys" | "listFolders" | "listFormResponses" | "listShares" | "listStarred" | "listTrash" | "permanentlyDeleteTrash" | "publishForm" | "rename" | "restoreTrash" | "revokeApiKey" | "revokeShare" | "saveNativeFile" | "setQuota" | "star" | "unstar" | "updateSharePasscode" | "upload"> & Partial<Pick<ZoDriveClient, "createClusterFolder" | "createClusterInvitation" | "createClusterMount" | "deleteClusterInvitation" | "deleteClusterMount" | "deleteClusterObject" | "deleteClusterPeer" | "downloadClusterObject" | "getClusterMountAccess" | "listClusterInvitations" | "listClusterMounts" | "listClusterObjects" | "listClusterPeers" | "renameClusterObject" | "updateClusterPeerRole" | "uploadClusterObject" | "createDatabase" | "createDatabaseApiKey" | "deleteDatabase" | "executeDatabase" | "exportDatabase" | "getDatabaseImportSettings" | "importDatabase" | "installDatabaseEngine" | "listDatabaseApiKeys" | "listDatabaseEngines" | "listDatabases" | "listDatabaseRows" | "listDatabaseTables" | "queryDatabase" | "revokeDatabaseApiKey" | "setDatabaseImportLimit" | "updateDatabaseEngine" | "createFunction" | "deleteFunction" | "listFunctions" | "listFunctionRuns" | "runFunction" | "updateFunction" | "deleteFolder" | "renameFolder">>;
 type AuthClient = Pick<ZoDriveClient, "changePassword" | "deleteAccount" | "getAuthStatus" | "login" | "logout" | "registerInitialUser" | "updateProfile">;
@@ -290,98 +296,11 @@ const useDriveUi = create<DriveUiState>((set) => ({
 const appBasePath = normalizeAppBasePath(
   import.meta.env.VITE_ZO_DRIVE_APP_BASE_PATH ?? (import.meta.env.DEV ? "/" : "/drive")
 );
+const { docsUrl, driveAppUrl, driveHomeUrl, formLink, landingUrl, loginUrl, releasesUrl, shareLink, zominAiDocsUrl, zominAiReleasesUrl } = createDriveUrls(appBasePath);
 const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.42.26";
-const CLI_VERSION = "1.3.0";
-const ZOMINAI_VERSION = "1.10.0";
-
-const GUI_CHANGELOG = [
-  {
-    version: "v1.42.26",
-    date: "2026-07-24",
-    changes: ["Consolidated the release history into durable product milestones and removed repetitive visual-tweak notes."]
-  },
-  {
-    version: "v1.42.25",
-    date: "2026-07-24",
-    changes: ["Completed the cobalt landing experience with an animated remote-access terminal, source link, and a clear six-product ownership story.", "Reworked Zo Shared Drives with nested folder views, a compact share-or-join workflow, full-width workspace, and a Zo Transfer-style collaboration header."]
-  },
-  {
-    version: "v1.42.0",
-    date: "2026-07-23",
-    changes: ["Added the selectable six-product suite, ownership comparison, remote CLI access guidance, and product walkthroughs to the landing page."]
-  },
-  {
-    version: "v1.38.0",
-    date: "2026-07-22",
-    changes: ["Added Shared Drive offline cache, folder lifecycle controls, User access roles, browser themes, and the ZominAI workspace with read-only Drive tools."]
-  },
-  {
-    version: "v1.10.0",
-    date: "2026-07-21",
-    changes: ["Added persistent Zo Database runtimes and workspaces, scoped HTTPS access, Zo Functions, Zo Paste links, and Shared Drive pairing and permissions."]
-  },
-  {
-    version: "v0.3.0",
-    date: "2026-07-20",
-    changes: ["Added scoped, revocable, expiry-aware device credentials in the API Keys workspace."]
-  }
-];
-
-const CLI_CHANGELOG = [
-  {
-    version: "v1.3.0",
-    date: "2026-07-22",
-    changes: ["Added terminal command families for Zo Paste, Zo Transfer, Zo Shared Drives, Zo Databases, and Zo Functions, with CRUD operations and JSON output for automation."]
-  },
-  {
-    version: "v1.2.0",
-    date: "2026-07-20",
-    changes: ["Added familiar Drive file operations, dry runs, progress reporting, file inspection, server-side copy and move, Trash-backed removal, and health checks."]
-  },
-  {
-    version: "v1.1.0",
-    date: "2026-07-20",
-    changes: ["Added secure interactive configuration for the Zo Drive URL and a scoped device API key, stored with owner-only permissions."]
-  },
-  {
-    version: "v1.0.0",
-    date: "2026-07-20",
-    changes: ["Replaced password-based terminal login with scoped, revocable per-device API keys."]
-  }
-];
-
-const ZOMINAI_CHANGELOG = [
-  {
-    version: "v1.10.0",
-    date: "2026-07-24",
-    changes: ["Added owner-only managed installation and removal for the selected Bonsai model version, stored outside Drive quota."]
-  },
-  {
-    version: "v1.9.0",
-    date: "2026-07-23",
-    changes: ["Added deterministic recursive Drive inventory summaries and model warm-up with explicit ready and retry states."]
-  },
-  {
-    version: "v1.7.0",
-    date: "2026-07-22",
-    changes: ["Added authenticated time and Drive tools, streaming cancellation, reliable follow-up context, response-speed metadata, and retryable runtime failures."]
-  },
-  {
-    version: "v1.5.0",
-    date: "2026-07-22",
-    changes: ["Added runtime-backed model selection, bounded custom system instructions, and authenticated read-only storage and file-count answers."]
-  },
-  {
-    version: "v1.0.0",
-    date: "2026-07-22",
-    changes: ["Established the private local-AI product with a Bonsai runtime, browser-local chat history, and read-only Drive context."]
-  }
-];
-
 // Local development uses Vite's same-origin proxy so browsers never need to
 // make a cross-port request. Deployed builds use the routed app prefix.
 const apiBaseUrl = import.meta.env.DEV
@@ -5270,58 +5189,6 @@ function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character);
 }
 
-export function formulaDisplay(value: string, cells: Record<string, string>): string {
-  if (!value.startsWith("=")) return value;
-  try {
-    const result = evaluateFormula(value.slice(1), cells, new Set());
-    return Number.isInteger(result) ? String(result) : String(Math.round(result * 1_000_000) / 1_000_000);
-  } catch {
-    return "#ERROR";
-  }
-}
-
-function evaluateFormula(expression: string, cells: Record<string, string>, visited: Set<string>): number {
-  const withSums = expression.replace(/SUM\(([A-Z]+\d+):([A-Z]+\d+)\)/gi, (_match, first: string, last: string) => String(sumRange(first.toUpperCase(), last.toUpperCase(), cells, visited)));
-  const substituted = withSums.replace(/\b([A-Z]+\d+)\b/gi, (_match, reference: string) => String(cellNumber(reference.toUpperCase(), cells, visited)));
-  if (!/^[0-9+\-*/().\s]+$/.test(substituted)) throw new Error("Unsupported formula");
-  const result = Function(`"use strict"; return (${substituted});`)();
-  if (typeof result !== "number" || !Number.isFinite(result)) throw new Error("Invalid result");
-  return result;
-}
-
-function cellNumber(reference: string, cells: Record<string, string>, visited: Set<string>): number {
-  if (visited.has(reference)) throw new Error("Circular reference");
-  const value = cells[reference] ?? "0";
-  if (!value.startsWith("=")) return Number(value) || 0;
-  const nextVisited = new Set(visited);
-  nextVisited.add(reference);
-  return evaluateFormula(value.slice(1), cells, nextVisited);
-}
-
-function sumRange(first: string, last: string, cells: Record<string, string>, visited: Set<string>): number {
-  const start = parseCellReference(first);
-  const end = parseCellReference(last);
-  if (!start || !end || start.column > end.column || start.row > end.row) throw new Error("Invalid range");
-  let total = 0;
-  for (let column = start.column; column <= end.column; column += 1) {
-    for (let row = start.row; row <= end.row; row += 1) total += cellNumber(`${columnName(column)}${row}`, cells, visited);
-  }
-  return total;
-}
-
-function parseCellReference(value: string): { column: number; row: number } | null {
-  const match = /^([A-Z]+)(\d+)$/.exec(value);
-  if (!match) return null;
-  const column = [...match[1]!].reduce((total, character) => total * 26 + character.charCodeAt(0) - 64, 0);
-  return { column, row: Number(match[2]) };
-}
-
-function columnName(column: number): string {
-  let result = "";
-  for (let current = column; current > 0; current = Math.floor((current - 1) / 26)) result = String.fromCharCode(65 + ((current - 1) % 26)) + result;
-  return result;
-}
-
 function sameAdvancedFilters(left: AdvancedFilters, right: AdvancedFilters): boolean {
   return left.contentQuery === right.contentQuery && left.inTrash === right.inTrash && left.location === right.location && left.modified === right.modified && left.starred === right.starred && left.type === right.type;
 }
@@ -5378,19 +5245,6 @@ function sharedDriveRoleLabel(role: ClusterRole): string {
   return role === "editor" ? "Read & write" : "Read only";
 }
 
-function recentFileLocation(key: string): string {
-  const separator = key.lastIndexOf("/");
-  return separator < 0 ? "My Drive" : key.slice(0, separator);
-}
-
-function formatRecentActivity(updatedAt: string): string {
-  const date = new Date(updatedAt);
-  const now = new Date();
-  const today = date.toDateString() === now.toDateString();
-  if (today) return `Modified today, ${date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
-  return `Modified ${date.toLocaleDateString([], { month: "short", day: "numeric" })}`;
-}
-
 function groupRecentFiles(files: Array<DriveObject | SharedDriveFile>): Array<[string, Array<DriveObject | SharedDriveFile>]> {
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -5408,78 +5262,9 @@ function groupRecentFiles(files: Array<DriveObject | SharedDriveFile>): Array<[s
   return [...groups.entries()];
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1_024) return `${bytes} B`;
-  if (bytes < 1_048_576) return `${(bytes / 1_024).toFixed(1)} KB`;
-  if (bytes < 1_073_741_824) return `${(bytes / 1_048_576).toFixed(1)} MB`;
-  return `${(bytes / 1_073_741_824).toFixed(1)} GB`;
-}
-
 function uploadRate(upload: UploadTask, now: number): number {
   if (upload.loaded === 0) return 0;
   return upload.loaded / Math.max((now - upload.startedAt) / 1_000, 0.25);
-}
-
-function formatDuration(seconds: number): string {
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-  return minutes < 60 ? `${minutes}m ${remainingSeconds}s` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
-}
-
-function formatTrashExpiry(expiresAt: string): string {
-  const days = Math.max(0, Math.ceil((Date.parse(expiresAt) - Date.now()) / (24 * 60 * 60 * 1_000)));
-  return days === 0 ? "Deletes today" : `Deletes in ${days} day${days === 1 ? "" : "s"}`;
-}
-
-function ttlToDate(ttl: string): string | null {
-  const milliseconds = ttl === "1d" ? 24 * 60 * 60 * 1_000 : ttl === "7d" ? 7 * 24 * 60 * 60 * 1_000 : ttl === "30d" ? 30 * 24 * 60 * 60 * 1_000 : 0;
-  return milliseconds ? new Date(Date.now() + milliseconds).toISOString() : null;
-}
-
-function normalizeAppBasePath(value: string): string {
-  const trimmed = value.trim().replace(/^\/+|\/+$/g, "");
-  return trimmed ? `/${trimmed}` : "";
-}
-
-function driveHomeUrl(): string {
-  return `${window.location.origin}${appBasePath || "/"}`;
-}
-
-function landingUrl(): string {
-  return appBasePath || "/";
-}
-
-function driveAppUrl(): string {
-  return `${driveHomeUrl()}?app=1`;
-}
-
-function loginUrl(): string {
-  return `${driveHomeUrl()}?login=1`;
-}
-
-function docsUrl(mode: "gui" | "cli" = "gui", page: "docs" | "changelog" = "docs"): string {
-  return `${driveHomeUrl()}?docs=1&mode=${mode}${page === "changelog" ? "&page=changelog" : ""}`;
-}
-
-function releasesUrl(mode: "gui" | "cli" = "gui"): string {
-  return `${driveHomeUrl()}?releases=1&mode=${mode}`;
-}
-
-function zominAiDocsUrl(page: "docs" | "changelog" = "docs"): string {
-  return `${driveHomeUrl()}?docs=1&product=zominai${page === "changelog" ? "&page=changelog" : ""}`;
-}
-
-function zominAiReleasesUrl(): string {
-  return `${driveHomeUrl()}?releases=1&product=zominai`;
-}
-
-function shareLink(id: string): string {
-  return `${driveHomeUrl()}?share=${encodeURIComponent(id)}`;
-}
-
-function formLink(id: string): string {
-  return `${driveHomeUrl()}?form=${encodeURIComponent(id)}`;
 }
 
 async function copyShareLink(id: string): Promise<void> {

@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { cors } from "hono/cors";
-import { z } from "zod";
 import { Readable } from "node:stream";
 import { createReadStream } from "node:fs";
 import { readFile } from "node:fs/promises";
@@ -16,10 +15,49 @@ import { LocalShareStore, type StoredShare } from "./sharing/local-share-store.j
 import { LocalFormStore, type PublishedForm } from "./forms/local-form-store.js";
 import { DatabaseEngineNotInstalledError, DatabaseImportError, DatabaseQueryError, LocalDatabaseStore, isDatabaseEngineId } from "./databases/local-database-store.js";
 import { LocalDatabaseApiKeyStore, type DatabaseApiKeyScope } from "./databases/local-database-api-key-store.js";
-import { LocalFunctionStore, validCron } from "./functions/local-function-store.js";
+import { LocalFunctionStore } from "./functions/local-function-store.js";
 import { LocalClusterCache } from "./clusters/local-cluster-cache.js";
 import { LocalClusterStore } from "./clusters/local-cluster-store.js";
-import { LocalDriveStorage, NativeFileVersionConflictError, StorageQuotaConfigurationError, StorageQuotaExceededError, TrashRestoreConflictError, UnsafeDrivePathError, nativeFileTypes, type DriveFileCategory } from "./storage/local-drive-storage.js";
+import { LocalDriveStorage, NativeFileVersionConflictError, StorageQuotaConfigurationError, StorageQuotaExceededError, TrashRestoreConflictError, UnsafeDrivePathError } from "./storage/local-drive-storage.js";
+import {
+  accountMemberCreateSchema,
+  accountMemberUpdateSchema,
+  changeSharePasscodeSchema,
+  clusterInvitationSchema,
+  clusterMountSchema,
+  clusterMountTokenSchema,
+  clusterPeerUpdateSchema,
+  createApiKeySchema,
+  createDatabaseApiKeySchema,
+  createDatabaseSchema,
+  createFolderSchema,
+  createNativeFileSchema,
+  createShareSchema,
+  credentialsSchema,
+  databaseExecuteSchema,
+  databaseQuerySchema,
+  databaseRowsQuerySchema,
+  deleteAccountSchema,
+  functionCreateSchema,
+  functionIdSchema,
+  functionRunSchema,
+  functionUpdateSchema,
+  listQuerySchema,
+  passwordChangeSchema,
+  publishFormSchema,
+  renameFolderSchema,
+  sharedPasteContentSchema,
+  submitFormResponseSchema,
+  updateDatabaseImportSettingsSchema,
+  updateFileSchema,
+  updateNativeFileSchema,
+  updateSharedPasteSchema,
+  updateStorageQuotaSchema,
+  usernameSchema,
+  zominAiChatSchema,
+  zominAiModelVersionSchema,
+  zominAiWarmupSchema
+} from "./request-schemas.js";
 
 export type UserResolver = (request: Request) => string | null | Promise<string | null>;
 
@@ -51,165 +89,6 @@ type CreateAppOptions = {
     model: string;
   };
 };
-
-const listQuerySchema = z.object({
-  prefix: z.string().max(1_024).optional(),
-  query: z.string().max(256).optional(),
-  contentQuery: z.string().max(256).optional(),
-  type: z.enum(["document", "spreadsheet", "presentation", "form", "paste", "image", "video", "audio", "pdf", "other"] satisfies [DriveFileCategory, ...DriveFileCategory[]]).optional(),
-  starred: z.enum(["true"]).optional().transform((value) => value === "true" ? true : undefined),
-  modifiedAfter: z.string().datetime().optional(),
-  modifiedBefore: z.string().datetime().optional()
-});
-
-const createFolderSchema = z.object({
-  path: z.string().min(1).max(1_024)
-});
-const renameFolderSchema = z.object({
-  name: z.string().trim().min(1).max(1_024)
-});
-const createNativeFileSchema = z.object({
-  name: z.string().trim().min(1).max(1_024),
-  path: z.string().max(1_024).optional(),
-  type: z.enum(nativeFileTypes)
-});
-const updateNativeFileSchema = z.object({
-  content: z.object({
-    format: z.literal("zo-native"),
-    type: z.enum(nativeFileTypes),
-    version: z.literal(1)
-  }).passthrough()
-});
-const updateFileSchema = z.object({
-  copyTo: z.string().trim().min(1).max(1_024).optional(),
-  overwrite: z.boolean().optional(),
-  name: z.string().trim().min(1).max(1_024).optional(),
-  destination: z.string().trim().min(1).max(1_024).optional()
-}).superRefine((value, context) => {
-  if ([value.name, value.destination, value.copyTo].filter((item) => item !== undefined).length !== 1) {
-    context.addIssue({ code: z.ZodIssueCode.custom, message: "Provide a file name, destination, or copy destination" });
-  }
-  if (value.overwrite !== undefined && value.copyTo === undefined) {
-    context.addIssue({ code: z.ZodIssueCode.custom, message: "Overwrite is only supported when copying a file" });
-  }
-});
-const publishFormSchema = z.object({ key: z.string().min(1).max(1_024) });
-const submitFormResponseSchema = z.object({
-  answers: z.record(z.string().max(256), z.union([z.string().max(10_000), z.array(z.string().max(1_024)).max(100)]))
-});
-
-const credentialsSchema = z.object({
-  username: z.string().trim().min(3).max(32).regex(/^[a-zA-Z0-9_-]+$/),
-  password: z.string().min(6).max(256)
-});
-const accountMemberCreateSchema = credentialsSchema.extend({
-  access: z.enum(["read", "write"]),
-  role: z.enum(["regular", "super"]),
-  isDemo: z.boolean().optional().default(false)
-});
-const accountMemberUpdateSchema = z.object({
-  access: z.enum(["read", "write"]).optional(),
-  role: z.enum(["regular", "super"]).optional()
-}).refine((value) => value.access !== undefined || value.role !== undefined, "Provide an access level or role");
-
-const usernameSchema = credentialsSchema.pick({ username: true });
-const passwordChangeSchema = z.object({
-  currentPassword: z.string().min(6).max(256),
-  newPassword: z.string().min(6).max(256)
-});
-const deleteAccountSchema = z.object({
-  password: z.string().min(6).max(256),
-  confirmation: z.literal("DELETE MY DRIVE")
-});
-const createShareSchema = z.object({
-  key: z.string().min(1).max(1_024),
-  access: z.enum(["public", "passcode"]),
-  editable: z.boolean().optional().default(false),
-  kind: z.enum(["share", "transfer"]).optional(),
-  passcode: z.string().min(1).max(256).optional(),
-  expiresAt: z.string().datetime().nullable().optional()
-}).superRefine((value, context) => {
-  if (value.access === "passcode" && !value.passcode) context.addIssue({ code: z.ZodIssueCode.custom, message: "A passcode is required" });
-});
-const changeSharePasscodeSchema = z.object({
-  passcode: z.string().min(1).max(256)
-});
-const sharedPasteContentSchema = z.object({
-  format: z.literal("zo-native"),
-  type: z.literal("paste"),
-  version: z.literal(1),
-  language: z.string().max(80),
-  tags: z.array(z.string().max(80)).max(20),
-  text: z.string().max(1_000_000)
-});
-const updateSharedPasteSchema = z.object({
-  content: sharedPasteContentSchema,
-  expectedRevision: z.string().min(1).max(128)
-});
-const updateStorageQuotaSchema = z.object({
-  quotaBytes: z.number().int().positive()
-});
-const createApiKeySchema = z.object({
-  name: z.string().trim().min(1).max(80),
-  scopes: z.array(z.enum(["read", "write"])).min(1).max(2),
-  expiresAt: z.string().datetime().nullable()
-});
-const createDatabaseSchema = z.object({
-  name: z.string().trim().min(1).max(80),
-  engine: z.enum(["sqlite", "duckdb", "libsql", "pglite", "lancedb", "leveldb", "redis", "kuzu"]).default("sqlite")
-});
-const updateDatabaseImportSettingsSchema = z.object({
-  importLimitBytes: z.number().int().positive()
-});
-const databaseRowsQuerySchema = z.object({
-  limit: z.coerce.number().int().min(1).max(100).default(100),
-  offset: z.coerce.number().int().min(0).default(0)
-});
-const databaseQuerySchema = z.object({
-  sql: z.string().min(1).max(50_000),
-  params: z.array(z.union([z.string(), z.number(), z.boolean(), z.null()])).max(100).default([])
-});
-const databaseExecuteSchema = z.record(z.string(), z.unknown()).refine((value) => Object.keys(value).length > 0 && JSON.stringify(value).length <= 1_000_000);
-const createDatabaseApiKeySchema = z.object({
-  name: z.string().trim().min(1).max(80),
-  scopes: z.array(z.enum(["read", "write"])).min(1).max(2),
-  expiresAt: z.string().datetime().nullable()
-});
-const functionIdSchema = z.string().uuid();
-const functionFieldsSchema = z.object({
-  name: z.string().trim().min(1).max(80),
-  runtime: z.enum(["javascript", "python"]),
-  source: z.string().min(1).max(50_000),
-  visibility: z.enum(["private", "public"]),
-  cron: z.string().trim().max(100).nullable(),
-  enabled: z.boolean()
-});
-const functionCreateSchema = functionFieldsSchema.extend({ visibility: z.enum(["private", "public"]).default("private"), cron: z.string().trim().max(100).nullable().default(null), enabled: z.boolean().default(true) }).superRefine((value, context) => { if (value.cron && !validCron(value.cron)) context.addIssue({ code: z.ZodIssueCode.custom, message: "Use a valid five-field UTC cron expression" }); });
-const functionUpdateSchema = z.object({ name: z.string().trim().min(1).max(80).optional(), runtime: z.enum(["javascript", "python"]).optional(), source: z.string().min(1).max(50_000).optional(), visibility: z.enum(["private", "public"]).optional(), cron: z.string().trim().max(100).nullable().optional(), enabled: z.boolean().optional() }).superRefine((value, context) => { if (Object.keys(value).length === 0) context.addIssue({ code: z.ZodIssueCode.custom, message: "Provide at least one change" }); if (value.cron && !validCron(value.cron)) context.addIssue({ code: z.ZodIssueCode.custom, message: "Use a valid five-field UTC cron expression" }); });
-const functionRunSchema = z.object({ input: z.unknown().optional().default({}) });
-const clusterRoleSchema = z.enum(["viewer", "editor"]);
-const clusterInvitationSchema = z.object({ folder: z.string().trim().min(1).max(1_024), role: clusterRoleSchema.default("editor"), recipient: z.string().trim().min(1).max(120).nullable().optional() });
-const clusterMountSchema = z.object({ remoteUrl: z.string().url().max(2_048), inviteToken: z.string().min(20).max(256) });
-const clusterPeerUpdateSchema = z.object({ role: clusterRoleSchema });
-const zominAiChatSchema = z.object({
-  messages: z.array(z.object({
-    content: z.string().max(100_000).nullable().optional(),
-    role: z.enum(["assistant", "system", "tool", "user"]),
-    tool_call_id: z.string().max(128).optional(),
-    tool_calls: z.array(z.object({
-      function: z.object({ arguments: z.string().max(20_000), name: z.string().max(80) }),
-      id: z.string().max(128),
-      type: z.literal("function")
-    })).max(6).optional()
-  })).min(1).max(30),
-  model: z.string().trim().min(1).max(256).optional(),
-  stream: z.boolean().optional(),
-  stream_options: z.object({ include_usage: z.boolean() }).optional(),
-  tool_choice: z.literal("auto").optional(),
-  tools: z.array(z.unknown()).max(10).optional()
-}).refine((value) => JSON.stringify(value).length <= 1_000_000, "ZominAI request is too large");
-const zominAiWarmupSchema = z.object({ model: z.string().trim().min(1).max(256).optional() });
-const zominAiModelVersionSchema = z.object({ version: z.string().trim().min(1).max(256) });
 
 export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys, invalidApiKeyRateLimiter = new InvalidApiKeyRateLimiter(), sharing, forms, databases = new LocalDatabaseStore(storage.root), databaseApiKeys = new LocalDatabaseApiKeyStore({ root: storage.root }), functions = new LocalFunctionStore(storage.root), clusters = new LocalClusterStore({ root: storage.root }), clusterCache = new LocalClusterCache({ root: storage.root, maxBytes: 1024 * 1024 * 1024 }), maxDatabaseImportBytes = Number.MAX_SAFE_INTEGER, trustProxy = false, zominAi }: CreateAppOptions) {
   const app = new Hono();
@@ -772,7 +651,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
   });
 
   app.post("/cluster/invitations/accept", async (context) => {
-    const parsed = z.object({ inviteToken: z.string().min(20).max(256) }).safeParse(await context.req.json().catch(() => null));
+    const parsed = clusterMountTokenSchema.safeParse(await context.req.json().catch(() => null));
     if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Invalid cluster invitation" } }, 400);
     const invitationId = invitationIdFromToken(parsed.data.inviteToken);
     if (!invitationId) return context.json({ error: { code: "INVALID_REQUEST", message: "Invalid cluster invitation" } }, 400);
