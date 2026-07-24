@@ -5,7 +5,10 @@ history remains available in Git.
 
 ## Unreleased
 
-No user-facing changes.
+### Added
+
+- Added a public architecture page covering the Zo Drive stack, Zo Computer
+  ownership model, external CLI access, and Shared Drive cluster flow.
 
 ## v1.42.26 - 2026-07-24
 

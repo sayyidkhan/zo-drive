@@ -4,11 +4,16 @@ export type ProductRelease = {
   changes: string[];
 };
 
-export const GUI_VERSION = "1.42.26";
+export const GUI_VERSION = "1.43.0";
 export const CLI_VERSION = "1.3.0";
 export const ZOMINAI_VERSION = "1.10.0";
 
 export const GUI_CHANGELOG: ProductRelease[] = [
+  {
+    version: "v1.43.0",
+    date: "2026-07-24",
+    changes: ["Added a public architecture page explaining Zo Drive's stack, Zo Computer ownership model, external CLI access, and Shared Drive cluster flow."]
+  },
   {
     version: "v1.42.26",
     date: "2026-07-24",
