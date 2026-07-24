@@ -2,6 +2,13 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.42.17 - 2026-07-24
+
+### Fixed
+
+- Restored visible custom tooltips for the collapsed desktop sidebar.
+
+## v1.42.16 - 2026-07-23
 
 ### Changed
 
