@@ -2,6 +2,12 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.42.21 - 2026-07-24
+
+### Added
+
+- Added a GitHub source-code action to the main landing hero.
+
 ## v1.42.20 - 2026-07-24
 
 ### Changed

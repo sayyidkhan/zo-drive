@@ -25,6 +25,7 @@ import {
   FolderPlus,
   FolderUp,
   Grid2X2,
+  Github,
   HardDrive,
   History,
   Info,
@@ -292,11 +293,16 @@ const driveCloudLogoUrl = `${appBasePath}/zo-drive-pegasus-cloud.svg`;
 const drivePegasusLogoUrl = `${appBasePath}/zo-pegasus.svg`;
 const zominAiButtonUrl = `${appBasePath}/zominai-button.png`;
 const nativeIllustrationUrl = (type: NativeFileType) => `${appBasePath}/native-illustrations/${type}.png`;
-const GUI_VERSION = "1.42.20";
+const GUI_VERSION = "1.42.21";
 const CLI_VERSION = "1.3.0";
 const ZOMINAI_VERSION = "1.9.0";
 
 const GUI_CHANGELOG = [
+  {
+    version: "v1.42.21",
+    date: "2026-07-24",
+    changes: ["Added a GitHub source-code action to the main landing hero."],
+  },
   {
     version: "v1.42.20",
     date: "2026-07-24",
@@ -1184,6 +1190,7 @@ function LandingPage() {
           <div className="mt-8 flex flex-wrap gap-3">
             <a className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:bg-blue-700" href={loginUrl()}><HardDrive size={18} /> Sign in to Zo Drive</a>
             <a className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50" href={docsUrl()}>Read the docs <ArrowUpRight size={17} /></a>
+            <a className="inline-flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-slate-800" href="https://github.com/sayyidkhan/zo-drive" rel="noreferrer" target="_blank"><Github size={17} /> View source</a>
           </div>
         </div>
 
