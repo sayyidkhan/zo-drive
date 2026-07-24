@@ -3892,12 +3892,14 @@ function ClusterDatabases({ client, search }: { client: DriveClient; search: str
       {sharedDrivesTab === "shared" && <>
       {!normalizedSearch && <>
       <section className="w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 px-5 py-5 sm:px-6">
-            <div>
-              <h2 className="text-xl font-semibold tracking-tight text-slate-900">Share a folder, not your whole Drive.</h2>
-              <p className="mt-1 text-sm leading-6 text-slate-500">Pick a folder, choose access, then send one pairing key.</p>
+          <div className="relative overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-cyan-950 px-7 py-9 text-white md:px-10">
+            <div className="absolute -right-28 -top-32 size-80 rounded-full bg-cyan-400/15 blur-3xl" />
+            <div className="relative">
+              <span className="inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-cyan-200/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100"><Network size={14} /> Private by default</span>
+              <h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">Share folders with Zo Shared Drives</h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300 md:text-base">Choose exactly which folders to share, set the right access, then send a pairing key. Your other Drive content stays private.</p>
+              <p className="mt-4 text-xs font-medium text-cyan-100/80">Inspired by Synology NAS Drive.</p>
             </div>
-            <span className="rounded-full bg-cyan-50 px-3 py-1.5 text-xs font-bold text-cyan-800">Private by default</span>
           </div>
           <div className="p-5 sm:p-6">
             <div

@@ -2,6 +2,12 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.42.25 - 2026-07-24
+
+### Changed
+
+- Added a full-width private-collaboration section header to Zo Shared Drives, matching Zo Transfer's layout.
+
 ## v1.42.24 - 2026-07-24
 
 ### Changed

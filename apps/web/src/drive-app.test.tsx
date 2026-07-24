@@ -738,13 +738,14 @@ describe("DriveApp", () => {
     fireEvent.click(screen.getByRole("button", { name: "Zo Shared Drives" }));
     expect(await screen.findByRole("heading", { name: "Zo Shared Drives" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Open upload menu" })).not.toBeInTheDocument();
-    expect(await screen.findByRole("heading", { name: "Share a folder, not your whole Drive." })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Share a folder, not your whole Drive." }).closest("section")).toHaveClass("w-full");
-    expect(screen.getByRole("heading", { name: "Share a folder, not your whole Drive." }).closest("section")).not.toHaveClass("max-w-3xl");
+    expect(await screen.findByRole("heading", { name: "Share folders with Zo Shared Drives" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Share folders with Zo Shared Drives" }).closest("section")).toHaveClass("w-full");
+    expect(screen.getByRole("heading", { name: "Share folders with Zo Shared Drives" }).closest("section")).not.toHaveClass("max-w-3xl");
     expect(screen.getByRole("tab", { name: "Shared Folders" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("tab", { name: "Connected Folders" })).toHaveAttribute("aria-selected", "false");
     expect(screen.getByRole("tab", { name: "Share a folder" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText("Private by default")).toBeInTheDocument();
+    expect(screen.getByText("Inspired by Synology NAS Drive.")).toBeInTheDocument();
     expect(screen.getByText("How Shared Drives work")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: "Connected Folders" }));
     expect(screen.getByRole("tab", { name: "Connected Folders" })).toHaveAttribute("aria-selected", "true");
