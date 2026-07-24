@@ -2,6 +2,12 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.42.23 - 2026-07-24
+
+### Changed
+
+- Clarified how the six-product family keeps work under one owner-controlled system.
+
 ## v1.42.22 - 2026-07-24
 
 ### Changed
