@@ -2,6 +2,14 @@
 
 All notable changes to the Zo Drive browser experience are recorded here.
 
+## v1.26.0 - 2026-07-25
+
+### Added
+
+- Rebuilt the public Zo Drive landing experience around the ownership story,
+  six-product suite, private-workspace preview, and an interactive particle
+  field that respects reduced-motion preferences.
+
 ## v1.25.0 - 2026-07-22
 
 ### Added
