@@ -5,6 +5,15 @@ history remains available in Git.
 
 ## Unreleased
 
+## v1.43.1 - 2026-07-25
+
+### Fixed
+
+- Served the public Zo Drive walkthrough as a binary MP4 so it plays correctly
+  through Zo Computer hosting.
+
+## v1.43.0 - 2026-07-24
+
 ### Added
 
 - Added a public architecture page covering the Zo Drive stack, Zo Computer

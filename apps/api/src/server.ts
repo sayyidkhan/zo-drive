@@ -1,7 +1,7 @@
 import { serve } from "@hono/node-server";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { dirname, extname, resolve, sep } from "node:path";
+import { dirname, resolve, sep } from "node:path";
 
 import { createApp } from "./app.js";
 import { InvalidApiKeyRateLimiter } from "./auth/invalid-api-key-rate-limiter.js";
@@ -15,6 +15,7 @@ import { LocalClusterCache } from "./clusters/local-cluster-cache.js";
 import { loadServerConfig } from "./server-config.js";
 import { LocalDriveStorage } from "./storage/local-drive-storage.js";
 import { LocalZominAiModelManager } from "./zominai/local-zominai-model-manager.js";
+import { staticContentType } from "./static-content-type.js";
 
 const dataRoot = requiredEnvironmentVariable("ZO_DRIVE_DATA_ROOT");
 const port = numberEnvironmentVariable("ZO_DRIVE_PORT", 43071);
@@ -103,7 +104,7 @@ if (process.env.NODE_ENV === "production") {
       const contents = await readFile(file);
       return new Response(contents, {
         headers: {
-          "content-type": contentTypeFor(file),
+          "content-type": staticContentType(file),
           "cache-control": file.includes(`${sep}assets${sep}`) ? "public, max-age=31536000, immutable" : "no-cache"
         }
       });
@@ -174,20 +175,4 @@ function developmentSessionSecret(): string {
     throw new Error("ZO_DRIVE_SESSION_SECRET is required in production");
   }
   return "development-only-session-secret-change-before-deploy";
-}
-
-function contentTypeFor(file: string): string {
-  switch (extname(file).toLowerCase()) {
-    case ".css": return "text/css; charset=utf-8";
-    case ".js": return "text/javascript; charset=utf-8";
-    case ".json": return "application/json; charset=utf-8";
-    case ".txt": return "text/plain; charset=utf-8";
-    case ".svg": return "image/svg+xml";
-    case ".png": return "image/png";
-    case ".jpg":
-    case ".jpeg": return "image/jpeg";
-    case ".ico": return "image/x-icon";
-    case ".woff2": return "font/woff2";
-    default: return "text/html; charset=utf-8";
-  }
 }
