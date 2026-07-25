@@ -27,6 +27,12 @@ describe("DriveApp", () => {
     expect(screen.getByLabelText("The ownership advantage")).toHaveTextContent("Storage you control");
     expect(screen.getByLabelText("The ownership advantage")).toHaveTextContent("01");
     expect(screen.getByLabelText("The ownership advantage")).toHaveTextContent("04");
+    const productVideo = screen.getByLabelText("Watch Zo Drive in 58 seconds");
+    expect(productVideo).toHaveAttribute("preload", "metadata");
+    expect(productVideo.querySelector("source")).toHaveAttribute("src", "/videos/zo-drive-v3-final.mp4");
+    const productVideoSection = productVideo.closest("section");
+    expect(productVideoSection).not.toBeNull();
+    expect(productVideoSection!.compareDocumentPosition(screen.getByLabelText("Zo Drive product suite")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.queryByText("The Zo Drive edge")).not.toBeInTheDocument();
     expect(screen.getByText("Decentralised cloud, on your Zo")).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "Choose Zo Drive mode" })).toBeInTheDocument();
