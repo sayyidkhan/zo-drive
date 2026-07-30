@@ -5,6 +5,10 @@ history remains available in Git.
 
 ## Unreleased
 
+### Fixed
+
+- Moved the public Zo Drive walkthrough to YouTube for more reliable playback.
+
 ## v1.43.1 - 2026-07-25
 
 ### Fixed

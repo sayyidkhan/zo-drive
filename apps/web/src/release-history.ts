@@ -4,11 +4,16 @@ export type ProductRelease = {
   changes: string[];
 };
 
-export const GUI_VERSION = "1.43.1";
+export const GUI_VERSION = "1.43.2";
 export const CLI_VERSION = "1.3.0";
 export const ZOMINAI_VERSION = "1.10.0";
 
 export const GUI_CHANGELOG: ProductRelease[] = [
+  {
+    version: "v1.43.2",
+    date: "2026-07-30",
+    changes: ["Moved the public Zo Drive walkthrough to YouTube for more reliable playback."]
+  },
   {
     version: "v1.43.1",
     date: "2026-07-25",
