@@ -458,7 +458,10 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
       }
       if (user.isDemo) {
         const ownerId = await auth.store.accountOwnerIdFor(user.id, "read");
-        if (!ownerId || !(await storage.getDemoMode({ userId: ownerId })).enabled) return context.json({ error: { code: "DEMO_MODE_OFF", message: "Demo Mode is not currently available" } }, 403);
+        if (!ownerId || !(await storage.getDemoMode({ userId: ownerId })).enabled) {
+          await recordAudit({ actorUserId: user.id, action: "LOGIN_FAILED", method: "POST", path: "/auth/login", status: 403, ipAddress: requestIp(context.req.raw, trustProxy), userAgent: context.req.header("user-agent")?.slice(0, 512) ?? null });
+          return context.json({ error: { code: "DEMO_MODE_OFF", message: "Demo Mode is not currently available" } }, 403);
+        }
       }
       const sessionToken = auth.sessions.create(user.id, await auth.store.sessionVersionFor(user.id));
       context.header("set-cookie", auth.sessions.cookieHeader(sessionToken, auth.secureCookies));

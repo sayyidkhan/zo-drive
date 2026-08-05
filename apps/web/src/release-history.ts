@@ -4,11 +4,16 @@ export type ProductRelease = {
   changes: string[];
 };
 
-export const GUI_VERSION = "1.45.0";
+export const GUI_VERSION = "1.45.1";
 export const CLI_VERSION = "1.3.0";
 export const ZOMINAI_VERSION = "1.10.0";
 
 export const GUI_CHANGELOG: ProductRelease[] = [
+  {
+    version: "v1.45.1",
+    date: "2026-08-05",
+    changes: ["Recorded demo sign-in attempts rejected while Demo Mode is off in the super-admin audit trail."]
+  },
   {
     version: "v1.45.0",
     date: "2026-08-05",

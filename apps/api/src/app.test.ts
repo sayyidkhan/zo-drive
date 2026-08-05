@@ -949,12 +949,13 @@ describe("Zo Drive API", () => {
     expect((await app.request("http://localhost/objects", { headers: { cookie: nextDemoCookie } })).status).toBe(401);
     const demoModeDisabled = await app.request("http://localhost/settings/demo-mode", { method: "PUT", headers: { "content-type": "application/json", cookie: superCookie }, body: JSON.stringify({ enabled: false }) });
     await expect(demoModeDisabled.json()).resolves.toMatchObject({ enabled: false, normalQuotaBytes: 2 * 1024 * 1024 * 1024, demoAccountExists: true });
-    expect((await app.request("http://localhost/auth/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: "demo", password: "public-demo" }) })).status).toBe(403);
+    const blockedDemoLogin = await app.request("http://localhost/auth/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: "demo", password: "public-demo" }) });
+    expect(blockedDemoLogin.status).toBe(403);
     expect((await app.request("http://localhost/auth/users/demo", { method: "PATCH", headers: { "content-type": "application/json", cookie: ownerCookie }, body: JSON.stringify({ role: "super" }) })).status).toBe(403);
     expect((await app.request("http://localhost/audit", { headers: { cookie: readerCookie } })).status).toBe(403);
     const audit = await app.request("http://localhost/audit", { headers: { cookie: ownerCookie } });
     expect(audit.status).toBe(200);
-    await expect(audit.json()).resolves.toMatchObject({ events: expect.arrayContaining([expect.objectContaining({ actorUserId: "demo", action: "LOGIN_SUCCEEDED" }), expect.objectContaining({ actorUserId: "owner", path: "/settings/demo-mode/reset" })]) });
+    await expect(audit.json()).resolves.toMatchObject({ events: expect.arrayContaining([expect.objectContaining({ actorUserId: "demo", action: "LOGIN_SUCCEEDED", status: 200 }), expect.objectContaining({ actorUserId: "demo", action: "LOGIN_FAILED", status: 403 }), expect.objectContaining({ actorUserId: "owner", path: "/settings/demo-mode/reset" })]) });
     expect((await app.request("http://localhost/auth/users/demo", { method: "DELETE", headers: { cookie: ownerCookie } })).status).toBe(204);
     await expect((await app.request("http://localhost/auth/status")).json()).resolves.toMatchObject({ demoAccount: null });
   });

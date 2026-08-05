@@ -5,6 +5,13 @@ history remains available in Git.
 
 ## Unreleased
 
+## v1.45.1 - 2026-08-05
+
+### Fixed
+
+- Recorded demo sign-in attempts rejected while Demo Mode is off in the
+  super-admin audit trail.
+
 ## v1.45.0 - 2026-08-05
 
 ### Added
