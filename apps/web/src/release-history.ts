@@ -4,11 +4,16 @@ export type ProductRelease = {
   changes: string[];
 };
 
-export const GUI_VERSION = "1.43.2";
+export const GUI_VERSION = "1.44.0";
 export const CLI_VERSION = "1.3.0";
 export const ZOMINAI_VERSION = "1.10.0";
 
 export const GUI_CHANGELOG: ProductRelease[] = [
+  {
+    version: "v1.44.0",
+    date: "2026-08-05",
+    changes: ["Added a super-admin Demo Mode that enforces a reversible 1 GB account-wide storage cap across the browser, API, and CLI."]
+  },
   {
     version: "v1.43.2",
     date: "2026-07-30",

@@ -911,6 +911,17 @@ describe("Zo Drive API", () => {
     const superLogin = await app.request("http://localhost/auth/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: "admin", password: "admin-secret" }) });
     const superCookie = superLogin.headers.get("set-cookie")!;
     expect((await app.request("http://localhost/auth/users", { headers: { cookie: superCookie } })).status).toBe(200);
+    expect((await app.request("http://localhost/settings/demo-mode", { headers: { cookie: readerCookie } })).status).toBe(403);
+    await expect((await app.request("http://localhost/settings/demo-mode", { headers: { cookie: superCookie } })).json()).resolves.toMatchObject({ enabled: false, quotaBytes: 100 * 1024 * 1024 * 1024 });
+    const demoModeEnabled = await app.request("http://localhost/settings/demo-mode", { method: "PUT", headers: { "content-type": "application/json", cookie: superCookie }, body: JSON.stringify({ enabled: true }) });
+    expect(demoModeEnabled.status).toBe(200);
+    await expect(demoModeEnabled.json()).resolves.toEqual({ enabled: true, quotaBytes: 1024 * 1024 * 1024, normalQuotaBytes: 100 * 1024 * 1024 * 1024 });
+    await expect((await app.request("http://localhost/usage", { headers: { cookie: ownerCookie } })).json()).resolves.toMatchObject({ quotaBytes: 1024 * 1024 * 1024 });
+    const quotaWhileDemo = await app.request("http://localhost/usage/quota", { method: "PUT", headers: { "content-type": "application/json", cookie: ownerCookie }, body: JSON.stringify({ quotaBytes: 2 * 1024 * 1024 * 1024 }) });
+    expect(quotaWhileDemo.status).toBe(400);
+    await expect(quotaWhileDemo.json()).resolves.toMatchObject({ error: { code: "INVALID_STORAGE_QUOTA", message: "Turn off Demo Mode before changing the storage limit" } });
+    const demoModeDisabled = await app.request("http://localhost/settings/demo-mode", { method: "PUT", headers: { "content-type": "application/json", cookie: superCookie }, body: JSON.stringify({ enabled: false }) });
+    await expect(demoModeDisabled.json()).resolves.toEqual({ enabled: false, quotaBytes: 100 * 1024 * 1024 * 1024, normalQuotaBytes: 100 * 1024 * 1024 * 1024 });
     expect((await app.request("http://localhost/auth/users/reader", { method: "PATCH", headers: { "content-type": "application/json", cookie: superCookie }, body: JSON.stringify({ access: "write" }) })).status).toBe(200);
     expect((await app.request("http://localhost/auth/users/owner", { method: "PATCH", headers: { "content-type": "application/json", cookie: superCookie }, body: JSON.stringify({ access: "read", role: "regular" }) })).status).toBe(403);
     expect((await app.request("http://localhost/auth/users/owner", { method: "DELETE", headers: { cookie: superCookie } })).status).toBe(403);

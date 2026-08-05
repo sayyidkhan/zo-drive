@@ -5,6 +5,15 @@ history remains available in Git.
 
 ## Unreleased
 
+## v1.44.0 - 2026-08-05
+
+### Added
+
+- Added a super-admin Demo Mode that enforces a reversible 1 GB account-wide
+  storage cap across the browser, API, and CLI.
+
+## v1.43.2 - 2026-07-30
+
 ### Fixed
 
 - Moved the public Zo Drive walkthrough to YouTube for more reliable playback.

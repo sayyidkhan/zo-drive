@@ -96,6 +96,9 @@ surface and use JSON except for object upload/download.
   `DELETE /trash` — inspect, restore, permanently delete, or empty Trash.
 - `GET /usage` and `PUT /usage/quota` — owner-complete storage usage and quota,
   including files, Trash, databases, functions, and Zo Originals data.
+- `GET|PUT /settings/demo-mode` — super-admin browser-session control for a
+  reversible, server-enforced 1 GB account-wide storage cap. Demo Mode must be
+  turned off before the normal quota can be changed.
 - `GET /databases/engines`, `POST /databases/engines/{engine}/install`, and
   `POST /databases/engines/{engine}/update` — inspect, provision, verify, or
   update one of SQLite, DuckDB, libSQL, PGlite, LanceDB, LevelDB, Redis, or

@@ -120,6 +120,10 @@ export const updateStorageQuotaSchema = z.object({
   quotaBytes: z.number().int().positive()
 });
 
+export const updateDemoModeSchema = z.object({
+  enabled: z.boolean()
+});
+
 export const createApiKeySchema = z.object({
   name: z.string().trim().min(1).max(80),
   scopes: z.array(z.enum(["read", "write"])).min(1).max(2),

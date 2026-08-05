@@ -9,6 +9,7 @@ import {
   databaseQueryResultSchema,
   databaseRowsSchema,
   databaseTableSchema,
+  demoModeStatusSchema,
   createdDriveApiKeySchema,
   driveDatabaseSchema,
   driveFunctionSchema,
@@ -45,7 +46,7 @@ import {
   functionRunSchema,
   storageUsageSchema
 } from "@zo-drive/types";
-import type { AccountAccess, AccountMember, AccountRole, ApiKeyScope, AuthStatus, ClusterInvitation, ClusterMount, ClusterPeer, ClusterPendingInvitation, ClusterRole, CreatedDatabaseApiKey, CreatedDriveApiKey, DatabaseApiKey, DatabaseApiKeyScope, DatabaseEngine, DatabaseEngineId, DatabaseExecuteRequest, DatabaseExecuteResult, DatabaseImportSettings, DatabaseQueryResult, DatabaseRows, DatabaseTable, DriveApiKey, DriveDatabase, DriveFolder, DriveFunction, DriveFunctionRun, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, FunctionRuntime, FunctionVisibility, Health, NativeFileType, PublicShare, PublishedForm, ShareAccess, ShareKind, SharedPaste, StorageUsage } from "@zo-drive/types";
+import type { AccountAccess, AccountMember, AccountRole, ApiKeyScope, AuthStatus, ClusterInvitation, ClusterMount, ClusterPeer, ClusterPendingInvitation, ClusterRole, CreatedDatabaseApiKey, CreatedDriveApiKey, DatabaseApiKey, DatabaseApiKeyScope, DatabaseEngine, DatabaseEngineId, DatabaseExecuteRequest, DatabaseExecuteResult, DatabaseImportSettings, DatabaseQueryResult, DatabaseRows, DatabaseTable, DemoModeStatus, DriveApiKey, DriveDatabase, DriveFolder, DriveFunction, DriveFunctionRun, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, FunctionRuntime, FunctionVisibility, Health, NativeFileType, PublicShare, PublishedForm, ShareAccess, ShareKind, SharedPaste, StorageUsage } from "@zo-drive/types";
 
 type Fetcher = typeof fetch;
 
@@ -343,6 +344,20 @@ export class ZoDriveClient {
       method: "PUT"
     });
     return storageUsageSchema.parse(await response.json());
+  }
+
+  async getDemoMode(): Promise<DemoModeStatus> {
+    const response = await this.request("/settings/demo-mode", { method: "GET" });
+    return demoModeStatusSchema.parse(await response.json());
+  }
+
+  async setDemoMode(enabled: boolean): Promise<DemoModeStatus> {
+    const response = await this.request("/settings/demo-mode", {
+      body: JSON.stringify({ enabled }),
+      headers: { "content-type": "application/json" },
+      method: "PUT"
+    });
+    return demoModeStatusSchema.parse(await response.json());
   }
 
   async listDatabases(): Promise<DriveDatabase[]> {

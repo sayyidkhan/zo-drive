@@ -126,6 +126,20 @@ describe("ZoDriveClient", () => {
     expect(fetcher).toHaveBeenCalledWith("https://drive.example/usage/quota", expect.objectContaining({ method: "PUT" }));
   });
 
+  it("reads and updates Demo Mode through the settings endpoint", async () => {
+    const disabled = { enabled: false, quotaBytes: 100 * 1024 * 1024 * 1024, normalQuotaBytes: 100 * 1024 * 1024 * 1024 };
+    const enabled = { enabled: true, quotaBytes: 1024 * 1024 * 1024, normalQuotaBytes: disabled.normalQuotaBytes };
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(disabled), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(enabled), { status: 200 }));
+    const client = new ZoDriveClient({ baseUrl: "https://drive.example", fetcher });
+
+    await expect(client.getDemoMode()).resolves.toEqual(disabled);
+    await expect(client.setDemoMode(true)).resolves.toEqual(enabled);
+    expect(fetcher).toHaveBeenNthCalledWith(1, "https://drive.example/settings/demo-mode", expect.objectContaining({ method: "GET" }));
+    expect(fetcher).toHaveBeenNthCalledWith(2, "https://drive.example/settings/demo-mode", expect.objectContaining({ body: JSON.stringify({ enabled: true }), method: "PUT" }));
+  });
+
   it("creates and lists empty folders through the API", async () => {
     const fetcher = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ key: "Projects", name: "Projects", updatedAt: "2026-01-01T00:00:00.000Z" }), { status: 201 }))

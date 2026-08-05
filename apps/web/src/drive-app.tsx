@@ -20,6 +20,7 @@ import {
   FileAudio,
   FileImage,
   FileText,
+  FlaskConical,
   Maximize2,
   Folder,
   FolderPlus,
@@ -80,6 +81,7 @@ import { formatBytes, formatDate, formatDuration, formatRecentActivity, formatTr
 import { CLI_CHANGELOG, CLI_VERSION, GUI_CHANGELOG, GUI_VERSION, ZOMINAI_CHANGELOG, ZOMINAI_VERSION } from "./release-history.js";
 import { formulaDisplay } from "./spreadsheet-formulas.js";
 import { SettingsCard } from "./features/account/components/settings-card.js";
+import { DemoModeScreen, type DemoModeClient } from "./features/demo-mode/demo-mode.js";
 import { Functions } from "./features/functions/functions.js";
 import { CodeBlock } from "./features/public-site/components/code-block.js";
 import { StorageBreakdownDialog, UsageCard } from "./features/storage/storage-usage.js";
@@ -119,7 +121,7 @@ type UserAccessClient = Pick<ZoDriveClient, "createAccountMember" | "deleteAccou
 type SharedClient = Pick<ZoDriveClient, "downloadShared" | "getPublicShare" | "openSharedPaste" | "saveSharedPaste">;
 type PublicFormClient = Pick<ZoDriveClient, "getPublicForm" | "submitFormResponse">;
 type ViewMode = "grid" | "list";
-type DriveSection = "api-keys" | "cluster-databases" | "databases" | "functions" | "home" | "my-drive" | "pastes" | "profile" | "shared" | "starred" | "theme" | "transfer" | "trash" | "user-access" | "zominai";
+type DriveSection = "api-keys" | "cluster-databases" | "databases" | "demo-mode" | "functions" | "home" | "my-drive" | "pastes" | "profile" | "shared" | "starred" | "theme" | "transfer" | "trash" | "user-access" | "zominai";
 type DatabasePanel = "data" | "run" | "sql" | "access";
 type DatabaseView = "catalog" | "instances";
 type AdvancedFileType = "document" | "spreadsheet" | "presentation" | "form" | "paste" | "image" | "video" | "audio" | "pdf" | "other";
@@ -175,7 +177,7 @@ const defaultRecentFilters: RecentFilters = {
   type: "any"
 };
 
-const driveSections: DriveSection[] = ["api-keys", "cluster-databases", "databases", "functions", "home", "my-drive", "pastes", "profile", "shared", "starred", "theme", "transfer", "trash", "user-access", "zominai"];
+const driveSections: DriveSection[] = ["api-keys", "cluster-databases", "databases", "demo-mode", "functions", "home", "my-drive", "pastes", "profile", "shared", "starred", "theme", "transfer", "trash", "user-access", "zominai"];
 const databasePanels: DatabasePanel[] = ["data", "run", "sql", "access"];
 const databaseViews: DatabaseView[] = ["catalog", "instances"];
 
@@ -1075,7 +1077,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
   }, [driveTheme]);
 
   useEffect(() => {
-    if (section === "user-access" && !canManageUserAccess) {
+    if ((section === "user-access" || section === "demo-mode") && !canManageUserAccess) {
       setSection("my-drive");
       setCurrentPath("");
     }
@@ -1099,7 +1101,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
       modifiedAfter: isRecent ? recentDateRange?.after : advancedDateRange?.after,
       modifiedBefore: isRecent ? recentDateRange?.before : advancedDateRange?.before
     }),
-    enabled: section !== "api-keys" && section !== "cluster-databases" && section !== "databases" && section !== "functions" && section !== "shared" && section !== "starred" && section !== "theme" && section !== "transfer" && section !== "trash" && section !== "user-access" && section !== "zominai"
+    enabled: section !== "api-keys" && section !== "cluster-databases" && section !== "databases" && section !== "demo-mode" && section !== "functions" && section !== "shared" && section !== "starred" && section !== "theme" && section !== "transfer" && section !== "trash" && section !== "user-access" && section !== "zominai"
   });
   const foldersQuery = useQuery({
     queryKey: ["folders", currentPath],
@@ -1459,6 +1461,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
               <a className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" href={docsUrl("gui")}><ScrollText size={17} /> Documentation</a>
               <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={() => { setAccountMenuOpen(false); setSection("api-keys"); setCurrentPath(""); }}><KeyRound size={17} /> API Keys</button>
               {canManageUserAccess && <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={() => { setAccountMenuOpen(false); setSection("user-access"); setCurrentPath(""); }}><UsersRound size={17} /> User access</button>}
+              {canManageUserAccess && <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={() => { setAccountMenuOpen(false); setSection("demo-mode"); setCurrentPath(""); }}><FlaskConical size={17} /> Demo Mode</button>}
               <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={() => { setAccountMenuOpen(false); setSection("profile"); setCurrentPath(""); }}><UserRound size={17} /> Profile & controls</button>
               <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={() => { setAccountMenuOpen(false); setZominAiPane("settings"); setSection("zominai"); setCurrentPath(""); }}><Settings2 size={17} /> ZominAI settings</button>
               <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100" onClick={() => { setAccountMenuOpen(false); setSection("theme"); setCurrentPath(""); }}><Palette size={17} /> Theme</button>
@@ -1513,10 +1516,11 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
           <div className="mb-7 flex flex-wrap items-center justify-between gap-4">
             <div>
               {section === "my-drive" && currentPath && <FolderNavigation currentPath={currentPath} onNavigate={setCurrentPath} />}
-              <h1 className={`${section === "my-drive" && currentPath ? "mt-3" : ""} text-2xl font-semibold tracking-tight text-slate-900`}>{section === "zominai" ? <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1">ZominAI <span className="text-sm font-medium tracking-normal text-slate-500">Pronounced ZOH-min A.I.</span></span> : showingSearchResults ? "Search results" : section === "api-keys" ? "API Keys" : section === "user-access" ? "User access" : section === "theme" ? "Theme" : section === "cluster-databases" ? "Zo Shared Drives" : section === "databases" ? "Zo Databases" : section === "functions" ? "Zo Functions" : section === "profile" ? "Profile & controls" : section === "home" ? "Recent" : section === "pastes" ? "Zo Paste" : section === "transfer" ? "Zo Transfer" : section === "shared" ? "Shared with others" : section === "starred" ? "Starred" : section === "trash" ? "Trash" : currentPath ? currentPath.split("/").at(-1) : "Files"}</h1>
+              <h1 className={`${section === "my-drive" && currentPath ? "mt-3" : ""} text-2xl font-semibold tracking-tight text-slate-900`}>{section === "zominai" ? <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1">ZominAI <span className="text-sm font-medium tracking-normal text-slate-500">Pronounced ZOH-min A.I.</span></span> : showingSearchResults ? "Search results" : section === "api-keys" ? "API Keys" : section === "user-access" ? "User access" : section === "demo-mode" ? "Demo Mode" : section === "theme" ? "Theme" : section === "cluster-databases" ? "Zo Shared Drives" : section === "databases" ? "Zo Databases" : section === "functions" ? "Zo Functions" : section === "profile" ? "Profile & controls" : section === "home" ? "Recent" : section === "pastes" ? "Zo Paste" : section === "transfer" ? "Zo Transfer" : section === "shared" ? "Shared with others" : section === "starred" ? "Starred" : section === "trash" ? "Trash" : currentPath ? currentPath.split("/").at(-1) : "Files"}</h1>
               {showingSearchResults && <p className="mt-1 text-sm text-slate-500">{search.trim() ? `Matches for “${search.trim()}” in this section.` : "Matches for the selected advanced filters."}</p>}
               {!showingSearchResults && section === "api-keys" && <p className="mt-1 text-sm text-slate-500">Provision and revoke scoped access for local computers and automations.</p>}
               {!showingSearchResults && section === "user-access" && <p className="mt-1 text-sm text-slate-500">Create, update, and revoke people’s access to this Drive.</p>}
+              {!showingSearchResults && section === "demo-mode" && <p className="mt-1 text-sm text-slate-500">Apply safe account-wide limits for public demonstrations.</p>}
               {!showingSearchResults && section === "theme" && <p className="mt-1 text-sm text-slate-500">Choose the visual style for this browser.</p>}
               {!showingSearchResults && section === "cluster-databases" && <p className="mt-1 text-sm text-slate-500">Choose exactly which Drive folders each trusted person can access.</p>}
               {!showingSearchResults && section === "databases" && <p className="mt-1 text-sm text-slate-500">Choose a lightweight open-source database, then keep its data private in your Drive.</p>}
@@ -1531,7 +1535,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
             </div>
             <div className="ml-auto flex shrink-0 items-center gap-3" data-testid="dashboard-actions">
               {zominAiChatOpen && showDriveUpload && <button aria-label="Open upload menu" className="hidden items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200 md:inline-flex" onClick={() => setUploadDialogOpen(true)}><Upload size={17} /> Upload</button>}
-              {section === "trash" && trashItems.length > 0 ? <button className="rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50" onClick={() => void emptyTrash()}>Empty trash</button> : section === "pastes" ? <button className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800" onClick={() => startNativeFile("paste")}><Plus size={17} /> New paste</button> : section !== "home" && section !== "theme" && section !== "transfer" && section !== "api-keys" && section !== "user-access" && section !== "cluster-databases" && section !== "databases" && section !== "functions" && section !== "profile" && section !== "zominai" && <div className="flex rounded-lg border border-slate-200 bg-white p-1">
+            {section === "trash" && trashItems.length > 0 ? <button className="rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50" onClick={() => void emptyTrash()}>Empty trash</button> : section === "pastes" ? <button className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800" onClick={() => startNativeFile("paste")}><Plus size={17} /> New paste</button> : section !== "home" && section !== "theme" && section !== "transfer" && section !== "api-keys" && section !== "user-access" && section !== "demo-mode" && section !== "cluster-databases" && section !== "databases" && section !== "functions" && section !== "profile" && section !== "zominai" && <div className="flex rounded-lg border border-slate-200 bg-white p-1">
               <button aria-label="List view" className={`rounded-md p-2 ${viewMode === "list" ? "bg-slate-100 text-slate-900" : "text-slate-400"}`} onClick={() => setViewMode("list")}><List size={18} /></button>
               <button aria-label="Grid view" className={`rounded-md p-2 ${viewMode === "grid" ? "bg-slate-100 text-slate-900" : "text-slate-400"}`} onClick={() => setViewMode("grid")}><Grid2X2 size={18} /></button>
             </div>}
@@ -1540,7 +1544,7 @@ function DriveScreen({ authClient, client, user, onAccountDeleted, onSignOut }: 
 
           {section === "home" && <RecentFiltersBar filters={recentFilters} onChange={setRecentFilters} />}
 
-          {section === "api-keys" ? <ApiKeys client={client} /> : section === "user-access" && canManageUserAccess ? <UserAccessScreen client={authClient as unknown as UserAccessClient} currentUser={user} /> : section === "theme" ? <ThemeScreen onThemeChange={setDriveTheme} theme={driveTheme} /> : section === "cluster-databases" ? <ClusterDatabases client={client} search={search} /> : section === "databases" ? <Databases client={client} search={search} /> : section === "functions" ? <Functions client={client} search={search} /> : section === "profile" ? <AccountScreen client={authClient} onAccountDeleted={onAccountDeleted} user={user} /> : section === "zominai" ? <ZominAiWorkspace initialPane={zominAiPane} /> : section === "transfer" ? <ZoTransfer client={client} search={search} onCreated={async () => { await refresh(); await queryClient.invalidateQueries({ queryKey: ["shares"] }); }} /> : section === "pastes" ? <ZoPaste files={displayedFiles} isError={filesQuery.isError} isLoading={isLoading} onCreate={() => startNativeFile("paste")} onDelete={(key) => deleteMutation.mutate(key)} onPreview={openPreview} onRetry={() => void filesQuery.refetch()} onShare={(file) => { setShareSettings(null); setShareFile(file); }} onToggleStar={(file) => starMutation.mutate({ key: file.key, starred: file.starred })} /> : isLoading ? (
+          {section === "api-keys" ? <ApiKeys client={client} /> : section === "user-access" && canManageUserAccess ? <UserAccessScreen client={authClient as unknown as UserAccessClient} currentUser={user} /> : section === "demo-mode" && canManageUserAccess ? <DemoModeScreen client={client as unknown as DemoModeClient} usage={usageQuery.data} /> : section === "theme" ? <ThemeScreen onThemeChange={setDriveTheme} theme={driveTheme} /> : section === "cluster-databases" ? <ClusterDatabases client={client} search={search} /> : section === "databases" ? <Databases client={client} search={search} /> : section === "functions" ? <Functions client={client} search={search} /> : section === "profile" ? <AccountScreen client={authClient} onAccountDeleted={onAccountDeleted} user={user} /> : section === "zominai" ? <ZominAiWorkspace initialPane={zominAiPane} /> : section === "transfer" ? <ZoTransfer client={client} search={search} onCreated={async () => { await refresh(); await queryClient.invalidateQueries({ queryKey: ["shares"] }); }} /> : section === "pastes" ? <ZoPaste files={displayedFiles} isError={filesQuery.isError} isLoading={isLoading} onCreate={() => startNativeFile("paste")} onDelete={(key) => deleteMutation.mutate(key)} onPreview={openPreview} onRetry={() => void filesQuery.refetch()} onShare={(file) => { setShareSettings(null); setShareFile(file); }} onToggleStar={(file) => starMutation.mutate({ key: file.key, starred: file.starred })} /> : isLoading ? (
             <div className="grid h-64 place-items-center text-sm text-slate-500"><LoaderCircle className="mr-2 animate-spin" size={20} /> Loading your drive…</div>
           ) : (section === "shared" ? sharesQuery.isError : section === "starred" ? starredQuery.isError : section === "trash" ? trashQuery.isError : filesQuery.isError) ? (
             <EmptyState

@@ -9,6 +9,7 @@ export const nativeFileTypes = ["document", "spreadsheet", "presentation", "form
 export type NativeFileType = (typeof nativeFileTypes)[number];
 export const DEFAULT_STORAGE_QUOTA_BYTES = 100 * 1024 * 1024 * 1024;
 export const MIN_STORAGE_QUOTA_BYTES = 1 * 1024 * 1024 * 1024;
+export const DEMO_MODE_STORAGE_QUOTA_BYTES = 1 * 1024 * 1024 * 1024;
 const MAX_STORAGE_QUOTA_RATIO = 0.8;
 
 const nativeContentTypes: Record<NativeFileType, string> = {
@@ -92,6 +93,18 @@ type StorageUsage = {
   availableBytes: number;
   systemUsedBytes: number;
   categories: Array<{ id: StorageCategory; bytes: number; fileCount: number }>;
+};
+
+type StoredStorageSettings = {
+  demoMode?: boolean;
+  normalQuotaBytes?: number;
+  quotaBytes?: number;
+};
+
+export type DemoModeStatus = {
+  enabled: boolean;
+  quotaBytes: number;
+  normalQuotaBytes: number;
 };
 
 export class TrashRestoreConflictError extends Error {
@@ -698,6 +711,10 @@ export class LocalDriveStorage {
 
   async setQuota({ userId, quotaBytes }: Pick<StorageTarget, "userId"> & { quotaBytes: number }): Promise<StorageUsage> {
     return this.withWriteLock(userId, async () => {
+      const settings = await this.readStorageSettings(userId);
+      if (settings.demoMode === true) {
+        throw new StorageQuotaConfigurationError("Turn off Demo Mode before changing the storage limit");
+      }
       const { maxQuotaBytes } = await this.getFilesystemQuotaBounds();
       if (!Number.isSafeInteger(quotaBytes)) {
         throw new StorageQuotaConfigurationError("Storage limit must be a whole number of bytes");
@@ -714,6 +731,42 @@ export class LocalDriveStorage {
       }
       await this.writeQuota(userId, quotaBytes);
       return this.getUsage({ userId });
+    });
+  }
+
+  async getDemoMode({ userId }: Pick<StorageTarget, "userId">): Promise<DemoModeStatus> {
+    const settings = await this.readStorageSettings(userId);
+    const normalQuotaBytes = validStoredQuota(settings.normalQuotaBytes) ?? validStoredQuota(settings.quotaBytes) ?? this.quotaBytes;
+    return {
+      enabled: settings.demoMode === true,
+      quotaBytes: settings.demoMode === true ? DEMO_MODE_STORAGE_QUOTA_BYTES : normalQuotaBytes,
+      normalQuotaBytes
+    };
+  }
+
+  async setDemoMode({ userId, enabled }: Pick<StorageTarget, "userId"> & { enabled: boolean }): Promise<DemoModeStatus> {
+    return this.withWriteLock(userId, async () => {
+      const safeUserId = this.normalizeUserId(userId);
+      const settings = await this.readStorageSettings(safeUserId);
+      const currentlyEnabled = settings.demoMode === true;
+      if (currentlyEnabled === enabled) return this.getDemoMode({ userId: safeUserId });
+
+      if (enabled) {
+        const usage = await this.getUsage({ userId: safeUserId });
+        if (usage.usedBytes > DEMO_MODE_STORAGE_QUOTA_BYTES) {
+          throw new StorageQuotaConfigurationError("Demo Mode cannot be enabled while Zo Drive stores more than 1 GB");
+        }
+        await this.writeStorageSettings(safeUserId, {
+          ...settings,
+          demoMode: true,
+          normalQuotaBytes: usage.quotaBytes,
+          quotaBytes: usage.quotaBytes
+        });
+      } else {
+        const normalQuotaBytes = validStoredQuota(settings.normalQuotaBytes) ?? validStoredQuota(settings.quotaBytes) ?? this.quotaBytes;
+        await this.writeStorageSettings(safeUserId, { demoMode: false, quotaBytes: normalQuotaBytes });
+      }
+      return this.getDemoMode({ userId: safeUserId });
     });
   }
 
@@ -763,22 +816,32 @@ export class LocalDriveStorage {
   }
 
   private async readQuota(userId: string): Promise<number> {
+    const settings = await this.readStorageSettings(userId);
+    if (settings.demoMode === true) return DEMO_MODE_STORAGE_QUOTA_BYTES;
+    return validStoredQuota(settings.quotaBytes) ?? this.quotaBytes;
+  }
+
+  private async writeQuota(userId: string, quotaBytes: number): Promise<void> {
+    const settings = await this.readStorageSettings(userId);
+    await this.writeStorageSettings(userId, { ...settings, quotaBytes });
+  }
+
+  private async readStorageSettings(userId: string): Promise<StoredStorageSettings> {
     try {
-      const parsed = JSON.parse(await readFile(join(this.userMetadataRoot(userId), "storage.json"), "utf8")) as { quotaBytes?: unknown };
-      return typeof parsed.quotaBytes === "number" && Number.isSafeInteger(parsed.quotaBytes) && parsed.quotaBytes >= MIN_STORAGE_QUOTA_BYTES ? parsed.quotaBytes : this.quotaBytes;
+      return JSON.parse(await readFile(join(this.userMetadataRoot(userId), "storage.json"), "utf8")) as StoredStorageSettings;
     } catch (error: unknown) {
-      if (isNotFound(error)) return this.quotaBytes;
+      if (isNotFound(error)) return {};
       throw error;
     }
   }
 
-  private async writeQuota(userId: string, quotaBytes: number): Promise<void> {
+  private async writeStorageSettings(userId: string, settings: StoredStorageSettings): Promise<void> {
     const metadataRoot = this.userMetadataRoot(userId);
     await mkdir(metadataRoot, { recursive: true });
     const target = join(metadataRoot, "storage.json");
     const temporaryTarget = join(metadataRoot, `.storage.${randomUUID()}.tmp`);
     try {
-      await writeFile(temporaryTarget, JSON.stringify({ quotaBytes }));
+      await writeFile(temporaryTarget, JSON.stringify(settings));
       await rename(temporaryTarget, target);
     } catch (error) {
       await rm(temporaryTarget, { force: true });
@@ -1196,6 +1259,10 @@ function pasteContentRevision(content: Record<string, unknown>): string {
 
 function isNotFound(error: unknown): error is NodeJS.ErrnoException {
   return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+}
+
+function validStoredQuota(value: unknown): number | null {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= MIN_STORAGE_QUOTA_BYTES ? value : null;
 }
 
 function isSafeStarKey(key: string): boolean {

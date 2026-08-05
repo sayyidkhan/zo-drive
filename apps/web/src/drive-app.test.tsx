@@ -159,7 +159,7 @@ describe("DriveApp", () => {
       expect(screen.getByRole("heading", { name: "Run private databases beside your files" })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Automate with Zo Functions" })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Ask about your Drive without granting write access" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 1.43.2" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 1.44.0" })).toBeInTheDocument();
       expect(screen.getByText("Product")).toBeInTheDocument();
       expect(screen.getByRole("navigation", { name: "Choose documentation product" })).toBeInTheDocument();
       expect(screen.getByRole("navigation", { name: "Documentation sections" })).toHaveTextContent("Zo Originals");
@@ -169,7 +169,7 @@ describe("DriveApp", () => {
         expect(modeSwitch).toHaveTextContent("CLI");
       }
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI releases version 1.43.2" })).toHaveAttribute("href", expect.stringContaining("?releases=1&mode=gui"));
+      expect(screen.getByRole("link", { name: "GUI releases version 1.44.0" })).toHaveAttribute("href", expect.stringContaining("?releases=1&mode=gui"));
       expect(screen.queryByRole("heading", { name: "GUI changelog" })).not.toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
 
@@ -207,7 +207,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.43.2")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.44.0")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();
@@ -365,6 +365,8 @@ describe("DriveApp", () => {
       createNativeFile: vi.fn().mockResolvedValue({ key: "Strategy", name: "Strategy", size: 1, contentType: "application/vnd.zo.document+json", nativeType: "document", updatedAt: "2026-01-01T00:00:00.000Z", starred: false }),
       saveNativeFile: vi.fn().mockResolvedValue({ key: "Strategy", name: "Strategy", size: 1, contentType: "application/vnd.zo.document+json", nativeType: "document", updatedAt: "2026-01-01T00:00:00.000Z", starred: false }),
       setQuota: vi.fn().mockResolvedValue({ fileCount: 2, usedBytes: 15, quotaBytes: 200 * 1024 * 1024 * 1024, quotaAvailableBytes: 200 * 1024 * 1024 * 1024 - 15, minQuotaBytes: 1024 * 1024 * 1024, maxQuotaBytes: Math.floor(512 * 1024 * 1024 * 1024 * 0.8), totalBytes: 512 * 1024 * 1024 * 1024, availableBytes: 512 * 1024 * 1024 * 1024 - 200, systemUsedBytes: 200, categories: [{ id: "photos", bytes: 10, fileCount: 1 }, { id: "documents", bytes: 5, fileCount: 1 }, { id: "videos", bytes: 0, fileCount: 0 }, { id: "audio", bytes: 0, fileCount: 0 }, { id: "archives", bytes: 0, fileCount: 0 }, { id: "other", bytes: 0, fileCount: 0 }, { id: "trash", bytes: 0, fileCount: 0 }] }),
+      getDemoMode: vi.fn().mockResolvedValue({ enabled: false, quotaBytes: 100 * 1024 * 1024 * 1024, normalQuotaBytes: 100 * 1024 * 1024 * 1024 }),
+      setDemoMode: vi.fn().mockResolvedValue({ enabled: true, quotaBytes: 1024 * 1024 * 1024, normalQuotaBytes: 100 * 1024 * 1024 * 1024 }),
       publishForm: vi.fn(),
       listFormResponses: vi.fn().mockResolvedValue([]),
       rename: vi.fn().mockResolvedValue({ key: "Strategy 2026", name: "Strategy 2026", size: 1, contentType: "application/vnd.zo.document+json", nativeType: "document", updatedAt: "2026-01-01T00:00:00.000Z", starred: false }),
@@ -694,7 +696,14 @@ describe("DriveApp", () => {
     await waitFor(() => expect(window.localStorage.getItem("zo-drive:zominai:v1")).toBeNull());
     fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
     expect(screen.getByRole("button", { name: "User access" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Demo Mode" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Theme" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Demo Mode" }));
+    expect(await screen.findByRole("heading", { name: "A safe, bounded Drive for demonstrations." })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Turn Demo Mode on" }));
+    await waitFor(() => expect(client.setDemoMode).toHaveBeenCalledWith(true));
+    expect(await screen.findByText("The 1 GB cap is active.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
     fireEvent.click(screen.getByRole("button", { name: "User access" }));
     expect(await screen.findByText("Demo credentials are public")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("checkbox", { name: "Demo account" }));
@@ -1105,6 +1114,7 @@ describe("DriveApp", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
     expect(screen.queryByRole("button", { name: "User access" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Demo Mode" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
 
     fireEvent.change(screen.getByLabelText("Upload files"), {

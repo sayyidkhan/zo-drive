@@ -52,6 +52,7 @@ import {
   updateFileSchema,
   updateNativeFileSchema,
   updateSharedPasteSchema,
+  updateDemoModeSchema,
   updateStorageQuotaSchema,
   usernameSchema,
   zominAiChatSchema,
@@ -127,6 +128,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     app.use("/api-keys/*", cors(corsOptions));
     app.use("/shares", cors(corsOptions));
     app.use("/shares/*", cors(corsOptions));
+    app.use("/settings/*", cors(corsOptions));
     app.use("/shared/*", cors(corsOptions));
     app.use("/forms", cors(corsOptions));
     app.use("/forms/*", cors(corsOptions));
@@ -477,6 +479,26 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
       if (result === "forbidden") return context.json({ error: { code: "OWNER_PROTECTED", message: "The original owner cannot be removed" } }, 403);
       if (result === "not_found") return context.json({ error: { code: "NOT_FOUND", message: "User not found or access cannot be managed" } }, 404);
       return context.body(null, 204);
+    });
+
+    app.get("/settings/demo-mode", async (context) => {
+      const userId = await requireBrowserUser(context.req.raw, auth);
+      if (!userId) return unauthorized(context);
+      if (!(await auth.store.canManageUsers(userId))) return context.json({ error: { code: "FORBIDDEN", message: "Only super users can manage Demo Mode" } }, 403);
+      const ownerUserId = await auth.store.accountOwnerIdFor(userId, "read");
+      if (!ownerUserId) return context.json({ error: { code: "FORBIDDEN", message: "Demo Mode is unavailable for this account" } }, 403);
+      return context.json(await storage.getDemoMode({ userId: ownerUserId }));
+    });
+
+    app.put("/settings/demo-mode", async (context) => {
+      const userId = await requireBrowserUser(context.req.raw, auth);
+      if (!userId) return unauthorized(context);
+      if (!(await auth.store.canManageUsers(userId))) return context.json({ error: { code: "FORBIDDEN", message: "Only super users can manage Demo Mode" } }, 403);
+      const ownerUserId = await auth.store.accountOwnerIdFor(userId, "read");
+      if (!ownerUserId) return context.json({ error: { code: "FORBIDDEN", message: "Demo Mode is unavailable for this account" } }, 403);
+      const parsed = updateDemoModeSchema.safeParse(await context.req.json().catch(() => null));
+      if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Choose whether Demo Mode is on or off" } }, 400);
+      return context.json(await storage.setDemoMode({ userId: ownerUserId, enabled: parsed.data.enabled }));
     });
 
     if (apiKeys) {

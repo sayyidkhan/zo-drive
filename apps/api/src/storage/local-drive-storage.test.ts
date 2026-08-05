@@ -1,9 +1,9 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { LocalDriveStorage, MIN_STORAGE_QUOTA_BYTES, StorageQuotaConfigurationError, StorageQuotaExceededError, UnsafeDrivePathError } from "./local-drive-storage.js";
+import { DEMO_MODE_STORAGE_QUOTA_BYTES, LocalDriveStorage, MIN_STORAGE_QUOTA_BYTES, StorageQuotaConfigurationError, StorageQuotaExceededError, UnsafeDrivePathError } from "./local-drive-storage.js";
 
 describe("LocalDriveStorage", () => {
   const roots: string[] = [];
@@ -167,6 +167,30 @@ describe("LocalDriveStorage", () => {
     await expect(new LocalDriveStorage({ root: storage.root }).getUsage({ userId: "user_123" })).resolves.toMatchObject({ quotaBytes: selectedQuota });
     await expect(storage.setQuota({ userId: "user_123", quotaBytes: MIN_STORAGE_QUOTA_BYTES - 1 })).rejects.toBeInstanceOf(StorageQuotaConfigurationError);
     await expect(storage.setQuota({ userId: "user_123", quotaBytes: initialUsage.maxQuotaBytes + 1 })).rejects.toBeInstanceOf(StorageQuotaConfigurationError);
+  });
+
+  it("persists Demo Mode, enforces 1 GB, and restores the previous quota", async () => {
+    const storage = await createStorage();
+    const initialUsage = await storage.getUsage({ userId: "user_123" });
+    const normalQuotaBytes = Math.min(200 * 1024 * 1024 * 1024, initialUsage.maxQuotaBytes);
+    await storage.setQuota({ userId: "user_123", quotaBytes: normalQuotaBytes });
+
+    await expect(storage.setDemoMode({ userId: "user_123", enabled: true })).resolves.toEqual({ enabled: true, quotaBytes: DEMO_MODE_STORAGE_QUOTA_BYTES, normalQuotaBytes });
+    await expect(new LocalDriveStorage({ root: storage.root }).getUsage({ userId: "user_123" })).resolves.toMatchObject({ quotaBytes: DEMO_MODE_STORAGE_QUOTA_BYTES });
+    await expect(storage.setQuota({ userId: "user_123", quotaBytes: normalQuotaBytes })).rejects.toThrow("Turn off Demo Mode");
+    await expect(storage.setDemoMode({ userId: "user_123", enabled: false })).resolves.toEqual({ enabled: false, quotaBytes: normalQuotaBytes, normalQuotaBytes });
+    await expect(storage.getUsage({ userId: "user_123" })).resolves.toMatchObject({ quotaBytes: normalQuotaBytes });
+  });
+
+  it("does not enable Demo Mode when existing data exceeds 1 GB", async () => {
+    const storage = await createStorage();
+    const filePath = join(storage.root, "v1", "users", "user_123", "files", "large.bin");
+    await mkdir(dirname(filePath), { recursive: true });
+    await writeFile(filePath, "");
+    await truncate(filePath, DEMO_MODE_STORAGE_QUOTA_BYTES + 1);
+
+    await expect(storage.setDemoMode({ userId: "user_123", enabled: true })).rejects.toThrow("more than 1 GB");
+    await expect(storage.getDemoMode({ userId: "user_123" })).resolves.toMatchObject({ enabled: false });
   });
 
   it("filters files by type, text content, star state, and modified date", async () => {

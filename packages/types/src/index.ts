@@ -73,6 +73,12 @@ export const storageUsageSchema = z.object({
   }))
 });
 
+export const demoModeStatusSchema = z.object({
+  enabled: z.boolean(),
+  quotaBytes: z.number().int().positive(),
+  normalQuotaBytes: z.number().int().positive()
+});
+
 export const apiErrorSchema = z.object({
   error: z.object({
     code: z.string(),
@@ -299,6 +305,7 @@ export type DriveFolder = z.infer<typeof driveFolderSchema>;
 export type ListFoldersResponse = z.infer<typeof listFoldersResponseSchema>;
 export type Health = z.infer<typeof healthSchema>;
 export type StorageUsage = z.infer<typeof storageUsageSchema>;
+export type DemoModeStatus = z.infer<typeof demoModeStatusSchema>;
 export type ApiError = z.infer<typeof apiErrorSchema>;
 export type AccountAccess = z.infer<typeof accountAccessSchema>;
 export type AccountRole = z.infer<typeof accountRoleSchema>;
