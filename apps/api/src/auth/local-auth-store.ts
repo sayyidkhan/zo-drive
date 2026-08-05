@@ -21,6 +21,8 @@ type StoredUser = Omit<AuthenticatedUser, "access" | "role" | "isOwner" | "isDem
   isOwner?: boolean;
   isDemo?: boolean;
   demoPassword?: string;
+  sessionsRevokedAt?: number;
+  sessionVersion?: number;
   passwordHash: string;
 };
 
@@ -80,6 +82,21 @@ export class LocalAuthStore {
     return demo?.demoPassword ? { username: demo.username, password: demo.demoPassword } : null;
   }
 
+  async getDemoAccountOwnerId(): Promise<string | null> {
+    const users = await this.readUsers();
+    const demo = users.users.find((candidate) => normaliseStoredUser(candidate, users.users).isDemo);
+    return demo ? accountOwnerId(demo, users.users) : null;
+  }
+
+  async getDemoAccount(userId: string): Promise<AuthenticatedUser | null> {
+    const users = await this.readUsers();
+    const actor = users.users.find((candidate) => candidate.id === userId);
+    if (!actor) return null;
+    const ownerId = accountOwnerId(actor, users.users);
+    const demo = users.users.find((candidate) => accountOwnerId(candidate, users.users) === ownerId && normaliseStoredUser(candidate, users.users).isDemo);
+    return demo ? publicUser(demo, users.users) : null;
+  }
+
   async renameUser(id: string, username: string): Promise<AuthenticatedUser | null> {
     const users = await this.readUsers();
     const user = users.users.find((candidate) => candidate.id === id);
@@ -120,7 +137,7 @@ export class LocalAuthStore {
       passwordHash: await hashPassword(password),
       createdAt: new Date().toISOString(),
       accountOwnerId: accountOwnerId(actor, users.users),
-      access: isDemo ? "read" : access,
+      access: isDemo ? "write" : access,
       role: isDemo ? "regular" : role,
       isOwner: false,
       isDemo,
@@ -137,7 +154,7 @@ export class LocalAuthStore {
     const member = users.users.find((candidate) => candidate.id === memberId);
     if (!actor || !member || !canManage(actor, users.users) || accountOwnerId(actor, users.users) !== accountOwnerId(member, users.users)) return null;
     if (member.isOwner) return "forbidden";
-    if (normaliseStoredUser(member, users.users).isDemo && (changes.access === "write" || changes.role === "super")) return "forbidden";
+    if (normaliseStoredUser(member, users.users).isDemo && (changes.access === "read" || changes.role === "super")) return "forbidden";
     if (changes.access) member.access = changes.access;
     if (changes.role) member.role = changes.role;
     await this.writeUsers(users);
@@ -164,6 +181,35 @@ export class LocalAuthStore {
     const normalized = normaliseStoredUser(user, users.users);
     if (requiredAccess === "write" && normalized.access !== "write") return null;
     return normalized.accountOwnerId;
+  }
+
+  async dataOwnerIdFor(userId: string, requiredAccess: "read" | "write" = "read"): Promise<string | null> {
+    const users = await this.readUsers();
+    const user = users.users.find((candidate) => candidate.id === userId);
+    if (!user) return null;
+    const normalized = normaliseStoredUser(user, users.users);
+    if (requiredAccess === "write" && normalized.access !== "write") return null;
+    return normalized.isDemo ? normalized.id : normalized.accountOwnerId;
+  }
+
+  async sessionVersionFor(userId: string): Promise<number> {
+    const user = (await this.readUsers()).users.find((candidate) => candidate.id === userId);
+    return user?.sessionVersion ?? 0;
+  }
+
+  async isSessionCurrent(userId: string, sessionVersion = 0): Promise<boolean> {
+    const user = (await this.readUsers()).users.find((candidate) => candidate.id === userId);
+    return Boolean(user && sessionVersion === (user.sessionVersion ?? 0));
+  }
+
+  async revokeSessions(userId: string, revokedAt = Date.now()): Promise<boolean> {
+    const users = await this.readUsers();
+    const user = users.users.find((candidate) => candidate.id === userId);
+    if (!user) return false;
+    user.sessionsRevokedAt = revokedAt;
+    user.sessionVersion = (user.sessionVersion ?? 0) + 1;
+    await this.writeUsers(users);
+    return true;
   }
 
   async canManageUsers(userId: string): Promise<boolean> {
@@ -259,7 +305,7 @@ function normaliseStoredUser(user: StoredUser, users: StoredUser[], assumeOwner 
   return {
     ...user,
     accountOwnerId: owner,
-    access: isDemo || user.access === "read" ? "read" : "write",
+    access: isDemo ? "write" : user.access === "read" ? "read" : "write",
     role: isDemo ? "regular" : user.role === "super" ? "super" : (isOwner ? "super" : "regular"),
     isOwner,
     isDemo

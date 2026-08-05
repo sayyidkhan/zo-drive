@@ -126,18 +126,28 @@ describe("ZoDriveClient", () => {
     expect(fetcher).toHaveBeenCalledWith("https://drive.example/usage/quota", expect.objectContaining({ method: "PUT" }));
   });
 
-  it("reads and updates Demo Mode through the settings endpoint", async () => {
-    const disabled = { enabled: false, quotaBytes: 100 * 1024 * 1024 * 1024, normalQuotaBytes: 100 * 1024 * 1024 * 1024 };
-    const enabled = { enabled: true, quotaBytes: 1024 * 1024 * 1024, normalQuotaBytes: disabled.normalQuotaBytes };
+  it("manages Demo Mode lifecycle and reads the audit trail", async () => {
+    const disabled = { enabled: false, quotaBytes: 100 * 1024 * 1024 * 1024, normalQuotaBytes: 100 * 1024 * 1024 * 1024, demoAccountExists: true, sandboxUsedBytes: 0, sandboxFileCount: 0 };
+    const enabled = { enabled: true, quotaBytes: 1024 * 1024 * 1024, normalQuotaBytes: disabled.normalQuotaBytes, demoAccountExists: true, sandboxUsedBytes: 256, sandboxFileCount: 2 };
+    const event = { id: "11111111-1111-4111-8111-111111111111", actorUserId: "owner", action: "POST /settings/demo-mode/reset", method: "POST", path: "/settings/demo-mode/reset", status: 200, ipAddress: null, userAgent: null, createdAt: "2026-08-05T00:00:00.000Z" };
     const fetcher = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify(disabled), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(enabled), { status: 200 }));
+      .mockResolvedValueOnce(new Response(JSON.stringify(enabled), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(enabled), { status: 200 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ events: [event] }), { status: 200 }));
     const client = new ZoDriveClient({ baseUrl: "https://drive.example", fetcher });
 
     await expect(client.getDemoMode()).resolves.toEqual(disabled);
     await expect(client.setDemoMode(true)).resolves.toEqual(enabled);
+    await expect(client.resetDemoSandbox()).resolves.toEqual(enabled);
+    await expect(client.endDemoSessions()).resolves.toBeUndefined();
+    await expect(client.listAuditEvents()).resolves.toEqual([event]);
     expect(fetcher).toHaveBeenNthCalledWith(1, "https://drive.example/settings/demo-mode", expect.objectContaining({ method: "GET" }));
     expect(fetcher).toHaveBeenNthCalledWith(2, "https://drive.example/settings/demo-mode", expect.objectContaining({ body: JSON.stringify({ enabled: true }), method: "PUT" }));
+    expect(fetcher).toHaveBeenNthCalledWith(3, "https://drive.example/settings/demo-mode/reset", expect.objectContaining({ method: "POST" }));
+    expect(fetcher).toHaveBeenNthCalledWith(4, "https://drive.example/settings/demo-mode/sessions", expect.objectContaining({ method: "DELETE" }));
+    expect(fetcher).toHaveBeenNthCalledWith(5, "https://drive.example/audit", expect.objectContaining({ method: "GET" }));
   });
 
   it("creates and lists empty folders through the API", async () => {

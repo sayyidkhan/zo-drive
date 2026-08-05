@@ -96,9 +96,16 @@ surface and use JSON except for object upload/download.
   `DELETE /trash` — inspect, restore, permanently delete, or empty Trash.
 - `GET /usage` and `PUT /usage/quota` — owner-complete storage usage and quota,
   including files, Trash, databases, functions, and Zo Originals data.
-- `GET|PUT /settings/demo-mode` — super-admin browser-session control for a
-  reversible, server-enforced 1 GB account-wide storage cap. Demo Mode must be
-  turned off before the normal quota can be changed.
+- `GET|PUT /settings/demo-mode` — super-admin browser-session control for an
+  isolated, writable 1 GB demo sandbox. Production data and quota are not
+  changed. Public demo sign-in is available only while this mode is enabled.
+- `POST /settings/demo-mode/reset` — explicitly remove only demo-owned files,
+  Trash, databases, functions, shares, and keys, then restore synthetic seed
+  data. Reset is never automatic.
+- `DELETE /settings/demo-mode/sessions` — revoke every active demo session
+  without affecting regular users or disabling Demo Mode.
+- `GET /audit` — super-admin-only account audit events for sign-ins and
+  mutating API actions.
 - `GET /databases/engines`, `POST /databases/engines/{engine}/install`, and
   `POST /databases/engines/{engine}/update` — inspect, provision, verify, or
   update one of SQLite, DuckDB, libSQL, PGlite, LanceDB, LevelDB, Redis, or
@@ -128,8 +135,11 @@ surface and use JSON except for object upload/download.
 - `GET /auth/status`, `POST /auth/register`, `POST /auth/login`,
   `POST /auth/logout`, `PATCH /auth/profile`, `POST /auth/password`, and
   `DELETE /auth/account` — owner account and browser-session management. An
-  unauthenticated status response includes public demo credentials when a
-  super user has enabled the single regular, read-only demo account.
+  unauthenticated status response includes public demo credentials only while
+  a super user has enabled the single regular demo sandbox account. The demo
+  account can write only inside its isolated namespace. Device and database
+  credential management remains visible but unavailable and returns no secret
+  payload in Demo Mode.
 
 ## Official clients and guides
 

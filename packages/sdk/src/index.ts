@@ -36,6 +36,7 @@ import {
   listObjectsResponseSchema,
   listTrashResponseSchema,
   listFunctionRunsResponseSchema,
+  listAuditEventsResponseSchema,
   clusterInvitationSchema,
   listClusterInvitationsResponseSchema,
   clusterMountSchema,
@@ -46,7 +47,7 @@ import {
   functionRunSchema,
   storageUsageSchema
 } from "@zo-drive/types";
-import type { AccountAccess, AccountMember, AccountRole, ApiKeyScope, AuthStatus, ClusterInvitation, ClusterMount, ClusterPeer, ClusterPendingInvitation, ClusterRole, CreatedDatabaseApiKey, CreatedDriveApiKey, DatabaseApiKey, DatabaseApiKeyScope, DatabaseEngine, DatabaseEngineId, DatabaseExecuteRequest, DatabaseExecuteResult, DatabaseImportSettings, DatabaseQueryResult, DatabaseRows, DatabaseTable, DemoModeStatus, DriveApiKey, DriveDatabase, DriveFolder, DriveFunction, DriveFunctionRun, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, FunctionRuntime, FunctionVisibility, Health, NativeFileType, PublicShare, PublishedForm, ShareAccess, ShareKind, SharedPaste, StorageUsage } from "@zo-drive/types";
+import type { AccountAccess, AccountMember, AccountRole, ApiKeyScope, AuditEvent, AuthStatus, ClusterInvitation, ClusterMount, ClusterPeer, ClusterPendingInvitation, ClusterRole, CreatedDatabaseApiKey, CreatedDriveApiKey, DatabaseApiKey, DatabaseApiKeyScope, DatabaseEngine, DatabaseEngineId, DatabaseExecuteRequest, DatabaseExecuteResult, DatabaseImportSettings, DatabaseQueryResult, DatabaseRows, DatabaseTable, DemoModeStatus, DriveApiKey, DriveDatabase, DriveFolder, DriveFunction, DriveFunctionRun, DriveObject, DriveShare, DriveTrashItem, DriveUser, FormResponse, FunctionRuntime, FunctionVisibility, Health, NativeFileType, PublicShare, PublishedForm, ShareAccess, ShareKind, SharedPaste, StorageUsage } from "@zo-drive/types";
 
 type Fetcher = typeof fetch;
 
@@ -358,6 +359,20 @@ export class ZoDriveClient {
       method: "PUT"
     });
     return demoModeStatusSchema.parse(await response.json());
+  }
+
+  async resetDemoSandbox(): Promise<DemoModeStatus> {
+    const response = await this.request("/settings/demo-mode/reset", { method: "POST" });
+    return demoModeStatusSchema.parse(await response.json());
+  }
+
+  async endDemoSessions(): Promise<void> {
+    await this.request("/settings/demo-mode/sessions", { method: "DELETE" });
+  }
+
+  async listAuditEvents(): Promise<AuditEvent[]> {
+    const response = await this.request("/audit", { method: "GET" });
+    return listAuditEventsResponseSchema.parse(await response.json()).events;
   }
 
   async listDatabases(): Promise<DriveDatabase[]> {

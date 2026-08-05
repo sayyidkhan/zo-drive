@@ -76,8 +76,24 @@ export const storageUsageSchema = z.object({
 export const demoModeStatusSchema = z.object({
   enabled: z.boolean(),
   quotaBytes: z.number().int().positive(),
-  normalQuotaBytes: z.number().int().positive()
+  normalQuotaBytes: z.number().int().positive(),
+  demoAccountExists: z.boolean().default(false),
+  sandboxUsedBytes: z.number().int().nonnegative().default(0),
+  sandboxFileCount: z.number().int().nonnegative().default(0)
 });
+
+export const auditEventSchema = z.object({
+  id: z.string().uuid(),
+  actorUserId: z.string().nullable(),
+  action: z.string(),
+  method: z.string(),
+  path: z.string(),
+  status: z.number().int(),
+  ipAddress: z.string().nullable(),
+  userAgent: z.string().nullable(),
+  createdAt: z.string().datetime()
+});
+export const listAuditEventsResponseSchema = z.object({ events: z.array(auditEventSchema) });
 
 export const apiErrorSchema = z.object({
   error: z.object({
@@ -306,6 +322,7 @@ export type ListFoldersResponse = z.infer<typeof listFoldersResponseSchema>;
 export type Health = z.infer<typeof healthSchema>;
 export type StorageUsage = z.infer<typeof storageUsageSchema>;
 export type DemoModeStatus = z.infer<typeof demoModeStatusSchema>;
+export type AuditEvent = z.infer<typeof auditEventSchema>;
 export type ApiError = z.infer<typeof apiErrorSchema>;
 export type AccountAccess = z.infer<typeof accountAccessSchema>;
 export type AccountRole = z.infer<typeof accountRoleSchema>;

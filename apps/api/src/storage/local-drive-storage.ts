@@ -711,10 +711,6 @@ export class LocalDriveStorage {
 
   async setQuota({ userId, quotaBytes }: Pick<StorageTarget, "userId"> & { quotaBytes: number }): Promise<StorageUsage> {
     return this.withWriteLock(userId, async () => {
-      const settings = await this.readStorageSettings(userId);
-      if (settings.demoMode === true) {
-        throw new StorageQuotaConfigurationError("Turn off Demo Mode before changing the storage limit");
-      }
       const { maxQuotaBytes } = await this.getFilesystemQuotaBounds();
       if (!Number.isSafeInteger(quotaBytes)) {
         throw new StorageQuotaConfigurationError("Storage limit must be a whole number of bytes");
@@ -736,7 +732,7 @@ export class LocalDriveStorage {
 
   async getDemoMode({ userId }: Pick<StorageTarget, "userId">): Promise<DemoModeStatus> {
     const settings = await this.readStorageSettings(userId);
-    const normalQuotaBytes = validStoredQuota(settings.normalQuotaBytes) ?? validStoredQuota(settings.quotaBytes) ?? this.quotaBytes;
+    const normalQuotaBytes = validStoredQuota(settings.quotaBytes) ?? this.quotaBytes;
     return {
       enabled: settings.demoMode === true,
       quotaBytes: settings.demoMode === true ? DEMO_MODE_STORAGE_QUOTA_BYTES : normalQuotaBytes,
@@ -750,22 +746,7 @@ export class LocalDriveStorage {
       const settings = await this.readStorageSettings(safeUserId);
       const currentlyEnabled = settings.demoMode === true;
       if (currentlyEnabled === enabled) return this.getDemoMode({ userId: safeUserId });
-
-      if (enabled) {
-        const usage = await this.getUsage({ userId: safeUserId });
-        if (usage.usedBytes > DEMO_MODE_STORAGE_QUOTA_BYTES) {
-          throw new StorageQuotaConfigurationError("Demo Mode cannot be enabled while Zo Drive stores more than 1 GB");
-        }
-        await this.writeStorageSettings(safeUserId, {
-          ...settings,
-          demoMode: true,
-          normalQuotaBytes: usage.quotaBytes,
-          quotaBytes: usage.quotaBytes
-        });
-      } else {
-        const normalQuotaBytes = validStoredQuota(settings.normalQuotaBytes) ?? validStoredQuota(settings.quotaBytes) ?? this.quotaBytes;
-        await this.writeStorageSettings(safeUserId, { demoMode: false, quotaBytes: normalQuotaBytes });
-      }
+      await this.writeStorageSettings(safeUserId, { ...settings, demoMode: enabled });
       return this.getDemoMode({ userId: safeUserId });
     });
   }
@@ -817,7 +798,6 @@ export class LocalDriveStorage {
 
   private async readQuota(userId: string): Promise<number> {
     const settings = await this.readStorageSettings(userId);
-    if (settings.demoMode === true) return DEMO_MODE_STORAGE_QUOTA_BYTES;
     return validStoredQuota(settings.quotaBytes) ?? this.quotaBytes;
   }
 

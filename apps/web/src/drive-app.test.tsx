@@ -159,7 +159,7 @@ describe("DriveApp", () => {
       expect(screen.getByRole("heading", { name: "Run private databases beside your files" })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Automate with Zo Functions" })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Ask about your Drive without granting write access" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 1.44.0" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 1.45.0" })).toBeInTheDocument();
       expect(screen.getByText("Product")).toBeInTheDocument();
       expect(screen.getByRole("navigation", { name: "Choose documentation product" })).toBeInTheDocument();
       expect(screen.getByRole("navigation", { name: "Documentation sections" })).toHaveTextContent("Zo Originals");
@@ -169,7 +169,7 @@ describe("DriveApp", () => {
         expect(modeSwitch).toHaveTextContent("CLI");
       }
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI releases version 1.44.0" })).toHaveAttribute("href", expect.stringContaining("?releases=1&mode=gui"));
+      expect(screen.getByRole("link", { name: "GUI releases version 1.45.0" })).toHaveAttribute("href", expect.stringContaining("?releases=1&mode=gui"));
       expect(screen.queryByRole("heading", { name: "GUI changelog" })).not.toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
 
@@ -207,7 +207,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.44.0")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.45.0")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();
@@ -321,12 +321,81 @@ describe("DriveApp", () => {
     const credentials = await screen.findByRole("region", { name: "Demo account credentials" });
     expect(credentials).toHaveTextContent("demo");
     expect(credentials).toHaveTextContent("public-demo");
-    expect(credentials).toHaveTextContent("read-only");
+    expect(credentials).toHaveTextContent("writable demo sandbox");
     fireEvent.click(screen.getByRole("button", { name: "Use demo credentials" }));
     expect(screen.getByRole("textbox", { name: "Username" })).toHaveValue("demo");
     expect(screen.getByLabelText("Password")).toHaveValue("public-demo");
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
     await waitFor(() => expect(authClient.login).toHaveBeenCalledWith({ username: "demo", password: "public-demo" }));
+  });
+
+  it("shows credential features to demo users without requesting credential payloads", async () => {
+    const listApiKeys = vi.fn().mockResolvedValue([]);
+    const listDatabaseApiKeys = vi.fn().mockResolvedValue([]);
+    const database = { id: "11111111-1111-4111-8111-111111111111", name: "demo-data", engine: "sqlite" as const, createdAt: "2026-08-05T00:00:00.000Z", updatedAt: "2026-08-05T00:00:00.000Z", sizeBytes: 0 };
+    const client = {
+      list: vi.fn().mockResolvedValue([]),
+      getUsage: vi.fn().mockResolvedValue({ fileCount: 0, usedBytes: 0, quotaBytes: 1024 * 1024 * 1024, quotaAvailableBytes: 1024 * 1024 * 1024, minQuotaBytes: 1024 * 1024 * 1024, maxQuotaBytes: 1024 * 1024 * 1024, totalBytes: 1024 * 1024 * 1024, availableBytes: 1024 * 1024 * 1024, systemUsedBytes: 0, categories: [] }),
+      listFolders: vi.fn().mockResolvedValue([]),
+      listStarred: vi.fn().mockResolvedValue([]),
+      listTrash: vi.fn().mockResolvedValue([]),
+      createFolder: vi.fn(),
+      createNativeFile: vi.fn(),
+      saveNativeFile: vi.fn(),
+      setQuota: vi.fn(),
+      publishForm: vi.fn(),
+      listFormResponses: vi.fn().mockResolvedValue([]),
+      rename: vi.fn(),
+      createShare: vi.fn(),
+      upload: vi.fn(),
+      delete: vi.fn(),
+      restoreTrash: vi.fn(),
+      permanentlyDeleteTrash: vi.fn(),
+      emptyTrash: vi.fn(),
+      download: vi.fn(),
+      star: vi.fn(),
+      unstar: vi.fn(),
+      updateSharePasscode: vi.fn(),
+      listShares: vi.fn().mockResolvedValue([]),
+      revokeShare: vi.fn(),
+      createApiKey: vi.fn(),
+      listApiKeys,
+      revokeApiKey: vi.fn(),
+      createDatabase: vi.fn(),
+      createDatabaseApiKey: vi.fn(),
+      deleteDatabase: vi.fn(),
+      executeDatabase: vi.fn(),
+      exportDatabase: vi.fn(),
+      getDatabaseImportSettings: vi.fn().mockResolvedValue({ importLimitBytes: 1024 * 1024, minImportLimitBytes: 1024, maxImportLimitBytes: 1024 * 1024 * 1024 }),
+      importDatabase: vi.fn(),
+      installDatabaseEngine: vi.fn(),
+      listDatabaseApiKeys,
+      listDatabaseEngines: vi.fn().mockResolvedValue([{ engine: "sqlite", name: "SQLite", protocol: "sql", installed: true, packageName: "sqlite", installedVersion: "1", updateAvailable: false }]),
+      listDatabases: vi.fn().mockResolvedValue([database]),
+      listDatabaseRows: vi.fn().mockResolvedValue({ columns: [], rows: [], total: 0 }),
+      listDatabaseTables: vi.fn().mockResolvedValue([]),
+      queryDatabase: vi.fn(),
+      revokeDatabaseApiKey: vi.fn(),
+      setDatabaseImportLimit: vi.fn(),
+      updateDatabaseEngine: vi.fn()
+    };
+    const authClient = {
+      getAuthStatus: vi.fn().mockResolvedValue({ authenticated: true, registrationAllowed: false, user: { id: "demo", username: "demo", access: "write", role: "regular", isOwner: false, isDemo: true } }),
+      login: vi.fn(), logout: vi.fn(), registerInitialUser: vi.fn(), updateProfile: vi.fn(), changePassword: vi.fn(), deleteAccount: vi.fn()
+    };
+
+    window.history.pushState({}, "", "?app=1&section=api-keys");
+    const apiKeysView = render(<DriveApp client={client} authClient={authClient} />);
+
+    expect(await screen.findByRole("heading", { name: "API Keys is not available in Demo Mode" })).toBeInTheDocument();
+    expect(screen.getByText(/available in regular Zo Drive accounts/)).toBeInTheDocument();
+    expect(listApiKeys).not.toHaveBeenCalled();
+
+    apiKeysView.unmount();
+    window.history.pushState({}, "", `?app=1&section=databases&databaseView=instances&database=${database.id}&databasePanel=access`);
+    render(<DriveApp client={client} authClient={authClient} />);
+    expect(await screen.findByRole("heading", { name: "Database credentials is not available in Demo Mode" })).toBeInTheDocument();
+    expect(listDatabaseApiKeys).not.toHaveBeenCalled();
   });
 
   it("renders documentation without checking the visitor's sign-in session", () => {
@@ -365,8 +434,11 @@ describe("DriveApp", () => {
       createNativeFile: vi.fn().mockResolvedValue({ key: "Strategy", name: "Strategy", size: 1, contentType: "application/vnd.zo.document+json", nativeType: "document", updatedAt: "2026-01-01T00:00:00.000Z", starred: false }),
       saveNativeFile: vi.fn().mockResolvedValue({ key: "Strategy", name: "Strategy", size: 1, contentType: "application/vnd.zo.document+json", nativeType: "document", updatedAt: "2026-01-01T00:00:00.000Z", starred: false }),
       setQuota: vi.fn().mockResolvedValue({ fileCount: 2, usedBytes: 15, quotaBytes: 200 * 1024 * 1024 * 1024, quotaAvailableBytes: 200 * 1024 * 1024 * 1024 - 15, minQuotaBytes: 1024 * 1024 * 1024, maxQuotaBytes: Math.floor(512 * 1024 * 1024 * 1024 * 0.8), totalBytes: 512 * 1024 * 1024 * 1024, availableBytes: 512 * 1024 * 1024 * 1024 - 200, systemUsedBytes: 200, categories: [{ id: "photos", bytes: 10, fileCount: 1 }, { id: "documents", bytes: 5, fileCount: 1 }, { id: "videos", bytes: 0, fileCount: 0 }, { id: "audio", bytes: 0, fileCount: 0 }, { id: "archives", bytes: 0, fileCount: 0 }, { id: "other", bytes: 0, fileCount: 0 }, { id: "trash", bytes: 0, fileCount: 0 }] }),
-      getDemoMode: vi.fn().mockResolvedValue({ enabled: false, quotaBytes: 100 * 1024 * 1024 * 1024, normalQuotaBytes: 100 * 1024 * 1024 * 1024 }),
-      setDemoMode: vi.fn().mockResolvedValue({ enabled: true, quotaBytes: 1024 * 1024 * 1024, normalQuotaBytes: 100 * 1024 * 1024 * 1024 }),
+      getDemoMode: vi.fn().mockResolvedValue({ enabled: false, quotaBytes: 100 * 1024 * 1024 * 1024, normalQuotaBytes: 100 * 1024 * 1024 * 1024, demoAccountExists: true, sandboxUsedBytes: 0, sandboxFileCount: 0 }),
+      setDemoMode: vi.fn().mockResolvedValue({ enabled: true, quotaBytes: 1024 * 1024 * 1024, normalQuotaBytes: 100 * 1024 * 1024 * 1024, demoAccountExists: true, sandboxUsedBytes: 256, sandboxFileCount: 2 }),
+      resetDemoSandbox: vi.fn().mockResolvedValue({ enabled: true, quotaBytes: 1024 * 1024 * 1024, normalQuotaBytes: 100 * 1024 * 1024 * 1024, demoAccountExists: true, sandboxUsedBytes: 256, sandboxFileCount: 2 }),
+      endDemoSessions: vi.fn().mockResolvedValue(undefined),
+      listAuditEvents: vi.fn().mockResolvedValue([]),
       publishForm: vi.fn(),
       listFormResponses: vi.fn().mockResolvedValue([]),
       rename: vi.fn().mockResolvedValue({ key: "Strategy 2026", name: "Strategy 2026", size: 1, contentType: "application/vnd.zo.document+json", nativeType: "document", updatedAt: "2026-01-01T00:00:00.000Z", starred: false }),
@@ -441,7 +513,7 @@ describe("DriveApp", () => {
       changePassword: vi.fn(),
       deleteAccount: vi.fn(),
       listAccountMembers: vi.fn().mockResolvedValue([{ id: "owner", username: "sayyid", access: "write", role: "super", isOwner: true, isDemo: false, createdAt: "2026-01-01T00:00:00.000Z" }]),
-      createAccountMember: vi.fn().mockResolvedValue({ id: "demo", username: "demo", access: "read", role: "regular", isOwner: false, isDemo: true, createdAt: "2026-07-22T00:00:00.000Z" }),
+      createAccountMember: vi.fn().mockResolvedValue({ id: "demo", username: "demo", access: "write", role: "regular", isOwner: false, isDemo: true, createdAt: "2026-07-22T00:00:00.000Z" }),
       updateAccountMember: vi.fn(),
       deleteAccountMember: vi.fn()
     };
@@ -697,9 +769,12 @@ describe("DriveApp", () => {
     fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
     expect(screen.getByRole("button", { name: "User access" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Demo Mode" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Audit trail" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Theme" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Demo Mode" }));
     expect(await screen.findByRole("heading", { name: "A safe, bounded Drive for demonstrations." })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reset demo data" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "End all demo sessions" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Turn Demo Mode on" }));
     await waitFor(() => expect(client.setDemoMode).toHaveBeenCalledWith(true));
     expect(await screen.findByText("The 1 GB cap is active.")).toBeInTheDocument();
@@ -712,7 +787,7 @@ describe("DriveApp", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "New user username" }), { target: { value: "demo" } });
     fireEvent.change(screen.getByRole("textbox", { name: "New user password" }), { target: { value: "public-demo" } });
     fireEvent.click(screen.getByRole("button", { name: "Add user" }));
-    await waitFor(() => expect(authClient.createAccountMember).toHaveBeenCalledWith({ username: "demo", password: "public-demo", access: "read", role: "regular", isDemo: true }));
+    await waitFor(() => expect(authClient.createAccountMember).toHaveBeenCalledWith({ username: "demo", password: "public-demo", access: "write", role: "regular", isDemo: true }));
     fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
     fireEvent.click(screen.getByRole("button", { name: "Theme" }));
     expect(await screen.findByRole("heading", { name: "Choose your Drive theme." })).toBeInTheDocument();

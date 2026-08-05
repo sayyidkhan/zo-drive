@@ -18,6 +18,7 @@ import { LocalDatabaseApiKeyStore, type DatabaseApiKeyScope } from "./databases/
 import { LocalFunctionStore } from "./functions/local-function-store.js";
 import { LocalClusterCache } from "./clusters/local-cluster-cache.js";
 import { LocalClusterStore } from "./clusters/local-cluster-store.js";
+import { LocalAuditStore } from "./audit/local-audit-store.js";
 import { LocalDriveStorage, NativeFileVersionConflictError, StorageQuotaConfigurationError, StorageQuotaExceededError, TrashRestoreConflictError, UnsafeDrivePathError } from "./storage/local-drive-storage.js";
 import {
   accountMemberCreateSchema,
@@ -80,6 +81,7 @@ type CreateAppOptions = {
   functions?: LocalFunctionStore;
   clusters?: LocalClusterStore;
   clusterCache?: LocalClusterCache;
+  audit?: LocalAuditStore;
   maxDatabaseImportBytes?: number;
   trustProxy?: boolean;
   zominAi?: {
@@ -91,22 +93,77 @@ type CreateAppOptions = {
   };
 };
 
-export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys, invalidApiKeyRateLimiter = new InvalidApiKeyRateLimiter(), sharing, forms, databases = new LocalDatabaseStore(storage.root), databaseApiKeys = new LocalDatabaseApiKeyStore({ root: storage.root }), functions = new LocalFunctionStore(storage.root), clusters = new LocalClusterStore({ root: storage.root }), clusterCache = new LocalClusterCache({ root: storage.root, maxBytes: 1024 * 1024 * 1024 }), maxDatabaseImportBytes = Number.MAX_SAFE_INTEGER, trustProxy = false, zominAi }: CreateAppOptions) {
+export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys, invalidApiKeyRateLimiter = new InvalidApiKeyRateLimiter(), sharing, forms, databases = new LocalDatabaseStore(storage.root), databaseApiKeys = new LocalDatabaseApiKeyStore({ root: storage.root }), functions = new LocalFunctionStore(storage.root), clusters = new LocalClusterStore({ root: storage.root }), clusterCache = new LocalClusterCache({ root: storage.root, maxBytes: 1024 * 1024 * 1024 }), audit = new LocalAuditStore({ root: storage.root }), maxDatabaseImportBytes = Number.MAX_SAFE_INTEGER, trustProxy = false, zominAi }: CreateAppOptions) {
   const app = new Hono();
+  const recordAudit = async (event: Parameters<LocalAuditStore["record"]>[0]) => {
+    try {
+      await audit.record(event);
+    } catch (error) {
+      console.error("Could not persist Zo Drive audit event", error);
+    }
+  };
+  const sessionUser = async (request: Request) => {
+    if (!auth) return null;
+    const payload = auth.sessions.payloadFromRequest(request);
+    if (!payload || !(await auth.store.isSessionCurrent(payload.userId, payload.sessionVersion))) return null;
+    return auth.store.findById(payload.userId);
+  };
+  const dataOwner = async (request: Request, requiredAccess: "read" | "write") => {
+    const userId = await resolveUserId(request);
+    if (!userId || !auth) return userId;
+    const browserUser = await sessionUser(request);
+    if (auth.sessions.payloadFromRequest(request) && !browserUser) return null;
+    const user = browserUser ?? await auth.store.findById(userId);
+    if (!user) return null;
+    if (user.isDemo) {
+      const ownerId = await auth.store.accountOwnerIdFor(user.id, "read");
+      if (!ownerId || !(await storage.getDemoMode({ userId: ownerId })).enabled) return null;
+      await ensureDemoSandbox(user.id);
+    }
+    return auth.store.dataOwnerIdFor(user.id, requiredAccess);
+  };
   const resolveAuthenticatedUser = async (request: Request) => {
     const userId = await resolveUserId(request);
     if (!userId || !auth) return userId;
+    if (auth.sessions.payloadFromRequest(request) && !(await sessionUser(request))) return null;
     return (await auth.store.findById(userId))?.id ?? null;
   };
   const resolveActiveUser: UserResolver = async (request) => {
-    const userId = await resolveUserId(request);
-    if (!userId || !auth) return userId;
-    return auth.store.accountOwnerIdFor(userId, request.method === "GET" || request.method === "HEAD" || request.method === "OPTIONS" ? "read" : "write");
+    return dataOwner(request, request.method === "GET" || request.method === "HEAD" || request.method === "OPTIONS" ? "read" : "write");
   };
   const resolveReadUser: UserResolver = async (request) => {
-    const userId = await resolveUserId(request);
-    if (!userId || !auth) return userId;
-    return auth.store.accountOwnerIdFor(userId, "read");
+    return dataOwner(request, "read");
+  };
+  const demoStatus = async (ownerUserId: string) => {
+    const status = await storage.getDemoMode({ userId: ownerUserId });
+    const demo = auth ? await auth.store.getDemoAccount(ownerUserId) : null;
+    if (status.enabled && demo) await ensureDemoSandbox(demo.id);
+    const usage = demo ? await storage.getUsage({ userId: demo.id }) : null;
+    return { ...status, demoAccountExists: Boolean(demo), sandboxUsedBytes: usage?.usedBytes ?? 0, sandboxFileCount: usage?.fileCount ?? 0 };
+  };
+  const seedDemoSandbox = async (demoUserId: string) => {
+    await storage.write({ userId: demoUserId, key: "Welcome to Zo Drive.md", content: Buffer.from("# Welcome to Zo Drive\n\nThis is synthetic demo data. Upload, edit, share, and delete files freely; a super-admin can reset this sandbox at any time.\n"), contentType: "text/markdown" });
+    await storage.write({ userId: demoUserId, key: "Example Projects/Product launch checklist.md", content: Buffer.from("# Product launch checklist\n\n- Review the demo workspace\n- Upload a sample asset\n- Create a share link\n- Test search and Trash\n"), contentType: "text/markdown" });
+  };
+  const ensureDemoSandbox = async (demoUserId: string) => {
+    const usage = await storage.getUsage({ userId: demoUserId });
+    if (usage.usedBytes <= 1024 * 1024 * 1024 && usage.quotaBytes !== 1024 * 1024 * 1024) {
+      await storage.setQuota({ userId: demoUserId, quotaBytes: 1024 * 1024 * 1024 });
+    }
+    if (usage.fileCount === 0) await seedDemoSandbox(demoUserId);
+  };
+  const resetDemoSandbox = async (demoUserId: string) => {
+    await auth?.store.revokeSessions(demoUserId);
+    await sharing?.removeByOwner(demoUserId);
+    await forms?.removeByOwner(demoUserId);
+    await databases.removeByOwner(demoUserId);
+    await databaseApiKeys.removeByOwner(demoUserId);
+    await functions.removeByOwner(demoUserId);
+    await apiKeys?.removeByOwner(demoUserId);
+    await clusters.removeByOwner(demoUserId);
+    await storage.removeUser({ userId: demoUserId });
+    await storage.setQuota({ userId: demoUserId, quotaBytes: 1024 * 1024 * 1024 });
+    await seedDemoSandbox(demoUserId);
   };
   if (allowedOrigin) {
     const corsOptions = { credentials: true, origin: allowedOrigin };
@@ -129,6 +186,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     app.use("/shares", cors(corsOptions));
     app.use("/shares/*", cors(corsOptions));
     app.use("/settings/*", cors(corsOptions));
+    app.use("/audit", cors(corsOptions));
     app.use("/shared/*", cors(corsOptions));
     app.use("/forms", cors(corsOptions));
     app.use("/forms/*", cors(corsOptions));
@@ -156,6 +214,22 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
       return;
     }
     if (context.res.status < 400) invalidApiKeyRateLimiter.clear(client);
+  });
+
+  app.use("*", async (context, next) => {
+    const method = context.req.method.toUpperCase();
+    const actorUserId = await resolveAuthenticatedUser(context.req.raw);
+    await next();
+    if (!["POST", "PUT", "PATCH", "DELETE"].includes(method) || context.req.path.startsWith("/auth/login")) return;
+    await recordAudit({
+      actorUserId,
+      action: `${method} ${context.req.path}`,
+      method,
+      path: context.req.path,
+      status: context.res.status,
+      ipAddress: requestIp(context.req.raw, trustProxy),
+      userAgent: context.req.header("user-agent")?.slice(0, 512) ?? null
+    });
   });
 
   app.get("/health", (context) => context.json({ status: "ok" }));
@@ -353,11 +427,13 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     app.get("/auth/status", async (context) => {
       const userId = await resolveAuthenticatedUser(context.req.raw);
       const user = userId ? await auth.store.findById(userId) : null;
+      const demoOwnerId = await auth.store.getDemoAccountOwnerId();
+      const demoEnabled = demoOwnerId ? (await storage.getDemoMode({ userId: demoOwnerId })).enabled : false;
       return context.json({
         authenticated: Boolean(user),
         registrationAllowed: !(await auth.store.hasUsers()),
         user,
-        demoAccount: await auth.store.getDemoAccountCredentials()
+        demoAccount: demoEnabled ? await auth.store.getDemoAccountCredentials() : null
       });
     });
 
@@ -367,7 +443,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
 
       const user = await auth.store.registerInitialUser(parsed.data);
       if (!user) return context.json({ error: { code: "REGISTRATION_CLOSED", message: "An owner account already exists. Please sign in." } }, 403);
-      context.header("set-cookie", auth.sessions.cookieHeader(auth.sessions.create(user.id), auth.secureCookies));
+      context.header("set-cookie", auth.sessions.cookieHeader(auth.sessions.create(user.id, await auth.store.sessionVersionFor(user.id)), auth.secureCookies));
       return context.json({ user }, 201);
     });
 
@@ -376,9 +452,17 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
       if (!parsed.success) return context.json({ error: { code: "INVALID_CREDENTIALS", message: "Username or password is incorrect" } }, 401);
 
       const user = await auth.store.authenticate(parsed.data);
-      if (!user) return context.json({ error: { code: "INVALID_CREDENTIALS", message: "Username or password is incorrect" } }, 401);
-      const sessionToken = auth.sessions.create(user.id);
+      if (!user) {
+        await recordAudit({ actorUserId: null, action: "LOGIN_FAILED", method: "POST", path: "/auth/login", status: 401, ipAddress: requestIp(context.req.raw, trustProxy), userAgent: context.req.header("user-agent")?.slice(0, 512) ?? null });
+        return context.json({ error: { code: "INVALID_CREDENTIALS", message: "Username or password is incorrect" } }, 401);
+      }
+      if (user.isDemo) {
+        const ownerId = await auth.store.accountOwnerIdFor(user.id, "read");
+        if (!ownerId || !(await storage.getDemoMode({ userId: ownerId })).enabled) return context.json({ error: { code: "DEMO_MODE_OFF", message: "Demo Mode is not currently available" } }, 403);
+      }
+      const sessionToken = auth.sessions.create(user.id, await auth.store.sessionVersionFor(user.id));
       context.header("set-cookie", auth.sessions.cookieHeader(sessionToken, auth.secureCookies));
+      await recordAudit({ actorUserId: user.id, action: "LOGIN_SUCCEEDED", method: "POST", path: "/auth/login", status: 200, ipAddress: requestIp(context.req.raw, trustProxy), userAgent: context.req.header("user-agent")?.slice(0, 512) ?? null });
       return context.json({ user });
     });
 
@@ -406,7 +490,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
       }
       const user = await auth.store.renameUser(userId, nextUserId);
       if (!user) return context.json({ error: { code: "PROFILE_UPDATE_FAILED", message: "Could not update the username" } }, 409);
-      context.header("set-cookie", auth.sessions.cookieHeader(auth.sessions.create(user.id), auth.secureCookies));
+      context.header("set-cookie", auth.sessions.cookieHeader(auth.sessions.create(user.id, await auth.store.sessionVersionFor(user.id)), auth.secureCookies));
       return context.json({ user });
     });
 
@@ -475,9 +559,20 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     app.delete("/auth/users/:id", async (context) => {
       const userId = await requireBrowserUser(context.req.raw, auth);
       if (!userId) return unauthorized(context);
+      const member = await auth.store.findById(context.req.param("id"));
       const result = await auth.store.removeAccountMember(userId, context.req.param("id"));
       if (result === "forbidden") return context.json({ error: { code: "OWNER_PROTECTED", message: "The original owner cannot be removed" } }, 403);
       if (result === "not_found") return context.json({ error: { code: "NOT_FOUND", message: "User not found or access cannot be managed" } }, 404);
+      if (member?.isDemo) {
+        await sharing?.removeByOwner(member.id);
+        await forms?.removeByOwner(member.id);
+        await databases.removeByOwner(member.id);
+        await databaseApiKeys.removeByOwner(member.id);
+        await functions.removeByOwner(member.id);
+        await apiKeys?.removeByOwner(member.id);
+        await clusters.removeByOwner(member.id);
+        await storage.removeUser({ userId: member.id });
+      }
       return context.body(null, 204);
     });
 
@@ -487,7 +582,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
       if (!(await auth.store.canManageUsers(userId))) return context.json({ error: { code: "FORBIDDEN", message: "Only super users can manage Demo Mode" } }, 403);
       const ownerUserId = await auth.store.accountOwnerIdFor(userId, "read");
       if (!ownerUserId) return context.json({ error: { code: "FORBIDDEN", message: "Demo Mode is unavailable for this account" } }, 403);
-      return context.json(await storage.getDemoMode({ userId: ownerUserId }));
+      return context.json(await demoStatus(ownerUserId));
     });
 
     app.put("/settings/demo-mode", async (context) => {
@@ -498,17 +593,57 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
       if (!ownerUserId) return context.json({ error: { code: "FORBIDDEN", message: "Demo Mode is unavailable for this account" } }, 403);
       const parsed = updateDemoModeSchema.safeParse(await context.req.json().catch(() => null));
       if (!parsed.success) return context.json({ error: { code: "INVALID_REQUEST", message: "Choose whether Demo Mode is on or off" } }, 400);
-      return context.json(await storage.setDemoMode({ userId: ownerUserId, enabled: parsed.data.enabled }));
+      const demo = await auth.store.getDemoAccount(userId);
+      if (!demo) return context.json({ error: { code: "DEMO_ACCOUNT_REQUIRED", message: "Create a demo account in User access before enabling Demo Mode" } }, 409);
+      if (parsed.data.enabled) {
+        const usage = await storage.getUsage({ userId: demo.id });
+        if (usage.usedBytes > 1024 * 1024 * 1024) return context.json({ error: { code: "DEMO_SANDBOX_TOO_LARGE", message: "Reset demo data or reduce the sandbox below 1 GB before enabling Demo Mode" } }, 409);
+        await ensureDemoSandbox(demo.id);
+      } else {
+        await auth.store.revokeSessions(demo.id);
+      }
+      await storage.setDemoMode({ userId: ownerUserId, enabled: parsed.data.enabled });
+      return context.json(await demoStatus(ownerUserId));
+    });
+
+    app.post("/settings/demo-mode/reset", async (context) => {
+      const userId = await requireBrowserUser(context.req.raw, auth);
+      if (!userId) return unauthorized(context);
+      if (!(await auth.store.canManageUsers(userId))) return context.json({ error: { code: "FORBIDDEN", message: "Only super users can reset demo data" } }, 403);
+      const ownerUserId = await auth.store.accountOwnerIdFor(userId, "read");
+      const demo = await auth.store.getDemoAccount(userId);
+      if (!ownerUserId || !demo) return context.json({ error: { code: "DEMO_ACCOUNT_REQUIRED", message: "Create a demo account before resetting demo data" } }, 409);
+      await resetDemoSandbox(demo.id);
+      return context.json(await demoStatus(ownerUserId));
+    });
+
+    app.delete("/settings/demo-mode/sessions", async (context) => {
+      const userId = await requireBrowserUser(context.req.raw, auth);
+      if (!userId) return unauthorized(context);
+      if (!(await auth.store.canManageUsers(userId))) return context.json({ error: { code: "FORBIDDEN", message: "Only super users can end demo sessions" } }, 403);
+      const demo = await auth.store.getDemoAccount(userId);
+      if (!demo) return context.json({ error: { code: "DEMO_ACCOUNT_REQUIRED", message: "Create a demo account before ending demo sessions" } }, 409);
+      await auth.store.revokeSessions(demo.id);
+      return context.body(null, 204);
+    });
+
+    app.get("/audit", async (context) => {
+      const userId = await requireBrowserUser(context.req.raw, auth);
+      if (!userId) return unauthorized(context);
+      if (!(await auth.store.canManageUsers(userId))) return context.json({ error: { code: "FORBIDDEN", message: "Only super users can view the audit trail" } }, 403);
+      return context.json({ events: await audit.list() });
     });
 
     if (apiKeys) {
       app.get("/api-keys", async (context) => {
+        if (await isDemoBrowserRequest(context.req.raw, auth)) return demoCredentialUnavailable(context);
         const userId = await requireAccountManager(context.req.raw, auth);
         if (!userId) return unauthorized(context);
         return context.json({ keys: await apiKeys.list(userId) });
       });
 
       app.post("/api-keys", async (context) => {
+        if (await isDemoBrowserRequest(context.req.raw, auth)) return demoCredentialUnavailable(context);
         const userId = await requireAccountManager(context.req.raw, auth);
         if (!userId) return unauthorized(context);
         const parsed = createApiKeySchema.safeParse(await context.req.json().catch(() => null));
@@ -518,6 +653,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
       });
 
       app.delete("/api-keys/:id", async (context) => {
+        if (await isDemoBrowserRequest(context.req.raw, auth)) return demoCredentialUnavailable(context);
         const userId = await requireAccountManager(context.req.raw, auth);
         if (!userId) return unauthorized(context);
         if (!(await apiKeys.revoke({ id: context.req.param("id"), ownerUserId: userId }))) return context.json({ error: { code: "NOT_FOUND", message: "API key not found" } }, 404);
@@ -1018,6 +1154,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
   });
 
   app.get("/databases/:id/api-keys", async (context) => {
+    if (auth && await isDemoBrowserRequest(context.req.raw, auth)) return demoCredentialUnavailable(context);
     const userId = await requireDatabaseOwner(context.req.raw, resolveActiveUser, auth);
     if (!userId) return unauthorized(context);
     await databases.get({ ownerUserId: userId, id: context.req.param("id") });
@@ -1025,6 +1162,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
   });
 
   app.post("/databases/:id/api-keys", async (context) => {
+    if (auth && await isDemoBrowserRequest(context.req.raw, auth)) return demoCredentialUnavailable(context);
     const userId = await requireDatabaseOwner(context.req.raw, resolveActiveUser, auth);
     if (!userId) return unauthorized(context);
     const parsed = createDatabaseApiKeySchema.safeParse(await context.req.json().catch(() => null));
@@ -1035,6 +1173,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
   });
 
   app.delete("/databases/:id/api-keys/:keyId", async (context) => {
+    if (auth && await isDemoBrowserRequest(context.req.raw, auth)) return demoCredentialUnavailable(context);
     const userId = await requireDatabaseOwner(context.req.raw, resolveActiveUser, auth);
     if (!userId) return unauthorized(context);
     if (!(await databaseApiKeys.revoke({ id: context.req.param("keyId"), ownerUserId: userId, databaseId: context.req.param("id") }))) return context.json({ error: { code: "NOT_FOUND", message: "Database API key not found" } }, 404);
@@ -1387,8 +1526,14 @@ async function requireUser(request: Request, resolveUserId: UserResolver): Promi
 }
 
 async function requireBrowserUser(request: Request, auth: NonNullable<CreateAppOptions["auth"]>): Promise<string | null> {
-  const userId = auth.sessions.userIdFromCookie(request);
-  return userId && (await auth.store.findById(userId))?.id || null;
+  const payload = auth.sessions.payloadFromRequest(request);
+  if (!payload || !(await auth.store.isSessionCurrent(payload.userId, payload.sessionVersion))) return null;
+  return (await auth.store.findById(payload.userId))?.id ?? null;
+}
+
+async function isDemoBrowserRequest(request: Request, auth: NonNullable<CreateAppOptions["auth"]>): Promise<boolean> {
+  const userId = await requireBrowserUser(request, auth);
+  return Boolean(userId && await auth.store.isDemoAccount(userId));
 }
 
 async function requireAccountManager(request: Request, auth: NonNullable<CreateAppOptions["auth"]>): Promise<string | null> {
@@ -1530,6 +1675,15 @@ function clusterProxyResponse(response: Response): Response {
 
 function unauthorized(context: Context) {
   return context.json({ error: { code: "UNAUTHORIZED", message: "Authentication is required" } }, 401);
+}
+
+function demoCredentialUnavailable(context: Context) {
+  return context.json({ error: { code: "DEMO_CREDENTIALS_UNAVAILABLE", message: "Credential management is not available in Demo Mode" } }, 403);
+}
+
+function requestIp(request: Request, trustProxy: boolean): string | null {
+  if (!trustProxy) return null;
+  return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim().slice(0, 128) ?? null;
 }
 
 function clusterReadOnly(context: Context) {

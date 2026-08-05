@@ -3,6 +3,8 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 type SessionPayload = {
   userId: string;
   expiresAt: number;
+  issuedAt?: number;
+  sessionVersion?: number;
 };
 
 export class SessionService {
@@ -10,27 +12,35 @@ export class SessionService {
     if (secret.length < 32) throw new Error("ZO_DRIVE_SESSION_SECRET must be at least 32 characters");
   }
 
-  create(userId: string): string {
-    const payload = Buffer.from(JSON.stringify({ userId, expiresAt: this.now() + 7 * 24 * 60 * 60 * 1_000 })).toString("base64url");
+  create(userId: string, sessionVersion = 0): string {
+    const payload = Buffer.from(JSON.stringify({ userId, sessionVersion, issuedAt: this.now(), expiresAt: this.now() + 7 * 24 * 60 * 60 * 1_000 })).toString("base64url");
     return `${payload}.${this.sign(payload)}`;
   }
 
-  userIdFromToken(token: string | undefined): string | null {
+  payloadFromToken(token: string | undefined): SessionPayload | null {
     if (!token) return null;
     const [payload, signature] = token.split(".");
     if (!payload || !signature || !safeEqual(signature, this.sign(payload))) return null;
     try {
       const decoded = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as SessionPayload;
-      return typeof decoded.userId === "string" && decoded.expiresAt > this.now() ? decoded.userId : null;
+      return typeof decoded.userId === "string" && decoded.expiresAt > this.now() ? decoded : null;
     } catch {
       return null;
     }
   }
 
-  userIdFromRequest(request: Request): string | null {
+  userIdFromToken(token: string | undefined): string | null {
+    return this.payloadFromToken(token)?.userId ?? null;
+  }
+
+  payloadFromRequest(request: Request): SessionPayload | null {
     const authorization = request.headers.get("authorization");
     const bearerToken = authorization?.match(/^Bearer (.+)$/i)?.[1];
-    return this.userIdFromToken(bearerToken ?? cookieValue(request.headers.get("cookie"), "zo_drive_session"));
+    return this.payloadFromToken(bearerToken ?? cookieValue(request.headers.get("cookie"), "zo_drive_session"));
+  }
+
+  userIdFromRequest(request: Request): string | null {
+    return this.payloadFromRequest(request)?.userId ?? null;
   }
 
   userIdFromCookie(request: Request): string | null {

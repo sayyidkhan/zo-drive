@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -881,10 +881,12 @@ describe("Zo Drive API", () => {
     const root = await mkdtemp(join(tmpdir(), "zo-drive-user-access-"));
     roots.push(root);
     const sessions = new SessionService("test-session-secret-that-is-more-than-thirty-two-characters");
+    const apiKeys = new LocalApiKeyStore({ root });
     const app = createApp({
       storage: new LocalDriveStorage({ root }),
       resolveUserId: (request) => sessions.userIdFromRequest(request),
-      auth: { store: new LocalAuthStore({ root }), sessions, secureCookies: false }
+      auth: { store: new LocalAuthStore({ root }), sessions, secureCookies: false },
+      apiKeys
     });
 
     const ownerRegistration = await app.request("http://localhost/auth/register", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: "owner", password: "owner-secret" }) });
@@ -897,8 +899,12 @@ describe("Zo Drive API", () => {
     expect(superUser.status).toBe(201);
     const demo = await app.request("http://localhost/auth/users", { method: "POST", headers: { "content-type": "application/json", cookie: ownerCookie }, body: JSON.stringify({ username: "demo", password: "public-demo", access: "write", role: "super", isDemo: true }) });
     expect(demo.status).toBe(201);
-    await expect(demo.json()).resolves.toMatchObject({ username: "demo", access: "read", role: "regular", isDemo: true });
-    await expect((await app.request("http://localhost/auth/status")).json()).resolves.toMatchObject({ authenticated: false, demoAccount: { username: "demo", password: "public-demo" } });
+    await expect(demo.json()).resolves.toMatchObject({ username: "demo", access: "write", role: "regular", isDemo: true });
+    const usersFile = join(root, "v1", "auth", "users.json");
+    const storedUsers = JSON.parse(await readFile(usersFile, "utf8")) as { users: Array<{ id: string; access?: string }> };
+    storedUsers.users.find((user) => user.id === "demo")!.access = "read";
+    await writeFile(usersFile, JSON.stringify(storedUsers, null, 2));
+    await expect((await app.request("http://localhost/auth/status")).json()).resolves.toMatchObject({ authenticated: false, demoAccount: null });
     expect((await app.request("http://localhost/auth/users", { method: "POST", headers: { "content-type": "application/json", cookie: ownerCookie }, body: JSON.stringify({ username: "demo-two", password: "public-demo-two", access: "read", role: "regular", isDemo: true }) })).status).toBe(409);
     expect((await app.request("http://localhost/objects", { method: "POST", headers: { "content-type": "text/plain", cookie: ownerCookie, "x-zo-drive-file-name": "owner-file.txt" }, body: "shared account file" })).status).toBe(201);
 
@@ -915,25 +921,40 @@ describe("Zo Drive API", () => {
     await expect((await app.request("http://localhost/settings/demo-mode", { headers: { cookie: superCookie } })).json()).resolves.toMatchObject({ enabled: false, quotaBytes: 100 * 1024 * 1024 * 1024 });
     const demoModeEnabled = await app.request("http://localhost/settings/demo-mode", { method: "PUT", headers: { "content-type": "application/json", cookie: superCookie }, body: JSON.stringify({ enabled: true }) });
     expect(demoModeEnabled.status).toBe(200);
-    await expect(demoModeEnabled.json()).resolves.toEqual({ enabled: true, quotaBytes: 1024 * 1024 * 1024, normalQuotaBytes: 100 * 1024 * 1024 * 1024 });
-    await expect((await app.request("http://localhost/usage", { headers: { cookie: ownerCookie } })).json()).resolves.toMatchObject({ quotaBytes: 1024 * 1024 * 1024 });
+    await expect(demoModeEnabled.json()).resolves.toMatchObject({ enabled: true, quotaBytes: 1024 * 1024 * 1024, normalQuotaBytes: 100 * 1024 * 1024 * 1024, demoAccountExists: true, sandboxFileCount: 2 });
+    await expect((await app.request("http://localhost/auth/status")).json()).resolves.toMatchObject({ authenticated: false, demoAccount: { username: "demo", password: "public-demo" } });
+    await expect((await app.request("http://localhost/usage", { headers: { cookie: ownerCookie } })).json()).resolves.toMatchObject({ quotaBytes: 100 * 1024 * 1024 * 1024 });
     const quotaWhileDemo = await app.request("http://localhost/usage/quota", { method: "PUT", headers: { "content-type": "application/json", cookie: ownerCookie }, body: JSON.stringify({ quotaBytes: 2 * 1024 * 1024 * 1024 }) });
-    expect(quotaWhileDemo.status).toBe(400);
-    await expect(quotaWhileDemo.json()).resolves.toMatchObject({ error: { code: "INVALID_STORAGE_QUOTA", message: "Turn off Demo Mode before changing the storage limit" } });
-    const demoModeDisabled = await app.request("http://localhost/settings/demo-mode", { method: "PUT", headers: { "content-type": "application/json", cookie: superCookie }, body: JSON.stringify({ enabled: false }) });
-    await expect(demoModeDisabled.json()).resolves.toEqual({ enabled: false, quotaBytes: 100 * 1024 * 1024 * 1024, normalQuotaBytes: 100 * 1024 * 1024 * 1024 });
+    expect(quotaWhileDemo.status).toBe(200);
+    await expect(quotaWhileDemo.json()).resolves.toMatchObject({ quotaBytes: 2 * 1024 * 1024 * 1024 });
     expect((await app.request("http://localhost/auth/users/reader", { method: "PATCH", headers: { "content-type": "application/json", cookie: superCookie }, body: JSON.stringify({ access: "write" }) })).status).toBe(200);
     expect((await app.request("http://localhost/auth/users/owner", { method: "PATCH", headers: { "content-type": "application/json", cookie: superCookie }, body: JSON.stringify({ access: "read", role: "regular" }) })).status).toBe(403);
     expect((await app.request("http://localhost/auth/users/owner", { method: "DELETE", headers: { cookie: superCookie } })).status).toBe(403);
     expect((await app.request("http://localhost/objects", { method: "POST", headers: { "content-type": "text/plain", cookie: readerCookie, "x-zo-drive-file-name": "member-file.txt" }, body: "now allowed" })).status).toBe(201);
 
     const demoLogin = await app.request("http://localhost/auth/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: "demo", password: "public-demo" }) });
+    await expect(demoLogin.clone().json()).resolves.toMatchObject({ user: { access: "write", isDemo: true } });
     const demoCookie = demoLogin.headers.get("set-cookie")!;
-    expect((await app.request("http://localhost/objects", { headers: { cookie: demoCookie } })).status).toBe(200);
-    expect((await app.request("http://localhost/objects", { method: "POST", headers: { "content-type": "text/plain", cookie: demoCookie, "x-zo-drive-file-name": "demo-write.txt" }, body: "blocked" })).status).toBe(401);
+    await expect((await app.request("http://localhost/objects", { headers: { cookie: demoCookie } })).json()).resolves.not.toMatchObject({ objects: [expect.objectContaining({ key: "owner-file.txt" })] });
+    expect((await app.request("http://localhost/objects", { method: "POST", headers: { "content-type": "text/plain", cookie: demoCookie, "x-zo-drive-file-name": "demo-write.txt" }, body: "allowed" })).status).toBe(201);
+    expect((await app.request("http://localhost/api-keys", { headers: { cookie: demoCookie } })).status).toBe(403);
     expect((await app.request("http://localhost/auth/profile", { method: "PATCH", headers: { "content-type": "application/json", cookie: demoCookie }, body: JSON.stringify({ username: "hijacked-demo" }) })).status).toBe(403);
     expect((await app.request("http://localhost/auth/password", { method: "POST", headers: { "content-type": "application/json", cookie: demoCookie }, body: JSON.stringify({ currentPassword: "public-demo", newPassword: "hijacked-password" }) })).status).toBe(403);
-    expect((await app.request("http://localhost/auth/users/demo", { method: "PATCH", headers: { "content-type": "application/json", cookie: ownerCookie }, body: JSON.stringify({ access: "write" }) })).status).toBe(403);
+    const reset = await app.request("http://localhost/settings/demo-mode/reset", { method: "POST", headers: { cookie: ownerCookie } });
+    await expect(reset.json()).resolves.toMatchObject({ enabled: true, sandboxFileCount: 2 });
+    expect((await app.request("http://localhost/objects", { headers: { cookie: demoCookie } })).status).toBe(401);
+    const nextDemoLogin = await app.request("http://localhost/auth/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: "demo", password: "public-demo" }) });
+    const nextDemoCookie = nextDemoLogin.headers.get("set-cookie")!;
+    expect((await app.request("http://localhost/settings/demo-mode/sessions", { method: "DELETE", headers: { cookie: ownerCookie } })).status).toBe(204);
+    expect((await app.request("http://localhost/objects", { headers: { cookie: nextDemoCookie } })).status).toBe(401);
+    const demoModeDisabled = await app.request("http://localhost/settings/demo-mode", { method: "PUT", headers: { "content-type": "application/json", cookie: superCookie }, body: JSON.stringify({ enabled: false }) });
+    await expect(demoModeDisabled.json()).resolves.toMatchObject({ enabled: false, normalQuotaBytes: 2 * 1024 * 1024 * 1024, demoAccountExists: true });
+    expect((await app.request("http://localhost/auth/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: "demo", password: "public-demo" }) })).status).toBe(403);
+    expect((await app.request("http://localhost/auth/users/demo", { method: "PATCH", headers: { "content-type": "application/json", cookie: ownerCookie }, body: JSON.stringify({ role: "super" }) })).status).toBe(403);
+    expect((await app.request("http://localhost/audit", { headers: { cookie: readerCookie } })).status).toBe(403);
+    const audit = await app.request("http://localhost/audit", { headers: { cookie: ownerCookie } });
+    expect(audit.status).toBe(200);
+    await expect(audit.json()).resolves.toMatchObject({ events: expect.arrayContaining([expect.objectContaining({ actorUserId: "demo", action: "LOGIN_SUCCEEDED" }), expect.objectContaining({ actorUserId: "owner", path: "/settings/demo-mode/reset" })]) });
     expect((await app.request("http://localhost/auth/users/demo", { method: "DELETE", headers: { cookie: ownerCookie } })).status).toBe(204);
     await expect((await app.request("http://localhost/auth/status")).json()).resolves.toMatchObject({ demoAccount: null });
   });

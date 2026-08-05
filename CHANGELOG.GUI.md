@@ -5,6 +5,20 @@ history remains available in Git.
 
 ## Unreleased
 
+## v1.45.0 - 2026-08-05
+
+### Added
+
+- Upgraded Demo Mode to a writable, isolated 1 GB sandbox with synthetic seed
+  data, manual reset, and a super-admin emergency session kill switch.
+- Added a persistent super-admin audit trail for sign-ins and account actions.
+
+### Security
+
+- Kept credential features visible to demo visitors while preventing the
+  browser and server from listing, creating, or revoking their secrets.
+- Stopped Demo Mode from exposing or changing production files and quotas.
+
 ## v1.44.0 - 2026-08-05
 
 ### Added

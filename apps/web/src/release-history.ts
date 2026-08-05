@@ -4,11 +4,16 @@ export type ProductRelease = {
   changes: string[];
 };
 
-export const GUI_VERSION = "1.44.0";
+export const GUI_VERSION = "1.45.0";
 export const CLI_VERSION = "1.3.0";
 export const ZOMINAI_VERSION = "1.10.0";
 
 export const GUI_CHANGELOG: ProductRelease[] = [
+  {
+    version: "v1.45.0",
+    date: "2026-08-05",
+    changes: ["Upgraded Demo Mode to an isolated writable 1 GB sandbox with manual reset, emergency session termination, credential protection, and an account-wide audit trail."]
+  },
   {
     version: "v1.44.0",
     date: "2026-08-05",

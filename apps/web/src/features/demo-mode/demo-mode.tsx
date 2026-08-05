@@ -1,18 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, FlaskConical, HardDrive, LoaderCircle, ShieldCheck } from "lucide-react";
+import { Check, FlaskConical, HardDrive, LoaderCircle, LogOut, RotateCcw, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
-import type { DemoModeStatus, StorageUsage } from "@zo-drive/types";
+import type { DemoModeStatus } from "@zo-drive/types";
 import { formatBytes } from "../../drive-formatting.js";
 
 export type DemoModeClient = {
   getDemoMode(): Promise<DemoModeStatus>;
   setDemoMode(enabled: boolean): Promise<DemoModeStatus>;
+  resetDemoSandbox(): Promise<DemoModeStatus>;
+  endDemoSessions(): Promise<void>;
 };
 
 const demoQuotaBytes = 1024 * 1024 * 1024;
 
-export function DemoModeScreen({ client, usage }: { client: DemoModeClient; usage?: StorageUsage }) {
+export function DemoModeScreen({ client }: { client: DemoModeClient }) {
   const queryClient = useQueryClient();
   const statusQuery = useQuery({ queryKey: ["demo-mode"], queryFn: () => client.getDemoMode() });
   const mutation = useMutation({
@@ -24,6 +26,19 @@ export function DemoModeScreen({ client, usage }: { client: DemoModeClient; usag
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Could not update Demo Mode")
   });
+  const resetMutation = useMutation({
+    mutationFn: () => client.resetDemoSandbox(),
+    onSuccess: (status) => {
+      queryClient.setQueryData(["demo-mode"], status);
+      toast.success("Demo data reset");
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not reset demo data")
+  });
+  const sessionsMutation = useMutation({
+    mutationFn: () => client.endDemoSessions(),
+    onSuccess: () => toast.success("All demo sessions ended"),
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not end demo sessions")
+  });
 
   if (statusQuery.isPending) {
     return <div className="grid h-64 place-items-center text-sm text-slate-500"><LoaderCircle className="mr-2 animate-spin" size={20} /> Loading Demo Mode…</div>;
@@ -33,8 +48,7 @@ export function DemoModeScreen({ client, usage }: { client: DemoModeClient; usag
   }
 
   const status = statusQuery.data;
-  const overDemoLimit = (usage?.usedBytes ?? 0) > demoQuotaBytes;
-  const activatingBlocked = !status.enabled && overDemoLimit;
+  const activatingBlocked = !status.enabled && (!status.demoAccountExists || status.sandboxUsedBytes > demoQuotaBytes);
 
   return <div className="w-full space-y-6">
     <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
@@ -44,7 +58,7 @@ export function DemoModeScreen({ client, usage }: { client: DemoModeClient; usag
         <div className="relative max-w-2xl">
           <span className="inline-flex items-center gap-2 rounded-full border border-cyan-200/25 bg-cyan-100/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-cyan-100"><FlaskConical size={14} /> Super-admin control</span>
           <h2 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">A safe, bounded Drive for demonstrations.</h2>
-          <p className="mt-3 max-w-xl text-sm leading-6 text-cyan-50/80">Demo Mode applies one account-wide storage ceiling across the browser, API, and CLI. It never deletes existing data.</p>
+          <p className="mt-3 max-w-xl text-sm leading-6 text-cyan-50/80">Demo Mode opens a writable, isolated 1 GB sandbox. Production files and storage limits stay untouched.</p>
         </div>
       </div>
 
@@ -70,7 +84,7 @@ export function DemoModeScreen({ client, usage }: { client: DemoModeClient; usag
             <span className={`relative h-7 w-12 shrink-0 rounded-full transition ${status.enabled ? "bg-emerald-600" : "bg-slate-300"}`}><span className={`absolute top-1 grid size-5 place-items-center rounded-full bg-white shadow transition ${status.enabled ? "left-6" : "left-1"}`}>{status.enabled && <Check size={13} className="text-emerald-600" />}</span></span>
           </button>
 
-          {activatingBlocked && <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-800" role="alert">This Drive currently uses {formatBytes(usage?.usedBytes ?? 0)}. Reduce usage to 1 GB or less before enabling Demo Mode.</p>}
+          {activatingBlocked && <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-800" role="alert">{!status.demoAccountExists ? "Create a demo account in User access before enabling Demo Mode." : `The demo sandbox uses ${formatBytes(status.sandboxUsedBytes)}. Reset it or reduce usage to 1 GB before enabling Demo Mode.`}</p>}
         </div>
 
         <aside className="space-y-3">
@@ -78,6 +92,11 @@ export function DemoModeScreen({ client, usage }: { client: DemoModeClient; usag
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5"><ShieldCheck className="text-slate-600" size={20} /><p className="mt-3 text-sm font-semibold text-slate-800">Server enforced</p><p className="mt-1 text-xs leading-5 text-slate-500">Browser and command-line clients cannot bypass the limit.</p></div>
         </aside>
       </div>
+    </section>
+
+    <section className="grid gap-4 lg:grid-cols-2">
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><RotateCcw className="text-blue-700" size={21} /><h3 className="mt-4 font-semibold text-slate-900">Reset demo data</h3><p className="mt-1 text-sm leading-6 text-slate-500">Manually remove only sandbox files, databases, functions, shares, and Trash, then restore synthetic examples. This never runs automatically.</p><button className="mt-5 rounded-lg border border-blue-200 px-4 py-2.5 text-sm font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50" disabled={!status.demoAccountExists || resetMutation.isPending} onClick={() => { if (window.confirm("Reset all demo data? Production data will not be changed.")) resetMutation.mutate(); }} type="button">{resetMutation.isPending ? "Resetting…" : "Reset demo data"}</button></div>
+      <div className="rounded-2xl border border-red-100 bg-white p-5 shadow-sm"><LogOut className="text-red-600" size={21} /><h3 className="mt-4 font-semibold text-slate-900">Emergency session kill switch</h3><p className="mt-1 text-sm leading-6 text-slate-500">Immediately sign out every active demo visitor. Regular user sessions are not affected and Demo Mode stays on.</p><button className="mt-5 rounded-lg border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50" disabled={!status.demoAccountExists || sessionsMutation.isPending} onClick={() => { if (window.confirm("End every active demo session now?")) sessionsMutation.mutate(); }} type="button">{sessionsMutation.isPending ? "Ending sessions…" : "End all demo sessions"}</button></div>
     </section>
   </div>;
 }
