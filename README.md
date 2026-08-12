@@ -208,6 +208,10 @@ usage, folder creation, text-file writes, moves, copies, and moving files to
 Trash. Read-only keys cannot call mutation tools. Permanent deletion is not
 available through MCP.
 
+Credit to [vihaanshahh/zo-mcp](https://github.com/vihaanshahh/zo-mcp), which
+helped inspire Zo Drive's MCP interface and demonstrated the value of connecting
+external agent clients directly to Zo.
+
 ### CLI
 
 #### Installation
