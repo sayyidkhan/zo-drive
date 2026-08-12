@@ -61,7 +61,7 @@ export class LocalApiKeyStore {
     if (changed) await this.write(data);
   }
 
-  async userIdFromRequest(request: Request): Promise<string | null> {
+  async userIdFromRequest(request: Request, requiredScope?: ApiKeyScope): Promise<string | null> {
     const authorization = request.headers.get("authorization");
     const apiKey = authorization?.match(/^Bearer (zdk_[A-Za-z0-9_-]+)$/)?.[1];
     const path = new URL(request.url).pathname;
@@ -70,7 +70,7 @@ export class LocalApiKeyStore {
     const requestHash = hash(apiKey);
     const stored = data.keys.find((key) => hashesMatch(key.secretHash, requestHash));
     if (!stored || (stored.expiresAt && new Date(stored.expiresAt).getTime() <= Date.now())) return null;
-    const required: ApiKeyScope = ["GET", "HEAD", "OPTIONS"].includes(request.method) ? "read" : "write";
+    const required: ApiKeyScope = requiredScope ?? (["GET", "HEAD", "OPTIONS"].includes(request.method) ? "read" : "write");
     if (!stored.scopes.includes(required)) return null;
     if (!stored.lastUsedAt || Date.now() - new Date(stored.lastUsedAt).getTime() > 60_000) {
       stored.lastUsedAt = new Date().toISOString();

@@ -22,7 +22,7 @@ describe("DriveApp", () => {
     expect(document.querySelector(".landing-particle-field")).toHaveClass("z-0");
     expect(screen.getByText("Data stays on your Zo")).toBeInTheDocument();
     expect(screen.getByText("Folder-preserving uploads")).toBeInTheDocument();
-    expect(screen.getByText("GUI & CLI Access")).toBeInTheDocument();
+    expect(screen.getByText("GUI, CLI & MCP access")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "A cloud should increase your agency, not your dependency." })).toBeInTheDocument();
     expect(screen.getByLabelText("The ownership advantage")).toHaveTextContent("Storage you control");
     expect(screen.getByLabelText("The ownership advantage")).toHaveTextContent("01");
@@ -43,7 +43,9 @@ describe("DriveApp", () => {
     expect(screen.getByRole("link", { name: "View source" })).toHaveAttribute("href", "https://github.com/sayyidkhan/zo-drive");
     expect(screen.getByRole("link", { name: "View source" })).toHaveAttribute("target", "_blank");
     expect(screen.getByRole("link", { name: "View source" })).toHaveAttribute("rel", "noreferrer");
-    expect(screen.getByRole("heading", { name: "Manage visually. Automate precisely." })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Manage visually. Automate precisely. Connect agents directly." })).toBeInTheDocument();
+    expect(screen.getByLabelText("Zo Drive interfaces")).toHaveTextContent("One Drive. Three ways to work.");
+    expect(screen.getByRole("link", { name: "Explore MCP" })).toHaveAttribute("href", expect.stringContaining("#mcp"));
     expect(screen.getByText(/including browser-only ZominAI/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Explore GUI" })).toHaveAttribute("href", expect.stringContaining("?docs=1"));
     expect(screen.getByRole("link", { name: "Explore CLI" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=cli"));
@@ -159,7 +161,8 @@ describe("DriveApp", () => {
       expect(screen.getByRole("heading", { name: "Run private databases beside your files" })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Automate with Zo Functions" })).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "Ask about your Drive without granting write access" })).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "GUI version 1.45.1" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Connect Codex, Claude, or Cursor without installing the CLI" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "GUI version 1.46.0" })).toBeInTheDocument();
       expect(screen.getByText("Product")).toBeInTheDocument();
       expect(screen.getByRole("navigation", { name: "Choose documentation product" })).toBeInTheDocument();
       expect(screen.getByRole("navigation", { name: "Documentation sections" })).toHaveTextContent("Zo Originals");
@@ -169,7 +172,7 @@ describe("DriveApp", () => {
         expect(modeSwitch).toHaveTextContent("CLI");
       }
       expect(screen.getByRole("link", { name: "Landing page" })).toHaveAttribute("href", "/");
-      expect(screen.getByRole("link", { name: "GUI releases version 1.45.1" })).toHaveAttribute("href", expect.stringContaining("?releases=1&mode=gui"));
+      expect(screen.getByRole("link", { name: "GUI releases version 1.46.0" })).toHaveAttribute("href", expect.stringContaining("?releases=1&mode=gui"));
       expect(screen.queryByRole("heading", { name: "GUI changelog" })).not.toBeInTheDocument();
       expect(screen.getAllByRole("link", { name: "GUI" })[0]).toHaveAttribute("aria-current", "page");
 
@@ -207,7 +210,7 @@ describe("DriveApp", () => {
       render(<DriveApp />);
 
       expect(screen.getByRole("heading", { name: "GUI changelog" })).toBeInTheDocument();
-      expect(screen.getByText("Latest: v1.45.1")).toBeInTheDocument();
+      expect(screen.getByText("Latest: v1.46.0")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", expect.stringContaining("?docs=1&mode=gui"));
 
       cleanup();

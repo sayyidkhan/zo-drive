@@ -21,6 +21,8 @@ rule changes.
 - Browser users authenticate with a signed HttpOnly session cookie. Automation
   and CLI clients authenticate with `Authorization: Bearer zdk_...` device
   keys. Treat every device key as a secret.
+- MCP clients connect to `POST /mcp` with the same bearer device key. The
+  endpoint uses stateless Streamable HTTP and requires no Zo Drive CLI install.
 - Repeated invalid device-key attempts are rate limited and return `429` with
   `Retry-After`. Do not retry a rejected key repeatedly; create a new key or
   reconfigure the client.
@@ -61,6 +63,10 @@ surface and use JSON except for object upload/download.
 
 ### Authenticated routes
 
+- `POST /mcp` — remote MCP endpoint for Codex, Claude, Cursor, and compatible
+  clients. Its ten tools cover file/folder discovery, text reads, usage, folder
+  creation, text writes, moves, copies, and reversible move-to-Trash. Device-key
+  read/write scopes are enforced per tool; permanent deletion is not exposed.
 - `GET|POST /folders` — list folders or create one.
 - `GET /zominai/health`, `GET /zominai/time`, `POST /zominai/warmup`, and
   `POST /zominai/chat` — inspect the private model runtime, retrieve the current
@@ -146,6 +152,8 @@ surface and use JSON except for object upload/download.
 - [Browser and CLI guides](./?docs=1): User-facing documentation for the
   hosted application.
 - [CLI guide](./?docs=1&mode=cli): Install, configure, and use `zo-drive`.
+- [MCP endpoint](./mcp): Connect an MCP client with a scoped `zdk_...` device
+  key; no Zo Drive CLI installation is required.
 - [Browser guide](./?docs=1&mode=gui): Browser workspace and account controls.
 - [ZominAI guide](./?docs=1&product=zominai): Private local runtime, selectable
   loaded models, bounded custom instructions, read-only Drive tools, response

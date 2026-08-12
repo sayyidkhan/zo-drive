@@ -4,11 +4,16 @@ export type ProductRelease = {
   changes: string[];
 };
 
-export const GUI_VERSION = "1.45.1";
+export const GUI_VERSION = "1.46.0";
 export const CLI_VERSION = "1.3.0";
 export const ZOMINAI_VERSION = "1.10.0";
 
 export const GUI_CHANGELOG: ProductRelease[] = [
+  {
+    version: "v1.46.0",
+    date: "2026-08-12",
+    changes: ["Added the authenticated Zo Drive MCP endpoint and presented GUI, CLI, and MCP as three interfaces to the same private Drive."]
+  },
   {
     version: "v1.45.1",
     date: "2026-08-05",

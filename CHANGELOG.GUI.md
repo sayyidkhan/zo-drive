@@ -5,6 +5,20 @@ history remains available in Git.
 
 ## Unreleased
 
+## v1.46.0 - 2026-08-12
+
+### Added
+
+- Added a scoped remote MCP endpoint for Codex, Claude, Cursor, and other MCP
+  clients, backed by the existing Zo Drive device-key model.
+- Updated the public landing page to present GUI, CLI, and MCP as three
+  interfaces to the same private Drive.
+
+### Security
+
+- Kept MCP read and write authority aligned with device-key scopes and omitted
+  permanent deletion from the MCP tool catalogue.
+
 ## v1.45.1 - 2026-08-05
 
 ### Fixed

@@ -19,6 +19,7 @@ import { LocalFunctionStore } from "./functions/local-function-store.js";
 import { LocalClusterCache } from "./clusters/local-cluster-cache.js";
 import { LocalClusterStore } from "./clusters/local-cluster-store.js";
 import { LocalAuditStore } from "./audit/local-audit-store.js";
+import { handleZoDriveMcpRequest } from "./mcp.js";
 import { LocalDriveStorage, NativeFileVersionConflictError, StorageQuotaConfigurationError, StorageQuotaExceededError, TrashRestoreConflictError, UnsafeDrivePathError } from "./storage/local-drive-storage.js";
 import {
   accountMemberCreateSchema,
@@ -220,7 +221,7 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
     const method = context.req.method.toUpperCase();
     const actorUserId = await resolveAuthenticatedUser(context.req.raw);
     await next();
-    if (!["POST", "PUT", "PATCH", "DELETE"].includes(method) || context.req.path.startsWith("/auth/login")) return;
+    if (!["POST", "PUT", "PATCH", "DELETE"].includes(method) || context.req.path.startsWith("/auth/login") || context.req.path === "/mcp") return;
     await recordAudit({
       actorUserId,
       action: `${method} ${context.req.path}`,
@@ -233,6 +234,35 @@ export function createApp({ storage, resolveUserId, allowedOrigin, auth, apiKeys
   });
 
   app.get("/health", (context) => context.json({ status: "ok" }));
+
+  if (apiKeys) {
+    app.all("/mcp", async (context) => {
+      const readUserId = await apiKeys.userIdFromRequest(context.req.raw, "read");
+      if (!readUserId) return unauthorized(context);
+      return handleZoDriveMcpRequest({
+        request: context.req.raw,
+        storage,
+        readUserId,
+        requireWriteUser: () => apiKeys.userIdFromRequest(context.req.raw, "write"),
+        onMutation: async (toolName) => recordAudit({
+          actorUserId: readUserId,
+          action: `MCP ${toolName}`,
+          method: "POST",
+          path: `/mcp/tools/${toolName}`,
+          status: 200,
+          ipAddress: requestIp(context.req.raw, trustProxy),
+          userAgent: context.req.header("user-agent")?.slice(0, 512) ?? null
+        }),
+        onFileMoved: async (fromKey, toKey) => {
+          await sharing?.renameKey({ ownerUserId: readUserId, fromKey, toKey });
+          await forms?.renameKey({ ownerUserId: readUserId, fromKey, toKey });
+        },
+        onFileTrashed: async (key) => {
+          await forms?.removeByKey({ ownerUserId: readUserId, key });
+        }
+      });
+    });
+  }
 
   if (zominAi) {
     const runtime = new URL(zominAi.endpoint);

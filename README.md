@@ -23,6 +23,7 @@ authentication, or workflow change.
 - Traversal-safe, user-scoped filesystem data root
 - Shared TypeScript SDK used by both the CLI and React app
 - `zo-drive` CLI: upload, list, download, delete, usage, and secure per-device configuration
+- Remote MCP endpoint for scoped agent access from Codex, Claude, Cursor, and other compatible clients without installing the Zo Drive CLI
 - React GUI: folder browsing, search, drag-and-drop/multiple upload of any file type, list/grid views, previews, deletion, and usage display
 - Zo-native files: documents, spreadsheets, presentations, forms, and secure text pastes created privately inside the drive
 - Zo Paste: dark text editor with language and tag metadata; create view-only or editable shared-notepad links with public or passcode access, expiry, and revocation controls
@@ -183,10 +184,29 @@ folder.
 
 #### GUI versioning
 
-The browser GUI has its own release track, currently `GUI v1.45.1`. GUI changes
+The browser GUI has its own release track, currently `GUI v1.46.0`. GUI changes
 are deployed to Zo Drive directly; browser users receive the current version by
 loading the page. Use `gui-v*` Git tags to trace a deployed GUI release. CLI
 releases are separate and do not change the GUI version.
+
+### MCP
+
+Zo Drive exposes a stateless Streamable HTTP MCP server at `/mcp`, or
+`/drive/mcp` when the hosted service keeps its normal route prefix. MCP clients
+connect directly over HTTPS, so users do not install the Zo Drive CLI.
+
+Create a scoped device key in **Zo Drive > API Keys**, then configure the MCP
+client with the endpoint and bearer header:
+
+```text
+URL: https://your-drive.example/drive/mcp
+Authorization: Bearer zdk_your_device_key
+```
+
+The MCP catalogue supports file and folder discovery, text reads, storage
+usage, folder creation, text-file writes, moves, copies, and moving files to
+Trash. Read-only keys cannot call mutation tools. Permanent deletion is not
+available through MCP.
 
 ### CLI
 
