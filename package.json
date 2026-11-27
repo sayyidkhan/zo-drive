@@ -4,6 +4,8 @@
   "version": "0.1.2",
   "packageManager": "pnpm@11.9.0",
   "scripts": {
+    "postinstall": "node scripts/trim-dependency-extras.mjs",
+    "maintenance:trim": "node scripts/trim-dependency-extras.mjs",
     "build": "pnpm --recursive run build",
     "test": "pnpm --filter @zo-drive/types build && pnpm --filter @zo-drive/sdk build && pnpm --filter @zo-drive/cli build && pnpm --recursive run test",
     "typecheck": "pnpm --filter @zo-drive/types build && pnpm --filter @zo-drive/sdk build && pnpm --recursive run typecheck"

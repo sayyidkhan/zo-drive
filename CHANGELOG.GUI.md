@@ -5,6 +5,12 @@ history remains available in Git.
 
 ## Unreleased
 
+## v1.46.1 - 2026-11-27
+
+### Fixed
+
+- Warm ZominAI again when reopening chat after the local model has gone idle.
+
 ## v1.46.0 - 2026-08-12
 
 ### Added

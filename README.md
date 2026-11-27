@@ -184,7 +184,7 @@ folder.
 
 #### GUI versioning
 
-The browser GUI has its own release track, currently `GUI v1.46.0`. GUI changes
+The browser GUI has its own release track, currently `GUI v1.46.1`. GUI changes
 are deployed to Zo Drive directly; browser users receive the current version by
 loading the page. Use `gui-v*` Git tags to trace a deployed GUI release. CLI
 releases are separate and do not change the GUI version.
@@ -439,6 +439,21 @@ The device API key is a bearer credential. Keep it in a secret manager and
 never commit it to source control. Create separate scoped keys for each
 machine or automation, and revoke a key from Zo Drive immediately if it may
 have been exposed.
+
+## Keeping the Zo installation compact
+
+`pnpm install` runs a version-checked cleanup of Kuzu's bundled test datasets and
+native binaries for other operating systems. Run `pnpm maintenance:trim` to
+repeat it. The active native binary, matching prebuilt binary, JavaScript API,
+source and database data are preserved. An unfamiliar Kuzu version is skipped
+until its package layout is reviewed. Reinstall Kuzu before running its upstream
+dataset-dependent tests.
+
+The managed ZominAI launcher releases model memory after 60 idle seconds using
+llama-server's built-in sleep mode. Opening or reopening the chat warms the model before enabling messages. An inference request also wakes it automatically;
+the first reply after idling can take a few extra seconds. Set
+`ZOMINAI_SLEEP_IDLE_SECONDS` in the runtime service to change the interval, or
+`-1` to disable sleeping. Restart only `zominai-runtime` after launcher changes.
 
 ## Verify before trying it
 

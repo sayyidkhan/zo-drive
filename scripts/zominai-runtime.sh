@@ -25,4 +25,5 @@ exec "${server_bin}" \
   --alias Bonsai-8B-Q1_0.gguf \
   --ctx-size 4096 \
   --parallel 2 \
+  --sleep-idle-seconds "${ZOMINAI_SLEEP_IDLE_SECONDS:-60}" \
   --jinja

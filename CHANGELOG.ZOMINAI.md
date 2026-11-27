@@ -6,7 +6,12 @@ remains available in Git.
 
 ## Unreleased
 
-No user-facing changes.
+## v1.11.0 - 2026-11-27
+
+### Changed
+
+- Release model memory after 60 seconds without requests and wake automatically for chat.
+- Warm the selected model whenever chat opens, with readiness and retry feedback before typing.
 
 ## v1.10.0 - 2026-07-24
 

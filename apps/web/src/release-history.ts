@@ -4,11 +4,12 @@ export type ProductRelease = {
   changes: string[];
 };
 
-export const GUI_VERSION = "1.46.0";
+export const GUI_VERSION = "1.46.1";
 export const CLI_VERSION = "1.3.0";
-export const ZOMINAI_VERSION = "1.10.0";
+export const ZOMINAI_VERSION = "1.11.0";
 
 export const GUI_CHANGELOG: ProductRelease[] = [
+  { version: "v1.46.1", date: "2026-11-27", changes: ["Warm ZominAI again when reopening chat after the local model has gone idle."] },
   {
     version: "v1.46.0",
     date: "2026-08-12",
@@ -100,6 +101,7 @@ export const CLI_CHANGELOG: ProductRelease[] = [
 ];
 
 export const ZOMINAI_CHANGELOG: ProductRelease[] = [
+  { version: "v1.11.0", date: "2026-11-27", changes: ["Release model memory after 60 idle seconds and warm the selected model each time chat opens."] },
   {
     version: "v1.10.0",
     date: "2026-07-24",
